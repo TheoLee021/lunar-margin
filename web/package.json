@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "oxlint --deny-warnings",
     "format": "prettier --write .",
-    "format:check": "prettier --write src/mission/MissionWorkspace.tsx src/mission/siteDecision.test.ts src/mission/siteDecision.ts src/mission/useSiteAssessments.ts && git diff -- src/mission/MissionWorkspace.tsx src/mission/siteDecision.test.ts src/mission/siteDecision.ts src/mission/useSiteAssessments.ts && prettier --check .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "e2e": "playwright test",
