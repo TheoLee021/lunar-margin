@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 
 from lunar_margin.engine.candidates.config import AnalysisWindow
 from lunar_margin.engine.candidates.grid import SitePoints
+from lunar_margin.engine.candidates.horizon_table import HorizonTable
 from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
 from lunar_margin.engine.horizon import horizon_profile
@@ -73,6 +74,7 @@ class FieldSettings:
 @dataclass(frozen=True)
 class _Context:
     dem: Dem
+    table: HorizonTable | None
     sun_vectors: NDArray[np.float64]
     earth_vectors: NDArray[np.float64]
     settings: FieldSettings
@@ -83,19 +85,22 @@ _COLUMNS = 11
 _NAN_ROW = (math.nan,) * 9 + (0.0, 0.0)
 
 
-def _site_row(ctx: _Context, lat_deg: float, lon_deg: float) -> tuple[float, ...]:
+def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
     s = ctx.settings
-    try:
-        horizon = horizon_profile(
-            ctx.dem,
-            lat_deg,
-            lon_deg,
-            observer_height_m=s.observer_height_m,
-            azimuth_step_deg=s.azimuth_step_deg,
-            max_range_m=s.max_range_m,
-        )
-    except ValueError:  # DEM 밖이거나 유효한 표본이 없는 지점: 결측으로 남긴다
-        return _NAN_ROW
+    if ctx.table is not None and row >= 0:
+        horizon = ctx.table.profile(row)  # 사전 계산한 수평선: 다시 계산하지 않는다
+    else:
+        try:
+            horizon = horizon_profile(
+                ctx.dem,
+                lat_deg,
+                lon_deg,
+                observer_height_m=s.observer_height_m,
+                azimuth_step_deg=s.azimuth_step_deg,
+                max_range_m=s.max_range_m,
+            )
+        except ValueError:  # DEM 밖이거나 유효한 표본이 없는 지점: 결측으로 남긴다
+            return _NAN_ROW
     values: list[float] = []
     for vectors in (ctx.sun_vectors, ctx.earth_vectors):
         azimuth, elevation = topocentric_azel(vectors, lat_deg, lon_deg, s.observer_height_m)
@@ -113,9 +118,15 @@ def _site_row(ctx: _Context, lat_deg: float, lon_deg: float) -> tuple[float, ...
 
 
 def _chunk_rows(
-    ctx: _Context, lat: NDArray[np.float64], lon: NDArray[np.float64]
+    ctx: _Context,
+    lat: NDArray[np.float64],
+    lon: NDArray[np.float64],
+    table_rows: NDArray[np.int64],
 ) -> NDArray[np.float64]:
-    rows = [_site_row(ctx, float(a), float(b)) for a, b in zip(lat, lon, strict=True)]
+    rows = [
+        _site_row(ctx, float(a), float(b), int(r))
+        for a, b, r in zip(lat, lon, table_rows, strict=True)
+    ]
     return np.array(rows, dtype=np.float64).reshape(len(rows), _COLUMNS)
 
 
@@ -127,9 +138,11 @@ def _init_worker(
     sun_vectors: NDArray[np.float64],
     earth_vectors: NDArray[np.float64],
     settings: FieldSettings,
+    table_dir: str | None,
 ) -> None:
     global _worker_ctx
-    _worker_ctx = _Context(open_dem(dem_pairs), sun_vectors, earth_vectors, settings)
+    table = HorizonTable.open(Path(table_dir)) if table_dir is not None else None
+    _worker_ctx = _Context(open_dem(dem_pairs), table, sun_vectors, earth_vectors, settings)
 
 
 def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
@@ -142,10 +155,12 @@ def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
     raise ValueError("expected one or two DEM file pairs")
 
 
-def _worker_chunk(args: tuple[NDArray[np.float64], NDArray[np.float64]]) -> NDArray[np.float64]:
+def _worker_chunk(
+    args: tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]],
+) -> NDArray[np.float64]:
     if _worker_ctx is None:
         raise RuntimeError("worker was not initialised")
-    return _chunk_rows(_worker_ctx, args[0], args[1])
+    return _chunk_rows(_worker_ctx, args[0], args[1], args[2])
 
 
 def _chunks(n: int, size: int) -> Iterator[slice]:
@@ -162,6 +177,7 @@ def compute_field(
     dem_files: Sequence[tuple[Path, Path]] | None = None,
     chunk_size: int = 64,
     on_progress: Callable[[int, int], None] | None = None,
+    table: HorizonTable | None = None,
 ) -> MetricField:
     """각 지점의 일조·지구 가시성 지표를 계산한다.
 
@@ -178,17 +194,19 @@ def compute_field(
     n = len(sites)
     matrix = np.full((n, _COLUMNS), np.nan)
     slices = list(_chunks(n, chunk_size))
+    table_rows = table.rows_for(sites) if table is not None else np.full(n, -1, dtype=np.int64)
     if workers <= 1 or n <= chunk_size:
-        ctx = _Context(dem, sun, earth, settings)
+        ctx = _Context(dem, table, sun, earth, settings)
         for sl in slices:
-            matrix[sl] = _chunk_rows(ctx, sites.lat_deg[sl], sites.lon_deg[sl])
+            matrix[sl] = _chunk_rows(ctx, sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl])
             if on_progress is not None:
                 on_progress(sl.stop, n)
     else:
         assert dem_files is not None
-        jobs = [(sites.lat_deg[sl], sites.lon_deg[sl]) for sl in slices]
+        jobs = [(sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl]) for sl in slices]
         pairs = tuple((str(img), str(lbl)) for img, lbl in dem_files)
-        init_args = (pairs, sun, earth, settings)
+        table_dir = str(table.directory) if table is not None else None
+        init_args = (pairs, sun, earth, settings, table_dir)
         with ProcessPoolExecutor(
             max_workers=workers, initializer=_init_worker, initargs=init_args
         ) as pool:
