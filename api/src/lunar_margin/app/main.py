@@ -4,22 +4,29 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from lunar_margin.app.settings import settings
-
-app = FastAPI(title="Lunar Margin API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
+from lunar_margin.app.settings import Settings
 
 
 class Health(BaseModel):
     status: Literal["ok"]
 
 
-@app.get("/health")
-def health() -> Health:
-    return Health(status="ok")
+def create_app(settings: Settings) -> FastAPI:
+    app = FastAPI(title="Lunar Margin API")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.cors_origin_regex or None,
+        allow_methods=["GET"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/health")
+    def health() -> Health:  # pyright: ignore[reportUnusedFunction]
+        return Health(status="ok")
+
+    return app
+
+
+app = create_app(Settings())
