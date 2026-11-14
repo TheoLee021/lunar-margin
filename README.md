@@ -44,7 +44,7 @@ See [AGENTS.md](AGENTS.md) for conventions, commands, and ownership.
 
 ## Lunar viewer preview
 
-The React HUD uses explicitly labeled example candidates and mission metrics. These are UI fixtures, not computed recommendations. `MissionSelection` is the shared map/panel selection; the Cesium viewer and camera stay outside React state and are destroyed on unmount.
+The React HUD keeps explicitly labeled example candidate locations and rankings. Selected-site metrics and the mission timeline use the real analysis API; candidate ranks are not computed recommendations. `MissionSelection` is the shared map/panel selection; the Cesium viewer and camera stay outside React state and are destroyed on unmount.
 
 Set `VITE_CESIUM_ION_TOKEN` in `web/.env.local` and add Cesium Moon (ion asset 2684829) to the token's account. The HUD adapts the shared `web/src/moon/MoonViewer.tsx` from #9 through marker props and its camera handle. Without a token, the shared viewer reports a configuration error. Workers and assets are served by the existing `vite-plugin-static-copy` configuration; no second viewer or install-time copying is used. No DEM, SPICE kernels, or terrain grids are bundled.
 
@@ -56,4 +56,10 @@ The default `/` screen is the mission HUD. `/?view=analysis` preserves the exist
 
 Click the mission dates to open the HUD-style planner. Its 5×5 price grid covers each reference departure/landing date ±2 days. Choosing a cell updates the example transfer path; applying commits departure, landing and duration to the shared selection. Closing or pressing Escape discards the draft, including duration. Dates and the applied schedule are validated with zod.
 
-Costs, flight paths and analysis chart shapes are explicitly illustrative fixtures. No trajectory optimization, site ranking over time, terrain shadow calculation or new backend endpoints are introduced here. The existing site candidates remain examples; actual date-dependent recommendations require the future calculation API.
+Costs, flight paths and landing-date scores remain explicitly illustrative fixtures. Site ranking and slope filters still operate on example data.
+
+The selected-site panel and unified timeline request `/analysis/illumination` and `/analysis/earth-visibility` from the backend added in #5. Both responses must match the selected coordinates and the surface interval: landing midnight UTC through landing + 7/14/28 days (end exclusive), with 30-minute samples and observer height 0 m. Departure changes do not change surface analysis. The HUD shows the applied schedule; the dialog previews its draft until Apply. Loading, errors and empty results do not fall back to fixtures.
+
+The timeline uses server elevations/visibility and exact server windows, with the terrain horizon interpolated at each body's azimuth. There is no extra 2° communication margin. Earth visibility describes terrain clearance, not a radio link budget. All samples remain available to the cursor and plot (at most 1,344 for 28 days).
+
+Run a backend containing #5 and the SPICE concurrency fix before exercising this frontend. Download NASA data once from `api/` with `uv run python -m lunar_margin.pipeline.fetch`; DEM and kernels stay outside the frontend and Git. `API_PROXY_TARGET` selects the local API; `VITE_API_URL` selects the deployed API. The API client, response schema and shared analysis helpers are reused from #6 without replacing its analysis page.

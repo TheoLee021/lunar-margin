@@ -1,5 +1,7 @@
 import { BASE_DAY, iso } from './missionDates'
-import type { Analysis } from './types'
+import type { DateScore } from './types'
+import { AnalysisStatus } from './AnalysisStatus'
+import type { MissionAnalysisResult } from './useMissionAnalysis'
 import { MissionTimeline } from './MissionTimeline'
 
 type Series = { x: number[]; y: number[]; color: string; dashed?: boolean }
@@ -145,15 +147,17 @@ function Plot({
   )
 }
 export function MissionCharts({
-  analysis,
+  score,
+  live,
   hour,
   onLanding,
 }: {
-  analysis: Analysis | null
+  live: MissionAnalysisResult
+  score: DateScore | null
   hour: number
   onLanding: (date: string) => void
 }) {
-  if (!analysis)
+  if (!score)
     return (
       <div className="planner-charts">
         <section className="group">
@@ -162,7 +166,7 @@ export function MissionCharts({
         </section>
       </div>
     )
-  const { xs, ys, day, duration, timeline } = analysis
+  const { xs, ys, day, duration } = score
   const best = ys.indexOf(Math.max(...ys)),
     ticks = [day - 60, day - 15, day + 30, day + 75, day + 120]
   return (
@@ -195,9 +199,18 @@ export function MissionCharts({
       >
         <div className="mission-timeline-heading">
           <h2>미션 기간 타임라인</h2>
-          <span className="example-label">예시 데이터</span>
+          <span className="example-label">NASA 실제 분석</span>
         </div>
-        <MissionTimeline timeline={timeline} duration={duration} hour={hour} />
+        {live.kind === 'ready' ? (
+          <MissionTimeline
+            key={`${live.data.sun.start}/${live.data.sun.end}/${live.data.sun.lat}/${live.data.sun.lon}`}
+            timeline={live.data.timeline}
+            duration={duration}
+            hour={hour}
+          />
+        ) : (
+          <AnalysisStatus result={live} />
+        )}
       </section>
     </div>
   )

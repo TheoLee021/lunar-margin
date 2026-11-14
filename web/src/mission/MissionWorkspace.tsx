@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { MissionMetrics } from './MissionMetrics'
+import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import { MissionMoonViewer } from './MissionMoonViewer'
 import { DEMO_SITES } from './demoSites'
@@ -6,11 +8,13 @@ import type { MissionSelection } from './types'
 
 export function MissionWorkspace({
   selection,
+  analysis,
   onSelect,
   summary,
   apiStatus,
   children,
 }: {
+  analysis: MissionAnalysisResult
   selection: MissionSelection
   onSelect: (id: string) => void
   summary: ReactNode
@@ -32,12 +36,6 @@ export function MissionWorkspace({
   ).toSorted((a, b) => score(b) - score(a))
   const selected =
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
-  const metrics = [
-    ['햇빛 시간', `${selected.sun}%`],
-    ['지구 가시 시간', `${selected.earth}%`],
-    ['최장 연속 어둠', `${selected.longestDarkness} 시간`],
-    ['경사', `${selected.slope.toFixed(1)}°`],
-  ]
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -50,7 +48,7 @@ export function MissionWorkspace({
           Lunar Margin
         </h1>
         <span className="border border-amber-400/60 bg-black/50 px-2 py-0.5 font-mono text-[10px] text-amber-300">
-          예시 임무 데이터 · 계산 API 연결 전
+          선택 지점: NASA 분석 · 후보 순위: 예시
         </span>
       </header>
       <button
@@ -168,20 +166,7 @@ export function MissionWorkspace({
               {Math.abs(selected.latitude).toFixed(2)}°S{' '}
               {Math.abs(selected.longitude).toFixed(1)}°W
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {metrics.map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-md border border-white/10 bg-white/5 px-3 py-2"
-                >
-                  <p className="text-xs text-neutral-400">{label}</p>
-                  <p className="font-mono text-lg">{value}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-neutral-400">
-              임무 지표는 UI 검토용 예시입니다.
-            </p>
+            <MissionMetrics result={analysis} />
           </aside>
         </>
       ) : null}

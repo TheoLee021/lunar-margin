@@ -1,4 +1,5 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
+import { nearestIndex, niceTicks } from '../analysis/derive'
 import type { Timeline } from './types'
 
 function timeLabel(day: number) {
@@ -19,6 +20,20 @@ export function MissionTimeline({
 }) {
   const [inspection, setInspection] = useState<number | null>(null)
   const patternId = useId()
+  const geometry = useMemo(() => {
+    const values = [...tl.sunEl, ...tl.earthEl, ...tl.sunHz, ...tl.earthHz]
+    let low = 0,
+      high = 0
+    for (const v of values) {
+      low = Math.min(low, v)
+      high = Math.max(high, v)
+    }
+    const padding = Math.max(0.5, (high - low) * 0.1)
+    const min = low - padding,
+      max = high + padding
+    // At most 1,344 samples for 28 days; keep all points, including short terrain peaks.
+    return { min, max, ticks: niceTicks(min, max, 6) }
+  }, [tl])
   if (tl.t.length === 0)
     return <p className="hint">선택한 기간의 분석 표본이 없습니다.</p>
   const current = Math.max(
@@ -33,7 +48,8 @@ export function MissionTimeline({
     plotHeight = 145
   const X = (time: number) => left + (time / duration) * plotWidth
   const Y = (value: number) =>
-    plotTop + (1 - (Math.max(-10, Math.min(12, value)) + 10) / 22) * plotHeight
+    plotTop +
+    (1 - (value - geometry.min) / (geometry.max - geometry.min)) * plotHeight
   const series = [
     {
       key: 'sun',
@@ -44,6 +60,7 @@ export function MissionTimeline({
       values: tl.sunEl,
       cutoff: tl.sunHz,
       visible: tl.sunVis,
+      segments: tl.sunPeriods,
       yes: '햇빛 있음',
       no: '햇빛 없음',
       barTitle: '햇빛',
@@ -55,8 +72,9 @@ export function MissionTimeline({
       bar: 292,
       color: 'var(--earth)',
       values: tl.earthEl,
-      cutoff: tl.earthHz.map((value) => value + 2),
+      cutoff: tl.earthHz,
       visible: tl.earthVis,
+      segments: tl.earthPeriods,
       yes: '지구 가시',
       no: '지구 차폐',
       barTitle: '지구 가시성',
@@ -84,15 +102,7 @@ export function MissionTimeline({
                 duration,
             ),
           )
-          setInspection(
-            tl.t.reduce(
-              (best, value, index) =>
-                Math.abs(value - time) < Math.abs(tl.t[best] - time)
-                  ? index
-                  : best,
-              0,
-            ),
-          )
+          setInspection(nearestIndex(tl.t, time))
         }}
       >
         <defs>
@@ -117,7 +127,7 @@ export function MissionTimeline({
         <text x="0" y="61" fill="var(--muted)" fontSize="9">
           고도각 (°)
         </text>
-        {[-8, -4, 0, 4, 8, 12].map((value) => (
+        {geometry.ticks.map((value) => (
           <g key={value}>
             <line
               x1={left}
@@ -139,13 +149,6 @@ export function MissionTimeline({
           </g>
         ))}
         {series.map((s) => {
-          const segments: { start: number; end: number; on: boolean }[] = []
-          tl.t.slice(0, -1).forEach((start, index) => {
-            const on = s.visible[index],
-              last = segments[segments.length - 1]
-            if (last && last.on === on) last.end = tl.t[index + 1]
-            else segments.push({ start, end: tl.t[index + 1], on })
-          })
           return (
             <g key={s.key}>
               <text
@@ -167,11 +170,13 @@ export function MissionTimeline({
               >
                 {s.key === 'sun'
                   ? '실선: 태양 / 점선: 지형 지평선'
-                  : '실선: 지구 / 점선: 지평선 + 2°'}
+                  : '실선: 지구 / 점선: 지형 지평선'}
               </text>
               <polyline
                 points={tl.t
-                  .map((t, i) => `${X(t)},${Y(s.cutoff[i])}`)
+                  .map(
+                    (t, i) => `${X(t).toFixed(2)},${Y(s.cutoff[i]).toFixed(2)}`,
+                  )
                   .join(' ')}
                 fill="none"
                 stroke={s.color}
@@ -181,7 +186,9 @@ export function MissionTimeline({
               />
               <polyline
                 points={tl.t
-                  .map((t, i) => `${X(t)},${Y(s.values[i])}`)
+                  .map(
+                    (t, i) => `${X(t).toFixed(2)},${Y(s.values[i]).toFixed(2)}`,
+                  )
                   .join(' ')}
                 fill="none"
                 stroke={s.color}
@@ -198,7 +205,7 @@ export function MissionTimeline({
               <text x={left} y={s.bar - 7} fill="var(--fg)" fontSize="11">
                 {s.barTitle}
               </text>
-              {segments.map((segment) => {
+              {s.segments.map((segment) => {
                 const w = X(segment.end) - X(segment.start)
                 return (
                   <g key={segment.start}>
@@ -257,7 +264,12 @@ export function MissionTimeline({
       <div className="timeline-inspection">
         <label htmlFor="timeline-inspection">검토 시점</label>
         <output htmlFor="timeline-inspection">
-          {timeLabel(tl.t[selected])}
+          {timeLabel(tl.t[selected])} ·{' '}
+          {new Date(Date.parse(tl.start) + tl.t[selected] * 86_400_000)
+            .toISOString()
+            .slice(0, 16)
+            .replace('T', ' ')}{' '}
+          UTC
         </output>
         <input
           id="timeline-inspection"
@@ -271,9 +283,10 @@ export function MissionTimeline({
         />
       </div>
       <p className="hint">
-        그래프를 클릭하거나 시점을 이동해 확인하세요. 가로축은 착륙 후 경과
-        시간입니다. 곡선과 상태는 예시이며 지구 가시성이 실제 통신 품질을
-        뜻하지는 않습니다.
+        {tl.start.slice(0, 10)} → {tl.end.slice(0, 10)} UTC · {tl.stepMinutes}분
+        간격 · 관측 높이 0 m. 실선은 천체 중심 고도, 점선은 그 방위각의 지형
+        지평선입니다. 색 막대는 서버의 가시 구간입니다. 그래프나 슬라이더로 실제
+        표본 시각을 확인하세요. 지구 가시성은 통신 품질을 뜻하지 않습니다.
       </p>
     </>
   )
