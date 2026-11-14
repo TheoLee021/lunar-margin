@@ -12,6 +12,7 @@ from lunar_margin.app.site_assessment import (
     BodySummary,
     SiteAssessment,
     SiteQuery,
+    RegionSummary,
     TerrainSummary,
     get_site_assessor,
 )
@@ -49,6 +50,17 @@ def client() -> Iterator[TestClient]:
                 longest_dark_hours=48.0,
                 windows_per_24h=0.5,
             ),
+            region=RegionSummary(
+                radius_m=query.assessment_radius_m,
+                sample_step_m=80.0,
+                total_samples=29,
+                valid_samples=29,
+                coverage_fraction=1.0,
+                slope_p95_deg=3.5,
+                slope_max_deg=5.0,
+                roughness_p95_m=2.0,
+                landing_safety_status="UNVERIFIED",
+            ),
             terrain=TerrainSummary(
                 elevation_m=400.0,
                 slope_deg=3.5,
@@ -75,6 +87,9 @@ def test_site_assessment_contract(client: TestClient) -> None:
     assert body["terrain"]["dem_pixel_m"] == 80
     assert body["terrain"]["slope_baseline_m"] == 160
     assert body["terrain"]["roughness_window_m"] == 400
+    assert body["region"]["radius_m"] == 250
+    assert body["region"]["coverage_fraction"] == 1.0
+    assert body["region"]["landing_safety_status"] == "UNVERIFIED"
 
 
 @pytest.mark.parametrize(
@@ -86,6 +101,7 @@ def test_site_assessment_contract(client: TestClient) -> None:
         {"step_minutes": 4},
         {"slope_baseline_m": 20},
         {"roughness_window_m": 40},
+        {"assessment_radius_m": 20},
         {"unrecognized": "bad"},
     ],
 )
