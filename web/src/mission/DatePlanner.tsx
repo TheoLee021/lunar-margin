@@ -1,0 +1,312 @@
+import { useEffect, useRef, useState } from 'react'
+import { dayOf, exampleCost, iso, short, DAY } from './missionDates'
+import { TransferOrbit } from './TransferOrbit'
+import { MissionCharts } from './MissionCharts'
+import type { Analysis, Schedule } from './types'
+import { DateSchema, ScheduleSchema } from './scheduleSchema'
+import './date-planner.css'
+
+type Props = {
+  schedule: Schedule
+  analyze: (schedule: Schedule) => Analysis | null
+  hour: number
+  onApply: (schedule: Schedule) => void
+  onClose: () => void
+}
+export function DatePlanner({
+  schedule,
+  analyze,
+  hour,
+  onApply,
+  onClose,
+}: Props) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [draft, setDraft] = useState(schedule)
+  const [anchors, setAnchors] = useState({
+    departure: schedule.departure,
+    landing: schedule.landing,
+  })
+  const departures = Array.from(
+    { length: 5 },
+    (_, i) => dayOf(anchors.departure) + i - 2,
+  )
+  const landings = Array.from(
+    { length: 5 },
+    (_, i) => dayOf(anchors.landing) + i - 2,
+  )
+  const prices = landings
+    .flatMap((l) => departures.map((d) => exampleCost(d, l)))
+    .filter((p): p is number => p !== null)
+  const minimum = Math.min(...prices)
+  const analysis = analyze(draft)
+  const [formError, setFormError] = useState('')
+  useEffect(() => {
+    const dialog = ref.current!,
+      trigger = document.activeElement as HTMLElement | null
+    dialog.showModal()
+    return () => {
+      dialog.close()
+      trigger?.focus()
+    }
+  }, [])
+  function shiftAnchors(step: number) {
+    setAnchors((a) => ({
+      departure: iso(dayOf(a.departure) + step),
+      landing: iso(dayOf(a.landing) + step),
+    }))
+  }
+  function selectLanding(landing: string) {
+    const departure =
+      dayOf(landing) > dayOf(draft.departure)
+        ? draft.departure
+        : iso(dayOf(landing) - 4)
+    setDraft((d) => ({ ...d, departure, landing }))
+    setAnchors({ departure, landing })
+  }
+  return (
+    <dialog
+      id="datePlanner"
+      ref={ref}
+      aria-labelledby="plannerTitle"
+      onCancel={onClose}
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return
+        const r = e.currentTarget.getBoundingClientRect()
+        if (
+          e.clientX < r.left ||
+          e.clientX > r.right ||
+          e.clientY < r.top ||
+          e.clientY > r.bottom
+        )
+          onClose()
+      }}
+    >
+      <header className="planner-header">
+        <div>
+          <h2 id="plannerTitle">
+            미션 날짜 <span className="tag">UTC</span>
+          </h2>
+          <p className="hint">출발일과 착륙일을 비교하세요.</p>
+        </div>
+        <button
+          type="button"
+          className="close-planner"
+          onClick={onClose}
+          aria-label="날짜 패널 닫기"
+        >
+          ✕
+        </button>
+      </header>
+      <div className="planner-layout">
+        <div className="planner-primary">
+          <section className="window-section">
+            <div className="window-toolbar">
+              <div>
+                <h3>출발일 × 착륙일</h3>
+                <p>각 기준일 ±2일 · 날짜 조합별 예시 비용 / USD million</p>
+              </div>
+              <div className="week-nav">
+                <button
+                  type="button"
+                  aria-label="기준일 하루 이전"
+                  onClick={() => shiftAnchors(-1)}
+                >
+                  ←
+                </button>
+                <span>{anchors.departure.slice(0, 7)} · ±2일</span>
+                <button
+                  type="button"
+                  aria-label="기준일 하루 이후"
+                  onClick={() => shiftAnchors(1)}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+            <div className="date-anchors">
+              <label>
+                기준 출발일 · UTC
+                <input
+                  type="date"
+                  value={anchors.departure}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (DateSchema.safeParse(value).success) {
+                      setFormError('')
+                      setAnchors((a) => ({ ...a, departure: value }))
+                    } else setFormError('유효한 출발일을 입력하세요.')
+                  }}
+                />
+              </label>
+              <span>→</span>
+              <label>
+                기준 착륙일 · UTC
+                <input
+                  type="date"
+                  value={anchors.landing}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (DateSchema.safeParse(value).success) {
+                      setFormError('')
+                      setAnchors((a) => ({ ...a, landing: value }))
+                    } else setFormError('유효한 착륙일을 입력하세요.')
+                  }}
+                />
+              </label>
+              <label>
+                착륙 후 표면 임무
+                <select
+                  value={draft.duration}
+                  onChange={(e) => {
+                    const duration = Number(e.target.value)
+                    setDraft((d) => ({ ...d, duration }))
+                  }}
+                >
+                  {[7, 14, 28].map((d) => (
+                    <option key={d} value={d}>
+                      {d}일
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid-scroll">
+              <table
+                className="cost-grid"
+                aria-label="출발일과 착륙일별 예시 비용"
+              >
+                <thead>
+                  <tr>
+                    <th scope="col" className="axis-cell">
+                      착륙 ↓<br />
+                      출발 →
+                    </th>
+                    {departures.map((d) => (
+                      <th key={d} scope="col">
+                        {short(d)}
+                        <small>
+                          {new Intl.DateTimeFormat('en-US', {
+                            weekday: 'short',
+                            timeZone: 'UTC',
+                          }).format(d * DAY)}
+                        </small>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {landings.map((l) => (
+                    <tr key={l}>
+                      <th scope="row">{short(l)}</th>
+                      {departures.map((d) => {
+                        const price = exampleCost(d, l),
+                          selected =
+                            d === dayOf(draft.departure) &&
+                            l === dayOf(draft.landing)
+                        return (
+                          <td
+                            key={d}
+                            className={
+                              price === null ? 'unavailable' : undefined
+                            }
+                          >
+                            {price === null ? (
+                              <span aria-label="선택 불가">—</span>
+                            ) : (
+                              <button
+                                type="button"
+                                aria-pressed={selected}
+                                aria-label={`출발 ${iso(d)}, 착륙 ${iso(l)}, 예시 비용 ${price.toFixed(1)} million USD`}
+                                className={
+                                  price < minimum + 7 ? 'low-cost' : undefined
+                                }
+                                onClick={() =>
+                                  setDraft((s) => ({
+                                    ...s,
+                                    departure: iso(d),
+                                    landing: iso(l),
+                                  }))
+                                }
+                              >
+                                <span>
+                                  ${price.toFixed(1)}
+                                  <small>M</small>
+                                </span>
+                                {price === minimum ? (
+                                  <small className="best-cost">최저 비용</small>
+                                ) : (
+                                  <small>{l - d}일 비행</small>
+                                )}
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {prices.length === 0 ? (
+              <p role="status" className="hint">
+                선택 가능한 날짜 조합이 없습니다. 기준 출발일과 착륙일을
+                조정하세요.
+              </p>
+            ) : null}
+            {formError ? (
+              <p role="alert" className="hint">
+                {formError}
+              </p>
+            ) : null}
+            <div className="grid-key">
+              <span>
+                <i />
+                낮은 예시 비용
+              </span>
+              <span>
+                <i />
+                선택한 조합
+              </span>
+              <span>— 출발일 이후 착륙만 가능</span>
+              <span>열: 출발일 · 행: 착륙일 / UTC</span>
+            </div>
+          </section>
+          <TransferOrbit schedule={draft} />
+          <MissionCharts
+            analysis={analysis}
+            hour={hour}
+            onLanding={selectLanding}
+          />
+        </div>
+      </div>
+      <footer className="planner-footer">
+        <p>
+          <span className="example-dot" />
+          비용과 비행 궤도는 목업 예시입니다.
+          <small>실제 견적·궤도 계산 결과가 아닙니다.</small>
+        </p>
+        <div>
+          <span aria-live="polite">
+            {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}
+          </span>
+          <button
+            type="button"
+            id="applyWindow"
+            onClick={() => {
+              const result = ScheduleSchema.safeParse(draft)
+              if (result.success) {
+                setFormError('')
+                onApply(result.data)
+              } else
+                setFormError(
+                  '착륙일은 출발일 이후여야 하며 임무 기간은 7·14·28일이어야 합니다.',
+                )
+            }}
+          >
+            일정 적용 <span>↗</span>
+          </button>
+        </div>
+      </footer>
+    </dialog>
+  )
+}

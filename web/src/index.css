@@ -22,3 +22,19 @@
   outline: 2px solid #5aaee3;
   outline-offset: 2px;
 }
+
+:root {
+  --bg: #050607;
+  --glass: rgba(15, 18, 23, 0.6);
+  --edge: rgba(170, 195, 230, 0.16);
+  --raise: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --fg: #ebe8e2;
+  --muted: #9ba2ad;
+  --sun: #f0a43c;
+  --earth: #5aaee3;
+  --good: #5fbf86;
+  --f-mono: var(--font-mono);
+  --f-body: var(--font-sans);
+  --f-display: var(--font-sans);
+}
