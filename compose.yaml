@@ -1,0 +1,15 @@
+name: lunar-margin
+
+# 백엔드를 띄우기만 할 때: docker compose up --build
+# 백엔드를 개발할 때는 api/에서 uv run fastapi dev (AGENTS.md 참고)
+services:
+  api:
+    build: ./api
+    command: fastapi dev src/lunar_margin/app/main.py --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./api/.env
+        required: false
+    volumes:
+      - ./api/src:/app/src
