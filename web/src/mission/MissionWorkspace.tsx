@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
-import { MoonViewer } from './MoonViewer'
+import { MissionMoonViewer } from './MissionMoonViewer'
 import { DEMO_SITES } from './demoSites'
 import type { MissionSelection } from './types'
 
@@ -38,7 +38,7 @@ export function MissionWorkspace({
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
-      <MoonViewer
+      <MissionMoonViewer
         selection={selection}
         sites={DEMO_SITES}
         onSelect={onSelect}

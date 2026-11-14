@@ -21,6 +21,12 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const earth: Analysis = await earthResponse.json()
   const degree = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`
   await page.goto('/')
+  await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
+    'data-state',
+    'ready',
+    { timeout: 30_000 },
+  )
+  await expect(page.locator('.cesium-widget canvas')).toHaveCount(1)
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   await rail.getByRole('button', { name: /후보 2/ }).click()
   await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(
@@ -45,6 +51,8 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(metric('최장 지구 차폐')).toHaveText(
     `${earth.metrics.longest_dark_hours.toFixed(1)} 시간`,
   )
+  await page.getByRole('button', { name: '선택 지점 3D로 보기' }).click()
+  await page.getByRole('button', { name: '위에서 보기' }).click()
   const slope = page.getByRole('slider', { name: /경사 ≤/ })
   await slope.fill('0')
   await expect(
@@ -157,4 +165,11 @@ test('mission planner previews dates, discards drafts and applies the selection'
     dialog.getByRole('button', { name: '일정 적용 ↗' }),
   ).toBeVisible()
   await dialog.getByRole('button', { name: '날짜 패널 닫기' }).click()
+  await page.getByRole('link', { name: '상세 분석', exact: true }).click()
+  await expect(page).toHaveURL(/view=analysis/)
+  await expect(page.getByLabel('위도 (°)')).toBeVisible()
+  await page.getByRole('link', { name: '미션 대시보드', exact: true }).click()
+  await expect(
+    page.getByRole('complementary', { name: '미션 조건' }),
+  ).toBeVisible()
 })
