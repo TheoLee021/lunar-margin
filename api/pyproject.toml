@@ -6,6 +6,7 @@ dependencies = [
     "fastapi[standard]>=0.163.0",
     "numpy>=2.5.4",
     "pydantic-settings>=2.16.3",
+    "scipy>=1.18.1",
     "spiceypy>=8.4.0",
 ]
 
@@ -14,6 +15,7 @@ dev = [
     "pyright>=1.1.414",
     "pytest>=9.2.0",
     "ruff>=0.17.5",
+    "scipy-stubs>=1.18.1.1",
 ]
 
 [build-system]
