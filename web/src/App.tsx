@@ -31,12 +31,14 @@ export default function App() {
       >
         {analysis ? <AnalysisWorkspace /> : <MissionApp />}
       </Suspense>
-      <a
-        className="hud-button fixed bottom-10 left-32 z-20"
-        href={analysis ? '/' : '/?view=analysis'}
-      >
-        {analysis ? '미션 대시보드' : '상세 분석'}
-      </a>
+      {!analysis ? (
+        <a
+          className="hud-button fixed bottom-10 left-32 z-20"
+          href="/?view=analysis"
+        >
+          상세 분석
+        </a>
+      ) : null}
     </>
   )
 }
