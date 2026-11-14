@@ -64,7 +64,7 @@ from lunar_margin.pipeline.candidate_schema import (
     SunMetrics,
     WindowSource,
 )
-from lunar_margin.pipeline.candidate_status import RunStatus, write_status
+from lunar_margin.pipeline.candidate_status import RunStatus, StatusKeeper
 from lunar_margin.pipeline.candidates_export import simple_json
 from lunar_margin.pipeline.png import encode_png
 from lunar_margin.pipeline.sources import DEM_SOURCES, SPICE_SOURCES
@@ -692,57 +692,42 @@ def run_mission(
         pid=os.getpid(),
         started_at=datetime.now(UTC).isoformat(timespec="seconds"),
     )
-    write_status(run_dir, status)
+    with StatusKeeper(run_dir, status) as keeper:
 
-    def progress(stage: str, done: int, total: int) -> None:
-        write_status(
-            run_dir,
-            status.model_copy(
-                update={
-                    "stage": stage,
-                    "done": done,
-                    "total": total,
-                    "elapsed_seconds": time.perf_counter() - started_clock,
-                }
-            ),
-        )
-        if on_progress is not None:
-            on_progress(stage, done, total)
+        def progress(stage: str, done: int, total: int) -> None:
+            keeper.update(
+                stage=stage,
+                done=done,
+                total=total,
+                elapsed_seconds=time.perf_counter() - started_clock,
+            )
+            if on_progress is not None:
+                on_progress(stage, done, total)
 
-    try:
-        outcome = run_search(
-            config, data_dir, log=log, progress=progress, extra_warnings=plan.warnings
+        try:
+            outcome = run_search(
+                config, data_dir, log=log, progress=progress, extra_warnings=plan.warnings
+            )
+            keeper.update(stage="writing")
+            write_outputs(outcome, run_dir)
+        except BaseException as error:
+            keeper.update(
+                state="failed",
+                stage="failed",
+                error=str(error),
+                completed_at=datetime.now(UTC).isoformat(),
+                elapsed_seconds=time.perf_counter() - started_clock,
+            )
+            raise
+        sampled = outcome.summary.counts["sampled_total"]
+        keeper.update(
+            state="done",
+            stage="done",
+            done=sampled,
+            total=sampled,
+            completed_at=datetime.now(UTC).isoformat(),
+            elapsed_seconds=time.perf_counter() - started_clock,
         )
-        write_status(run_dir, status.model_copy(update={"stage": "writing"}))
-        write_outputs(outcome, run_dir)
-    except BaseException as error:
-        write_status(
-            run_dir,
-            status.model_copy(
-                update={
-                    "state": "failed",
-                    "stage": "failed",
-                    "error": str(error),
-                    "completed_at": datetime.now(UTC).isoformat(),
-                    "elapsed_seconds": time.perf_counter() - started_clock,
-                }
-            ),
-        )
-        raise
-    sampled = outcome.summary.counts["sampled_total"]
-    write_status(
-        run_dir,
-        status.model_copy(
-            update={
-                "state": "done",
-                "stage": "done",
-                "done": sampled,
-                "total": sampled,
-                "completed_at": datetime.now(UTC).isoformat(),
-                "elapsed_seconds": time.perf_counter() - started_clock,
-            }
-        ),
-    )
     return outcome
 
 

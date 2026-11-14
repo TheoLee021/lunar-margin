@@ -232,6 +232,35 @@ def test_a_different_mission_is_refused_while_another_search_is_running(tmp_path
     assert len(launcher.launched) == 1
 
 
+def test_a_run_that_stopped_updating_does_not_block_new_searches(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from lunar_margin.pipeline.candidate_status import STALE_AFTER
+
+    stuck = tmp_path / "candidates" / "m-stuck"
+    stuck.mkdir(parents=True)
+    import os
+
+    # 프로세스는 SIGKILL로 죽었지만 pid가 살아 있어 보이는 상황 (좀비, pid 재사용)
+    updated = datetime.now(UTC) - STALE_AFTER - timedelta(minutes=1)
+    (stuck / "status.json").write_text(
+        RunStatus(
+            state="running",
+            stage="fine",
+            done=1,
+            total=9,
+            pid=os.getpid(),
+            updated_at=updated.isoformat(timespec="seconds"),
+        ).model_dump_json()
+    )
+    launcher = FakeLauncher()
+
+    response = search_client(tmp_path, launcher).post("/candidates/search", json=EXAMPLE_MISSION)
+
+    assert response.status_code == 202
+    assert len(launcher.launched) == 1
+
+
 def test_a_failed_run_can_be_started_again_from_a_clean_directory(tmp_path: Path) -> None:
     run_id = MissionRequest.model_validate(EXAMPLE_MISSION).run_id()
     run_dir = tmp_path / "candidates" / run_id
