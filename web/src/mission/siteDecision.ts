@@ -41,7 +41,10 @@ export function assessCandidate(
   )
   const coveragePass = data.region.coverage_fraction >= 0.9999
   const regionalSlope = data.region.slope_p95_deg
-  const slopePass = coveragePass && regionalSlope !== null && regionalSlope <= constraints.maxSlopeDeg
+  const slopePass =
+    coveragePass &&
+    regionalSlope !== null &&
+    regionalSlope <= constraints.maxSlopeDeg
   const slopeCheck = {
     id: 'slope',
     label: 'DEM 경사',
@@ -53,7 +56,9 @@ export function assessCandidate(
         constraints.maxSlopeDeg +
         '°'
       : '250 m 지역 경사 P95 ' +
-        (regionalSlope === null ? '확인 불가' : regionalSlope.toFixed(2) + '°') +
+        (regionalSlope === null
+          ? '확인 불가'
+          : regionalSlope.toFixed(2) + '°') +
         ' · 허용 ' +
         constraints.maxSlopeDeg +
         '°',
