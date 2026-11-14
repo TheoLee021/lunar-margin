@@ -1,0 +1,5 @@
+.DS_Store
+.env
+.env.local
+# superpowers 등 개인 작업 문서
+docs/superpowers/
