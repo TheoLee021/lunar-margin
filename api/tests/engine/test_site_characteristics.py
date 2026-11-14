@@ -58,9 +58,7 @@ def test_planar_surface_reports_expected_slope_but_zero_roughness() -> None:
     dem = make_dem(heights)
 
     assert local_slope_deg(dem, -90.0, 0.0) == pytest.approx(10.0, abs=0.05)
-    assert local_roughness_rms_m(dem, -90.0, 0.0, window_m=400.0) == pytest.approx(
-        0.0, abs=1e-4
-    )
+    assert local_roughness_rms_m(dem, -90.0, 0.0, window_m=400.0) == pytest.approx(0.0, abs=1e-4)
 
 
 def test_bump_increases_roughness() -> None:
@@ -68,9 +66,7 @@ def test_bump_increases_roughness() -> None:
     heights[C, C] = 10.0
     dem = make_dem(heights)
 
-    roughness = local_roughness_rms_m(
-        dem, -90.0, 0.0, window_m=400.0, samples_per_axis=5
-    )
+    roughness = local_roughness_rms_m(dem, -90.0, 0.0, window_m=400.0, samples_per_axis=5)
 
     assert roughness > 1.0
 
