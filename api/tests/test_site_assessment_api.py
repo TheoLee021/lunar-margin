@@ -1,4 +1,5 @@
 """FastAPI contract checks; independent of DEM downloads or SPICE kernels."""
+
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
@@ -76,15 +77,18 @@ def test_site_assessment_contract(client: TestClient) -> None:
     assert body["terrain"]["roughness_window_m"] == 400
 
 
-@pytest.mark.parametrize("patch", [
-    {"lat": -79.0},
-    {"end": START.isoformat()},
-    {"end": (START + timedelta(days=29)).isoformat()},
-    {"step_minutes": 4},
-    {"slope_baseline_m": 20},
-    {"roughness_window_m": 40},
-    {"unrecognized": "bad"},
-])
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"lat": -79.0},
+        {"end": START.isoformat()},
+        {"end": (START + timedelta(days=29)).isoformat()},
+        {"step_minutes": 4},
+        {"slope_baseline_m": 20},
+        {"roughness_window_m": 40},
+        {"unrecognized": "bad"},
+    ],
+)
 def test_invalid_query_fails_422(client: TestClient, patch: dict[str, object]) -> None:
     response = client.get("/analysis/site-assessment", params={**PARAMS, **patch})
     assert response.status_code == 422
