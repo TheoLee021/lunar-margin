@@ -25,9 +25,9 @@ import { parseSunDirection } from './sun'
 /** Cesium Moon Terrain (3D Tiles). The ion account must have it under My Assets, or it 404s. */
 const CESIUM_MOON_ASSET_ID = 2684829
 
-// Start straight above the south pole, high enough to frame the polar cap down to about 84°S,
+// Start straight above the south pole, framing the 85.5°S high-resolution disc with its surroundings,
 // with 0° longitude at the top of the screen as on south-polar maps.
-const START_HEIGHT_M = 400_000
+const START_HEIGHT_M = 730_000
 const SITE_RANGE_M = 30_000
 const OBLIQUE_PITCH = CesiumMath.toRadians(-45)
 const MIN_ZOOM_DISTANCE_M = 150
