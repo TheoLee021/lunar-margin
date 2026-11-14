@@ -23,6 +23,8 @@ npm run dev
 
 Open http://localhost:5173.
 
+Backend details (NASA data ingestion, illumination and Earth-visibility analysis): see [api/README.md](api/README.md).
+
 See [AGENTS.md](AGENTS.md) for conventions, commands, and ownership.
 
 ## License
