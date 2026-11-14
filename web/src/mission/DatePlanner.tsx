@@ -2,20 +2,28 @@ import { useEffect, useRef, useState } from 'react'
 import { dayOf, exampleCost, iso, short, DAY } from './missionDates'
 import { TransferOrbit } from './TransferOrbit'
 import { MissionCharts } from './MissionCharts'
-import type { Analysis, Schedule } from './types'
+import { missionParams } from './liveAnalysis'
+import {
+  useMissionAnalysis,
+  type MissionAnalysisResult,
+} from './useMissionAnalysis'
+import { demoDateScore } from './demoDateScore'
+import type { CandidateSite, Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
 import './date-planner.css'
 
 type Props = {
   schedule: Schedule
-  analyze: (schedule: Schedule) => Analysis | null
+  site: CandidateSite
+  appliedAnalysis: MissionAnalysisResult
   hour: number
   onApply: (schedule: Schedule) => void
   onClose: () => void
 }
 export function DatePlanner({
   schedule,
-  analyze,
+  site,
+  appliedAnalysis,
   hour,
   onApply,
   onClose,
@@ -39,7 +47,13 @@ export function DatePlanner({
     .filter((p): p is number => p !== null)
   const minimum = Math.min(...prices)
   const validDraft = ScheduleSchema.safeParse(draft).success
-  const analysis = validDraft ? analyze(draft) : null
+  const score = validDraft ? demoDateScore(draft) : null
+  const sameSurfacePeriod =
+    draft.landing === schedule.landing && draft.duration === schedule.duration
+  const preview = useMissionAnalysis(
+    validDraft && !sameSurfacePeriod ? missionParams(site, draft) : null,
+  )
+  const live = sameSurfacePeriod ? appliedAnalysis : preview
   const [formError, setFormError] = useState('')
   useEffect(() => {
     const dialog = ref.current!,
@@ -283,7 +297,8 @@ export function DatePlanner({
             <>
               <TransferOrbit schedule={draft} />
               <MissionCharts
-                analysis={analysis}
+                score={score}
+                live={live}
                 hour={hour}
                 onLanding={selectLanding}
               />

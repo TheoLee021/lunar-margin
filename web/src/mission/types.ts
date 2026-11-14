@@ -28,14 +28,17 @@ export type Timeline = {
   earthHz: number[]
   sunVis: boolean[]
   earthVis: boolean[]
-  longest: number
-  sunPct: number
-  earthPct: number
+  sunPeriods: VisibilityPeriod[]
+  earthPeriods: VisibilityPeriod[]
+  start: string
+  end: string
+  stepMinutes: number
 }
-export type Analysis = {
+export type DateScore = {
   day: number
   duration: number
   xs: number[]
   ys: number[]
-  timeline: Timeline
 }
+
+export type VisibilityPeriod = { start: number; end: number; on: boolean }

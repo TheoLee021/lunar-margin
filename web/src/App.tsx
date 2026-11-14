@@ -3,8 +3,8 @@ import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
 import { MissionSummary } from './mission/MissionSummary'
 import { DEMO_SITES, INITIAL_SELECTION } from './mission/demoSites'
-import { demoAnalysis } from './mission/demoAnalysis'
-import type { Schedule } from './mission/types'
+import { missionParams } from './mission/liveAnalysis'
+import { useMissionAnalysis } from './mission/useMissionAnalysis'
 
 const DatePlanner = lazy(() =>
   import('./mission/DatePlanner').then((module) => ({
@@ -32,9 +32,13 @@ export default function App() {
       })
     return () => controller.abort()
   }, [])
+  const site =
+    DEMO_SITES.find((s) => s.id === selection.siteId) ?? DEMO_SITES[0]!
+  const live = useMissionAnalysis(missionParams(site, selection))
   return (
     <MissionWorkspace
       selection={selection}
+      analysis={live}
       onSelect={(siteId) => setSelection((current) => ({ ...current, siteId }))}
       summary={
         <button
@@ -73,13 +77,8 @@ export default function App() {
           <DatePlanner
             schedule={selection}
             hour={0}
-            analyze={(draft: Schedule) =>
-              demoAnalysis(
-                draft,
-                DEMO_SITES.find((site) => site.id === selection.siteId) ??
-                  DEMO_SITES[0]!,
-              )
-            }
+            site={site}
+            appliedAnalysis={live}
             onApply={(schedule) => {
               setSelection((current) => ({ ...current, ...schedule }))
               setPlanner(false)
