@@ -6,20 +6,30 @@ import {
   type Ref,
 } from 'react'
 import type { LunarLocation } from './location'
+import type { MoonMarker } from './markerLayer'
 import type { MoonScene } from './scene'
 import { parseSunDirection, type Vector3 } from './sun'
 
 /** Imperative API for panels. Calls made before the Moon has loaded are applied once it is ready. */
 export interface MoonViewerHandle {
   flyTo(location: LunarLocation): void
+  /** Back to the start view straight above the south pole. No-op until the Moon has loaded. */
+  flyToOverview(): void
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
   setSunDirection(direction: unknown): void
 }
 
 interface MoonViewerProps {
   ref?: Ref<MoonViewerHandle>
+  /** Labelled points such as candidate landing sites. */
+  markers?: readonly MoonMarker[]
+  selectedMarkerId?: string | null
+  onMarkerSelect?: (id: string) => void
+  /** Click on the surface (not on a marker). */
   onPick?: (location: LunarLocation) => void
 }
+
+const NO_MARKERS: readonly MoonMarker[] = []
 
 type LoadState =
   { kind: 'loading' } | { kind: 'ready' } | { kind: 'error'; message: string }
@@ -30,17 +40,32 @@ const sceneModule = import('./scene')
 
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
 
-export default function MoonViewer({ ref, onPick }: MoonViewerProps) {
+export default function MoonViewer({
+  ref,
+  markers = NO_MARKERS,
+  selectedMarkerId = null,
+  onMarkerSelect,
+  onPick,
+}: MoonViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const compassRef = useRef<HTMLSpanElement>(null)
   const sceneRef = useRef<MoonScene | null>(null)
   const pending = useRef<{ fly?: LunarLocation; sun?: Vector3 | null }>({})
-  const onPickRef = useRef(onPick)
+  const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const ready = state.kind === 'ready'
 
   useEffect(() => {
-    onPickRef.current = onPick
-  }, [onPick])
+    callbacks.current = { onPick, onMarkerSelect }
+  }, [onPick, onMarkerSelect])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setMarkers(markers)
+  }, [ready, markers])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setSelectedMarker(selectedMarkerId)
+  }, [ready, selectedMarkerId])
 
   useImperativeHandle(
     ref,
@@ -48,6 +73,9 @@ export default function MoonViewer({ ref, onPick }: MoonViewerProps) {
       flyTo(location) {
         if (sceneRef.current) sceneRef.current.flyTo(location)
         else pending.current.fly = location
+      },
+      flyToOverview() {
+        sceneRef.current?.flyToOverview()
       },
       setSunDirection(direction) {
         if (sceneRef.current) sceneRef.current.setSunDirection(direction)
@@ -70,7 +98,8 @@ export default function MoonViewer({ ref, onPick }: MoonViewerProps) {
         createMoonScene(container, {
           ionToken,
           signal: controller.signal,
-          onPick: (location) => onPickRef.current?.(location),
+          onPick: (location) => callbacks.current.onPick?.(location),
+          onMarkerSelect: (id) => callbacks.current.onMarkerSelect?.(id),
           onHeadingChange: (heading) => {
             if (compassRef.current)
               compassRef.current.style.transform = `rotate(${-heading}rad)`

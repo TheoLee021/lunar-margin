@@ -20,6 +20,7 @@ import {
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { shouldFreeCameraAxis } from './camera'
 import { toLunarLocation, type LunarLocation } from './location'
+import { createMarkerLayer, type MoonMarker } from './markerLayer'
 import { parseSunDirection } from './sun'
 
 /** Cesium Moon Terrain (3D Tiles). The ion account must have it under My Assets, or it 404s. */
@@ -64,11 +65,16 @@ export interface MoonSceneOptions {
   ionToken: string
   signal: AbortSignal
   onPick: (location: LunarLocation) => void
+  onMarkerSelect: (id: string) => void
   onHeadingChange: (headingRad: number) => void
 }
 
 export interface MoonScene {
   flyTo(location: LunarLocation): void
+  /** Back to the start view: straight above the south pole. */
+  flyToOverview(): void
+  setMarkers(markers: readonly MoonMarker[]): void
+  setSelectedMarker(id: string | null): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
   resetNorth(): void
@@ -155,9 +161,15 @@ export async function createMoonScene(
     })
   }
 
+  const markers = createMarkerLayer(viewer)
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
+      const markerId = markers.markerIdOf(scene.pick(position))
+      if (markerId !== undefined) {
+        options.onMarkerSelect(markerId)
+        return
+      }
       const surface = pickSurface(position)
       if (!surface) return
       options.onPick(
@@ -179,10 +191,11 @@ export async function createMoonScene(
     ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
   )
 
-  camera.setView({
+  const overview = {
     destination: Cartesian3.fromDegrees(0, -90, START_HEIGHT_M),
     orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 },
-  })
+  }
+  camera.setView(overview)
 
   return {
     flyTo(location) {
@@ -193,6 +206,15 @@ export async function createMoonScene(
         SITE_RANGE_M,
         2,
       )
+    },
+    flyToOverview() {
+      camera.flyTo({ ...overview, duration: 1.2 })
+    },
+    setMarkers(next) {
+      markers.setMarkers(next)
+    },
+    setSelectedMarker(id) {
+      markers.setSelected(id)
     },
     setSunDirection(direction) {
       if (direction === null) {
