@@ -32,6 +32,7 @@ from lunar_margin.engine.candidates.filtering import (
     reason_names,
 )
 from lunar_margin.engine.candidates.grid import SitePoints, polar_grid, refine_points
+from lunar_margin.engine.candidates.horizon_table import find_table
 from lunar_margin.engine.candidates.mission import MissionRequest, plan_search
 from lunar_margin.engine.candidates.projection import polar_radius_m
 from lunar_margin.engine.candidates.ranking import RankScores, score_sites
@@ -65,8 +66,9 @@ from lunar_margin.pipeline.candidate_schema import (
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, write_status
 from lunar_margin.pipeline.candidates_export import simple_json
+from lunar_margin.pipeline.horizons import TABLES_DIR, resolve_dems, table_spec_for
 from lunar_margin.pipeline.png import encode_png
-from lunar_margin.pipeline.sources import DEM_SOURCES, SPICE_SOURCES
+from lunar_margin.pipeline.sources import SPICE_SOURCES
 
 _REASON_KEYS = (
     "sun_fraction_below_min",
@@ -209,32 +211,19 @@ def run_search(
     extra_warnings: list[str] | None = None,
 ) -> SearchOutcome:
     started = time.perf_counter()
-    if config.dem not in DEM_SOURCES:
-        raise ValueError(f"unknown DEM '{config.dem}'. choices: {', '.join(DEM_SOURCES)}")
-    img_source, lbl_source = DEM_SOURCES[config.dem]
-    dem_files = (data_dir / "dem" / img_source.filename, data_dir / "dem" / lbl_source.filename)
-    if not all(p.exists() for p in dem_files):
-        raise FileNotFoundError(
-            f"DEM files not found in {data_dir / 'dem'}; "
-            f"run `uv run python -m lunar_margin.pipeline.fetch --dem {config.dem}`"
+    selection = resolve_dems(config, data_dir)
+    img_source = selection.primary
+    dem_pairs = selection.pairs
+    fallback_source = selection.fallback
+    warnings: list[str] = list(extra_warnings or []) + selection.warnings
+    table_spec = table_spec_for(config, data_dir)
+    table = find_table(data_dir / TABLES_DIR, table_spec)
+    if table is None:
+        warnings.append(
+            "수평선 테이블이 없어 지점마다 수평선을 직접 계산했습니다(느림). "
+            "`uv run python -m lunar_margin.pipeline.horizons`로 미리 계산해 두면 "
+            "같은 조건의 이후 탐색이 훨씬 빨라집니다."
         )
-    dem_pairs = [dem_files]
-    fallback_source = None
-    warnings: list[str] = list(extra_warnings or [])
-    if config.fallback_dem is not None:
-        if config.fallback_dem not in DEM_SOURCES:
-            raise ValueError(f"unknown DEM '{config.fallback_dem}'")
-        fb_img, fb_lbl = DEM_SOURCES[config.fallback_dem]
-        fb_files = (data_dir / "dem" / fb_img.filename, data_dir / "dem" / fb_lbl.filename)
-        if all(p.exists() for p in fb_files):
-            dem_pairs.append(fb_files)
-            fallback_source = fb_img
-        else:
-            warnings.append(
-                f"보충 DEM({fb_img.filename})이 없어 주 DEM 바깥의 지형은 알 수 없습니다. "
-                f"`uv run python -m lunar_margin.pipeline.fetch --dem {config.fallback_dem}`로 "
-                "받으면 수평선이 ROI 전체에서 완전해집니다."
-            )
     load_kernels(data_dir / "spice")
     dem = open_dem(dem_pairs)
     workers = config.workers or os.cpu_count() or 1
@@ -286,6 +275,7 @@ def run_search(
             workers=workers,
             dem_files=dem_pairs,
             on_progress=reporter("coarse"),
+            table=table,
         )
         coarse_filter = evaluate(
             coarse_field,
@@ -314,6 +304,7 @@ def run_search(
         workers=workers,
         dem_files=dem_pairs,
         on_progress=reporter("fine"),
+        table=table,
     )
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
@@ -476,6 +467,7 @@ def run_search(
         ),
         projection=_PROJECTION,
         plan_id=fine.plan_id,
+        horizon_table=None if table is None else table.directory.name,
     )
     return SearchOutcome(
         config=config,

@@ -90,6 +90,7 @@ class Source(_Model):
     window: WindowSource
     projection: str
     plan_id: str
+    horizon_table: str | None = None  # 사전 계산한 수평선 테이블 id (직접 계산했으면 null)
 
 
 class Summary(_Model):
