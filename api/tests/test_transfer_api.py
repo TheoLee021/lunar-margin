@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 from fastapi.testclient import TestClient
 
 from lunar_margin.app.main import create_app
@@ -53,3 +54,25 @@ def test_transfer_normalizes_offset_dates_to_utc(data_dir: Path) -> None:
     assert response.status_code == 200
     assert response.json()["departure"] == PARAMS["departure"]
     assert response.json()["arrival"] == PARAMS["arrival"]
+
+
+def test_transfer_api_preserves_dates_and_tangency_at_perilune(data_dir: Path) -> None:
+    client = TestClient(create_app(Settings(data_dir=data_dir)))
+    for departure, arrival in [("2027-01-06", "2027-01-10"), ("2027-01-13", "2027-01-18")]:
+        params = {"departure": departure + "T00:00:00Z", "arrival": arrival + "T00:00:00Z"}
+        response = client.get("/trajectory/transfer", params=params)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["departure"] == params["departure"]
+        assert body["arrival"] == params["arrival"]
+        tail = body["transfer"][-3:]
+        times = np.array([s["seconds"] - tail[-1]["seconds"] for s in tail])
+        positions = np.array(
+            [np.array(s["spacecraft_km"]) - s["moon_km"] for s in tail], dtype=np.float64
+        )
+        velocity = np.array([np.polyfit(times, positions[:, axis], 2)[1] for axis in range(3)])
+        radial = np.asarray(positions[-1], dtype=np.float64).copy()
+        radial /= np.linalg.norm(radial)
+        assert abs(float(np.dot(velocity, radial))) < 0.005
+        assert abs(body["metrics"]["arrival_altitude_km"] - 100) < 0.05
+        assert body["transfer"][-1] == body["capture"][0]

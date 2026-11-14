@@ -1,7 +1,7 @@
 """Dated Earth-Moon preview: Lambert seed + Earth/Moon numerical shooting.
 
-Free parking-orbit orientation, impulsive insertion on the Earth-facing side of
-an altitude-100-km lunar sphere. Arrival is not constrained to be a perilune.
+Free parking-orbit orientation, targeting an altitude-100-km lunar perilune
+at the requested arrival time. Impulsive tangential circularization at perilune.
 No launch-site/ascent, Sun gravity, oblateness, finite burns or landing model.
 """
 
@@ -127,7 +127,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     normal = np.cross(end, end_velocity)
     normal /= np.linalg.norm(normal)
     tangent = np.cross(normal, radial)
-    target = end - (R_M + ARRIVAL_HEIGHT) * radial
+    seed_target = end - (R_M + ARRIVAL_HEIGHT) * radial
     deadline = monotonic() + 20
 
     def rhs(t: float, state: Vec, weight: float = 1.0) -> Vec:
@@ -158,16 +158,18 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
 
     # The parking plane follows lunar orbital angular momentum, not a fixed
     # launch site. Try two direct-transfer orientations; never draw an unfitted seed.
-    angles = (160.0, 140.0) if duration <= 5 * 86400 else (200.0, 240.0)
+    angles = (160.0, 140.0)
     t_pre = np.unique(
         np.r_[
-            np.linspace(0, duration, 650), np.linspace(max(0, duration - 3 * 3600), duration, 160)
+            np.linspace(0, duration, 650),
+            np.linspace(duration - 3 * 3600, duration, 160),
+            np.linspace(duration - 600, duration, 121),
         ]
     )
     for angle in angles:
         radians = math.radians(angle)
         r0 = (R_E + PARKING) * (math.cos(radians) * radial - math.sin(radians) * tangent)
-        initial = _lambert(r0, target, duration, normal)
+        initial = _lambert(r0, seed_target, duration, normal)
 
         def propagate(velocity: Vec, weight: float, origin: Vec = r0) -> Vec:
             solution = solve_ivp(
@@ -178,7 +180,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
                 method="DOP853",
                 rtol=2e-9,
                 atol=1e-9,
-                max_step=7200,
+                max_step=1800,
             )
             if not solution.success:
                 raise ValueError("Numerical propagation failed")
@@ -188,7 +190,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         converged = True
 
         def residual(v: Vec, gravity: float) -> Vec:
-            return (propagate(v, gravity)[:3] - target) / 1000
+            return (propagate(v, gravity)[:3] - seed_target) / 1000
 
         for weight in (0.25, 0.5, 0.75, 1.0):
             fitted = root(
@@ -198,11 +200,56 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
                 options={"eps": 1e-10, "xtol": 1e-8, "maxfev": 60},
             )
             velocity = np.asarray(fitted.x, dtype=np.float64)
-            if np.linalg.norm(propagate(velocity, weight)[:3] - target) > 0.03:
+            if np.linalg.norm(propagate(velocity, weight)[:3] - seed_target) > 0.03:
                 converged = False
                 break
         if not converged:
             continue
+
+        # Keep the dates fixed and free one arrival-position angle. Three departure
+        # velocity components plus that angle satisfy position (3) and radial
+        # velocity (1). Continuation from the fitted near-side point avoids a
+        # discontinuous jump to another encounter branch.
+        seed_state = propagate(velocity, 1.0)
+        seed_r = seed_state[:3] - end
+        seed_radial_speed = float(
+            np.dot(seed_state[3:] - end_velocity, seed_r) / np.linalg.norm(seed_r)
+        )
+        parameters = np.r_[velocity, 0.0]
+
+        def arrival_position(angle: float) -> Vec:
+            return end + (R_M + ARRIVAL_HEIGHT) * (
+                -math.cos(angle) * radial + math.sin(angle) * tangent
+            )
+
+        def perilune_residual(parameters: Vec, radial_speed: float) -> Vec:
+            state = propagate(parameters[:3], 1.0)
+            relative_r = state[:3] - end
+            actual_radial_speed = float(
+                np.dot(state[3:] - end_velocity, relative_r) / np.linalg.norm(relative_r)
+            )
+            return np.r_[
+                (state[:3] - arrival_position(float(parameters[3]))) / 1000,
+                actual_radial_speed - radial_speed,
+            ]
+
+        for fraction in (0.25, 0.5, 0.75, 1.0):
+            goal_speed = seed_radial_speed * (1 - fraction)
+            fitted = root(
+                perilune_residual,
+                parameters,
+                args=(goal_speed,),
+                options={"eps": 1e-10, "xtol": 1e-9, "maxfev": 80},
+            )
+            parameters = np.asarray(fitted.x, dtype=np.float64)
+            residuals = perilune_residual(parameters, goal_speed)
+            if np.linalg.norm(residuals[:3]) > 0.00003 or abs(residuals[3]) > 1e-5:
+                converged = False
+                break
+        if not converged:
+            continue
+        velocity = parameters[:3]
+        target = arrival_position(float(parameters[3]))
         pre = solve_ivp(
             rhs,
             (0, duration),
@@ -220,7 +267,28 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         error = float(np.linalg.norm(pre.y[:3, -1] - target))
         earth_clearance = float(np.linalg.norm(pre.y[:3], axis=0).min() - R_E)
         lunar_clearance = float(np.linalg.norm(pre.y[:3].T - moon_pre, axis=1).min() - R_M)
-        if error > 0.05 or earth_clearance < 100 or lunar_clearance < 0:
+        relative_r = pre.y[:3, -1] - end
+        relative_v = pre.y[3:, -1] - end_velocity
+        radius = float(np.linalg.norm(relative_r))
+        up = relative_r / radius
+        radial_speed = float(np.dot(relative_v, up))
+        relative_acceleration = rhs(duration, np.asarray(pre.y[:, -1]))[3:] - moon(duration, 2)
+        radial_acceleration = float(
+            (np.dot(relative_v, relative_v) - radial_speed**2) / radius
+            + np.dot(up, relative_acceleration)
+        )
+        # Zero radial speed alone could select an apolune. Require a minimum
+        # distance with an inbound approach and no earlier, lower lunar passage.
+        previous_r = np.asarray(pre.y[:3, -2] - moon_pre[-2], dtype=np.float64)
+        approaching = float(np.linalg.norm(previous_r)) > radius
+        if (
+            error > 0.05
+            or earth_clearance < 100
+            or lunar_clearance < ARRIVAL_HEIGHT - 0.05
+            or abs(radial_speed) > 1e-5
+            or radial_acceleration <= 0
+            or not approaching
+        ):
             continue
         break
     else:
@@ -237,7 +305,12 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     )
     loi = float(np.linalg.norm(captured_velocity - state[3:]))
     captured_state = np.r_[state[:3], captured_velocity]
-    t_post = np.linspace(duration, duration + POST_SECONDS, 420)
+    t_post = np.unique(
+        np.r_[
+            np.linspace(duration, duration + POST_SECONDS, 420),
+            np.linspace(duration, duration + 600, 121),
+        ]
+    )
     post = solve_ivp(
         rhs,
         (duration, duration + POST_SECONDS),
@@ -266,7 +339,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     return TransferResult(
         departure,
         arrival,
-        "DE440 J2000 Earth-Moon gravity; Lambert seed + numerical shooting",
+        "DE440 J2000 Earth-Moon gravity; Lambert seed + perilune shooting",
         R_E,
         R_M,
         [1.0, 0.0, 0.0],
