@@ -109,7 +109,7 @@ export default function AnalysisWorkspace() {
     <main className="relative h-svh overflow-hidden bg-black text-neutral-100">
       <MoonViewer markers={siteMarkers} onPick={pickLocation} />
       {/* Panels float over the Moon; the bottom strip stays clear for the compass and data credits. */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3 pb-16 lg:flex-row lg:items-start lg:p-4 lg:pb-16">
+      <div className="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3 pb-24 lg:flex-row lg:items-start lg:p-4 lg:pb-24">
         <aside className="pointer-events-auto flex max-h-full w-full shrink-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-950/80 lg:w-[22rem]">
           <header className="flex flex-col gap-1 border-b border-white/10 px-4 py-3">
             <div className="flex items-baseline gap-3">
