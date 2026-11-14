@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEventHandler } from 'react'
 import { fetchHealth } from './api/client'
 import type { AnalysisKind, AnalysisParams } from './api/analysis'
 import { AnalysisForm } from './analysis/AnalysisForm'
@@ -33,7 +33,15 @@ const INITIAL_VALUES: FormValues = {
   observerHeightM: '0',
 }
 
-export default function AnalysisWorkspace() {
+type AnalysisWorkspaceProps = {
+  dashboardHref?: string
+  onDashboardClick?: MouseEventHandler<HTMLAnchorElement>
+}
+
+export default function AnalysisWorkspace({
+  dashboardHref = '/',
+  onDashboardClick,
+}: AnalysisWorkspaceProps) {
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })
   const [kind, setKind] = useState<AnalysisKind>('illumination')
   const [values, setValues] = useState<FormValues>(INITIAL_VALUES)
@@ -111,7 +119,14 @@ export default function AnalysisWorkspace() {
       {/* Panels float over the Moon; the bottom strip stays clear for the compass and data credits. */}
       <div className="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3 pb-16 lg:flex-row lg:items-start lg:p-4 lg:pb-16">
         <aside className="pointer-events-auto flex max-h-full w-full shrink-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-950/80 lg:w-[22rem]">
-          <header className="flex flex-col gap-1 border-b border-white/10 px-4 py-3">
+          <header className="flex shrink-0 flex-col gap-2 border-b border-white/10 px-4 py-3">
+            <a
+              className="hud-button self-start"
+              href={dashboardHref}
+              onClick={onDashboardClick}
+            >
+              미션 대시보드
+            </a>
             <div className="flex items-baseline gap-3">
               <h1 className="text-xl font-semibold tracking-tight">
                 Lunar Margin
