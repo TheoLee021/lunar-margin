@@ -47,8 +47,8 @@ def main() -> None:
             "DEM coverage counts are coherent",
         )
         require(
-            abs(region["coverage_fraction"] -
-                region["valid_samples"] / region["total_samples"]) < 0.0001,
+            abs(region["coverage_fraction"] - region["valid_samples"] / region["total_samples"])
+            < 0.0001,
             "DEM coverage fraction matches sample counts",
         )
         require(
