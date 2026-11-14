@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { dayOf, exampleCost, iso, short, DAY } from './missionDates'
-import { TransferOrbit } from './TransferOrbit'
 import { MissionCharts } from './MissionCharts'
 import { missionParams } from './liveAnalysis'
 import {
@@ -17,6 +16,7 @@ type Props = {
   site: CandidateSite
   appliedAnalysis: MissionAnalysisResult
   hour: number
+  onViewOrbit: (schedule: Schedule) => void
   onApply: (schedule: Schedule) => void
   onClose: () => void
 }
@@ -26,6 +26,7 @@ export function DatePlanner({
   appliedAnalysis,
   hour,
   onApply,
+  onViewOrbit,
   onClose,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -295,7 +296,6 @@ export function DatePlanner({
           </section>
           {validDraft ? (
             <>
-              <TransferOrbit schedule={draft} />
               <MissionCharts
                 score={score}
                 live={live}
@@ -307,7 +307,7 @@ export function DatePlanner({
             <section className="group" role="status">
               <h2>일정을 확인하세요</h2>
               <p className="hint">
-                착륙일을 출발일 이후로 선택하면 비행 궤도와 분석이 표시됩니다.
+                착륙일을 출발일 이후로 선택하면 일정 분석이 표시됩니다.
               </p>
             </section>
           )}
@@ -316,13 +316,24 @@ export function DatePlanner({
       <footer className="planner-footer">
         <p>
           <span className="example-dot" />
-          비용과 비행 궤도는 목업 예시입니다.
-          <small>실제 견적·궤도 계산 결과가 아닙니다.</small>
+          비용은 목업 예시입니다.
+          <small>궤도 보기로 이동하면 선택한 일정이 유지됩니다.</small>
         </p>
         <div>
           <span aria-live="polite">
             {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}
           </span>
+          <button
+            type="button"
+            className="planner-orbit-link"
+            disabled={!validDraft}
+            onClick={() => {
+              const result = ScheduleSchema.safeParse(draft)
+              if (result.success) onViewOrbit(result.data)
+            }}
+          >
+            이 일정의 궤도 보기 ↗
+          </button>
           <button
             type="button"
             id="applyWindow"
