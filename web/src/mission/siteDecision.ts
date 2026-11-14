@@ -39,24 +39,36 @@ export function assessCandidate(
     { maxDarkHours: constraints.maxDarkHours },
     { fraction: '일조율', dark: '연속 암흑' },
   )
-  const slopePass = data.terrain.slope_deg <= constraints.maxSlopeDeg
+  const coveragePass = data.region.coverage_fraction >= 0.9999
+  const regionalSlope = data.region.slope_p95_deg
+  const slopePass = coveragePass && regionalSlope !== null && regionalSlope <= constraints.maxSlopeDeg
   const slopeCheck = {
     id: 'slope',
     label: 'DEM 경사',
     pass: slopePass,
     reason: slopePass
-      ? 'DEM 경사 ' +
-        data.terrain.slope_deg.toFixed(2) +
+      ? '250 m 지역 DEM 경사 P95 ' +
+        regionalSlope!.toFixed(2) +
         '° ≤ ' +
         constraints.maxSlopeDeg +
         '°'
-      : 'DEM 경사 ' +
-        data.terrain.slope_deg.toFixed(2) +
-        '° > 허용 ' +
+      : '250 m 지역 경사 P95 ' +
+        (regionalSlope === null ? '확인 불가' : regionalSlope.toFixed(2) + '°') +
+        ' · 허용 ' +
         constraints.maxSlopeDeg +
         '°',
   }
-  const checks = [...earthChecks, ...sunChecks, slopeCheck]
+  const coverageCheck = {
+    id: 'terrain_coverage',
+    label: 'DEM 지역 자료 완전성',
+    pass: coveragePass,
+    reason: coveragePass
+      ? '250 m 평가 원의 DEM 유효 표본 100%'
+      : 'DEM 유효 표본 ' +
+        (data.region.coverage_fraction * 100).toFixed(1) +
+        '% · 결측으로 지역 지형 미검증',
+  }
+  const checks = [...earthChecks, ...sunChecks, slopeCheck, coverageCheck]
   const weight = earthWeightPercent / 100
   return {
     pass: checks.every((check) => check.pass),
