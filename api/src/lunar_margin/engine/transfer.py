@@ -171,6 +171,9 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         r0 = (R_E + PARKING) * (math.cos(radians) * radial - math.sin(radians) * tangent)
         initial = _lambert(r0, seed_target, duration, normal)
 
+        # DOP853 controls local error and shortens steps near either body. A
+        # two-hour cruise ceiling avoids hundreds of unnecessary far-field steps
+        # per shooting iteration; final propagation uses the same settings.
         def propagate(velocity: Vec, weight: float, origin: Vec = r0) -> Vec:
             solution = solve_ivp(
                 rhs,
@@ -180,7 +183,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
                 method="DOP853",
                 rtol=2e-9,
                 atol=1e-9,
-                max_step=1800,
+                max_step=7200,
             )
             if not solution.success:
                 raise ValueError("Numerical propagation failed")
@@ -259,7 +262,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
             method="DOP853",
             rtol=2e-9,
             atol=1e-9,
-            max_step=1800,
+            max_step=7200,
         )
         if not pre.success or len(pre.t) != len(t_pre):
             continue
