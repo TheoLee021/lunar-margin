@@ -89,7 +89,7 @@ def test_site_assessment_contract(client: TestClient) -> None:
         {"unrecognized": "bad"},
     ],
 )
-def test_invalid_query_fails_422(client: TestClient, patch: dict[str, object]) -> None:
+def test_invalid_query_fails_422(client: TestClient, patch: dict[str, str | float | int]) -> None:
     response = client.get("/analysis/site-assessment", params={**PARAMS, **patch})
     assert response.status_code == 422
 
