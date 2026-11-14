@@ -13,12 +13,15 @@ Model:
  - Instantaneous LOI at that perilune, circularizing in the incoming orbital plane.
 
 Not a flight-design trajectory, not an actual dated ephemeris, not a polar lunar
-orbit design. Solar gravity, Sun/Moon eclipse, nonspherical gravity, plane
-change, launch site and finite-duration burns are outside the present model.
+orbit design. Launch-site and parking-orbit geometry can be SCREENED using
+four user inputs, but are NOT coupled to the current fixed-plane lunar transfer.
+Solar gravity, Sun/Moon eclipse, nonspherical gravity, plane changes,
+actual ascent trajectories and finite-duration burns are outside this model.
 
 Usage:
     python lunar_transfer.py --output output
     python lunar_transfer.py --parking-km 400 --perilune-km 100 --output output400
+    python lunar_transfer.py --launch-site kennedy --parking-km 200 --parking-inc-deg 40 --output output40
 
 Dependencies: numpy, scipy, matplotlib. Optional: plotly for 3D HTML.
 """
@@ -38,6 +41,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+
+from launch_geometry import SITES, analyze as analyze_launch, comparison as compare_launch_sites, export as export_launch
 
 # Units: km, km/s, s. Rounded benchmark constants.
 MU_E = 398600.435436                 # km^3/s^2
@@ -422,7 +427,13 @@ def parking_trade(out: Path, perilune_km: float, post_hours: float):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    # The four mission-input controls (site, parking altitude, inclination, azimuth).
+    # Inclination/azimuth can be omitted or cross-checked against each other.
+    parser.add_argument('--launch-site',choices=sorted(SITES),default='kennedy',help='Launch-pad preset for geometric screening; NOT coupled to lunar transfer plane')
     parser.add_argument('--parking-km',type=float,default=200.,help='Initial Earth circular parking altitude [km]')
+    parser.add_argument('--parking-inc-deg',type=float,default=None,help='Geometric target parking inclination [deg]')
+    parser.add_argument('--azimuth-deg',type=float,default=None,help='INERTIAL horizontal heading clockwise from north [deg], not pad steering')
+    parser.add_argument('--compare-inc-deg',type=float,default=40.,help='Common parking inclination for the four-launch-site comparison [deg]')
     parser.add_argument('--perilune-km',type=float,default=100.,help='Requested lunar arrival periapsis altitude [km]')
     parser.add_argument('--apogee-km',type=float,default=A_MOON,help='Earth 2-body design apogee radius [km]')
     parser.add_argument('--post-hours',type=float,default=14.,help='Hours propagated after LOI')
@@ -432,9 +443,19 @@ def main():
     if args.parking_km < 100 or args.perilune_km < 20 or args.post_hours <= 0:
         parser.error('Use parking>=100 km, perilune>=20 km and positive post-hours')
     out=Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
+    # Fail closed: a launch geometry mismatch must not be reported as a feasible
+    # coupled mission. Run launch_geometry.py alone to study an invalid case.
+    launch_case=analyze_launch(args.launch_site,args.parking_km,
+                               args.parking_inc_deg,args.azimuth_deg)
+    if not launch_case['geometry']['input_consistency_pass']:
+        parser.error('Direct launch geometry impossible/inconsistent. Run launch_geometry.py to inspect the infeasible case.')
+    comparison_cases=compare_launch_sites(args.parking_km,args.compare_inc_deg)
+    export_launch(out,launch_case,comparison_cases)
     test_err=earth_only_energy_test()
     result=solve_transfer(args.parking_km,args.perilune_km,args.apogee_km,args.post_hours)
     report=metrics(result,test_err)
+    report['launch_site_screening']=launch_case
+    report['transfer_plane_coupled_to_launch_site']=False
     assert abs(report['perilune_actual_altitude_km']-args.perilune_km)<.05
     assert report['post_loi_min_altitude_km']>0, 'Captured orbit intersects lunar surface'
     make_plots(result,out)
@@ -442,6 +463,9 @@ def main():
         report['parking_trade']=parking_trade(out,args.perilune_km,args.post_hours)
     (out/'mission_metrics.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(report,indent=2))
+    print('\nIMPORTANT: Launch-site geometry is a screening result only. The lunar transfer\n'
+          'still uses the original fixed plane; do NOT interpret site changes as a\n'
+          'site-specific TLI/LOI trajectory or verified launch opportunity.')
     print('\nFigures and metrics saved to',out)
 
 if __name__=='__main__':
