@@ -22,7 +22,7 @@ export interface RequestOptions {
   signal?: AbortSignal
 }
 
-const DEFAULT_BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+export const DEFAULT_BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 // FastAPI 에러 본문 `{"detail": ...}` 를 메시지에 담는다.
 async function failureMessage(

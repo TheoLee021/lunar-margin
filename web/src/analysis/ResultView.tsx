@@ -12,17 +12,18 @@ interface Props {
   kind: AnalysisKind
   data: Analysis
   thresholds: Thresholds
-  pinned: boolean
-  pinDisabled: boolean
-  onPin: () => void
+  /** 비교에 담는 기능이 필요 없는 곳(후보 상세 등)에서는 세 값을 모두 생략한다. */
+  pinned?: boolean
+  pinDisabled?: boolean
+  onPin?: () => void
 }
 
 export function ResultView({
   kind,
   data,
   thresholds,
-  pinned,
-  pinDisabled,
+  pinned = false,
+  pinDisabled = false,
   onPin,
 }: Props) {
   const copy = KIND_COPY[kind]
@@ -52,18 +53,20 @@ export function ResultView({
             {data.observer_height_m} m
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onPin}
-          disabled={pinned || pinDisabled}
-          className="rounded-md border border-neutral-600 px-3 py-1.5 text-xs text-neutral-200 hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pinned
-            ? '비교에 추가됨'
-            : pinDisabled
-              ? '비교는 최대 3개'
-              : '비교에 추가'}
-        </button>
+        {onPin ? (
+          <button
+            type="button"
+            onClick={onPin}
+            disabled={pinned || pinDisabled}
+            className="rounded-md border border-neutral-600 px-3 py-1.5 text-xs text-neutral-200 hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {pinned
+              ? '비교에 추가됨'
+              : pinDisabled
+                ? '비교는 최대 3개'
+                : '비교에 추가'}
+          </button>
+        ) : null}
       </header>
 
       <MetricCards kind={kind} data={data} />

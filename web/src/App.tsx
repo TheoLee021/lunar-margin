@@ -1,10 +1,18 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
 import { MissionSummary } from './mission/MissionSummary'
 import { DEMO_SITES, INITIAL_SELECTION } from './mission/demoSites'
 import { missionParams } from './mission/liveAnalysis'
 import { useMissionAnalysis } from './mission/useMissionAnalysis'
+import type { MissionSelection } from './mission/types'
 
 const DatePlanner = lazy(() =>
   import('./mission/DatePlanner').then((module) => ({
@@ -15,11 +23,17 @@ const DatePlanner = lazy(() =>
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
+const SearchView = lazy(() => import('./search/SearchView'))
+
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 
 export default function App() {
-  const analysis =
-    new URLSearchParams(window.location.search).get('view') === 'analysis'
+  const [selection, setSelection] = useState(INITIAL_SELECTION)
+  const [view, setView] = useState(() =>
+    new URLSearchParams(window.location.search).get('view'),
+  )
+  const analysis = view === 'analysis'
+  const searching = view === 'search'
   return (
     <>
       <Suspense
@@ -29,21 +43,44 @@ export default function App() {
           </p>
         }
       >
-        {analysis ? <AnalysisWorkspace /> : <MissionApp />}
+        {searching ? (
+          <main className="min-h-screen bg-neutral-950 p-6 pt-20 text-neutral-100">
+            <h1 className="mb-6 text-xl font-semibold">
+              남극 착륙 후보지 탐색
+            </h1>
+            <SearchView />
+          </main>
+        ) : analysis ? (
+          <AnalysisWorkspace />
+        ) : (
+          <MissionApp selection={selection} setSelection={setSelection} />
+        )}
       </Suspense>
+      <button
+        type="button"
+        className="hud-button fixed top-4 right-4 z-40"
+        onClick={() => setView(searching ? null : 'search')}
+      >
+        {searching ? '미션 대시보드' : '후보지 탐색'}
+      </button>
       <a
         className="hud-button fixed bottom-4 left-32 z-20"
-        href={analysis ? '/' : '/?view=analysis'}
+        href={analysis || searching ? '/' : '/?view=analysis'}
       >
-        {analysis ? '미션 대시보드' : '상세 분석'}
+        {analysis || searching ? '미션 대시보드' : '상세 분석'}
       </a>
     </>
   )
 }
 
-function MissionApp() {
+function MissionApp({
+  selection,
+  setSelection,
+}: {
+  selection: MissionSelection
+  setSelection: Dispatch<SetStateAction<MissionSelection>>
+}) {
   const [planner, setPlanner] = useState(false)
-  const [selection, setSelection] = useState(INITIAL_SELECTION)
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })
   useEffect(() => {
     const controller = new AbortController()
