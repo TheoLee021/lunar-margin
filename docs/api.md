@@ -98,7 +98,7 @@ TBD (layer 목록, 타일링 스킴, 투영)
 ```
 
 계산 방식:
-- 기존 horizon_profile()을 후보마다 1회 계산하여 Sun/Earth 두 시계열에 함께 적용한다.
+- 기존 horizon_profile()을 후보마다 1회 계산하여 Sun/Earth 두 시계열에 함께 적용한다. 후보 스크리닝 계산은 방위각 2° 간격, DEM ray 160 m 간격을 사용한다(상세 분석은 기본 1°/80 m). 따라서 메인 HUD의 선별 점수와 상세 분석의 가시율은 약간 차이 날 수 있다.
 - 기존 SPICE, visibility_series(), summarize()를 그대로 재사용한다.
 - site_characteristics.py에서 160 m 간격의 2D 중심 유한차분 경사와 400 m 창의 평면 제거 RMS를 계산한다. 80 m DEM 해상도로 착륙선 발판 수준의 장애물 안전성을 보증하지 않는다.
 - 별도의 우주선·태양전지 발전량·RF 링크 성공률 모델은 없다.
