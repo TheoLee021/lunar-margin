@@ -6,8 +6,8 @@ from numpy.typing import NDArray
 
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.site_characteristics import (
-    characterize_site,
     characterize_region,
+    characterize_site,
     local_roughness_rms_m,
     local_slope_deg,
 )
