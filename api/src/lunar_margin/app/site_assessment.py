@@ -101,7 +101,11 @@ def get_site_assessor(settings: Annotated[Settings, Depends(get_settings)]) -> A
             slope_baseline_m=query.slope_baseline_m,
             roughness_window_m=query.roughness_window_m,
         )
-        horizon = horizon_profile(dem, query.lat, query.lon)
+        # Coarse screening: reduced DEM ray sampling limits concurrent API memory.
+        # The existing detailed analysis keeps its higher-resolution settings.
+        horizon = horizon_profile(
+            dem, query.lat, query.lon, azimuth_step_deg=2.0, step_m=160.0
+        )
         et = utc_range(query.start, query.end, query.step_minutes)
 
         def summary(body: str) -> BodySummary:
