@@ -79,9 +79,10 @@ export interface Preset {
   lon: number
 }
 
-// 예시 좌표이며 확정된 착륙 후보지가 아니다.
+// 예시 좌표이며 확정된 착륙 후보지가 아니다. 2027-01 한 달 기준 값은 api/README.md 참고.
 export const PRESETS: readonly Preset[] = [
-  { name: 'Shackleton 가장자리 부근', lat: -89.7, lon: 130 },
-  { name: 'Connecting Ridge 부근', lat: -89.5, lon: 222 },
-  { name: 'Malapert 산 부근', lat: -86, lon: 0 },
+  { name: 'Connecting Ridge 부근 (일조·통신 양호)', lat: -89.5, lon: 222 },
+  { name: 'Malapert 산 부근 (고지대)', lat: -86, lon: 0 },
+  { name: '극점 부근 고지대', lat: -89.8, lon: 210 },
+  { name: 'Shackleton 크레이터 안쪽 (영구 음영 예시)', lat: -89.7, lon: 130 },
 ]
