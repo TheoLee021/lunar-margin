@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from lunar_margin.app.analysis import router as analysis_router
-from lunar_margin.app.site_assessment import router as site_assessment_router
 from lunar_margin.app.settings import Settings
+from lunar_margin.app.site_assessment import router as site_assessment_router
 
 
 class Health(BaseModel):
