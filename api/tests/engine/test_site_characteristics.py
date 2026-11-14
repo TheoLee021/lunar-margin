@@ -105,7 +105,7 @@ def test_circular_region_slope_detects_incline() -> None:
 
 def test_circular_region_missing_dem_samples_reduce_coverage() -> None:
     heights = np.zeros((N, N), dtype=np.float32)
-    heights[C, C + 1] = np.nan
+    heights[C, C + 3] = np.nan
     dem = make_dem(heights)
     region = characterize_region(dem, -90.0, 0.0)
     assert 0 < region.coverage_fraction < 1
