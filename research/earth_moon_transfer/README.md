@@ -145,6 +145,56 @@ Run the launch geometry tests from this folder:
 python -m unittest -v test_launch_geometry.py
 ```
 
+
+## v1.2: 100-km lunar orbit to powered touchdown (standalone lander)
+
+This is a **separate, idealized descent-stage mission segment**, not a continuation of the full transfer spacecraft state. The Earth–Moon transfer captures into a near-circular orbit in its incoming plane; this lander demonstrator assumes an independently supplied circular lunar orbit with no specific latitude/longitude. **It does not establish south-pole landing feasibility.**
+
+Run (from this directory):
+
+```bash
+python lunar_descent.py --orbit-km 100 --pdi-km 15 --mass-kg 1650 --dry-mass-kg 650 --thrust-n 8500 --isp-s 310 --output output_descent
+python -m unittest -v test_lunar_descent.py
+```
+
+Scenario model:
+- Initial lunar circular orbit: altitude 100 km, orbital speed about 1,633.5 m/s.
+- **DOI (descent orbit insertion):** instantaneous retrograde impulse at 100 km to an ellipse with 15-km perilune; DOI Δv ~19.46 m/s.
+- **Coast:** half of a two-body Kepler ellipse, about 56.86 min, reaching the 15-km perilune with ~1,692.34 m/s tangential speed.
+- **PDI (powered descent initiation):** finite-thrust, throttleable descent of a hypothetical 1,650-kg wet lander using a maximum 8,500-N engine, Isp 310 s, dry-mass limit 650 kg.
+- Guidance uses ideal state feedback: staged reference radial descent speed, along-track velocity decay, and a thrust magnitude limiter. It is not optimized, and the physical thrust vector may point in arbitrary directions within the chosen 2D plane.
+- **Touchdown criterion:** radial speed ≤1.5 m/s and tangential speed ≤2.0 m/s, mass exceeding dry mass by ≥1 kg; smooth mean-radius sphere, no hazards.
+
+Tested baseline numerical results (rounded):
+| Quantity | Baseline |
+| --- | ---: |
+| DOI Δv | 19.455 m/s |
+| DOI propellant, impulsive rocket-equation approximation | 10.53 kg |
+| DOI coast duration | 56.86 min |
+| Powered descent duration | 12.34 min |
+| Powered descent integrated thrust/mass | ~2,390 m/s |
+| Powered-descent propellant | 893.4 kg |
+| Total DOI + powered-descent propellant | 903.9 kg |
+| Final propellant above dry mass | 96.1 kg |
+| Final radial speed | −0.700 m/s |
+| Final tangential speed | +0.24 m/s |
+| Computed in-plane surface-arc downrange from PDI | ~253 km |
+| Landing criterion | PASS for this *idealized mathematical* case |
+
+**Do not add 2,390 m/s and 19.455 m/s to the earlier Earth–Moon TLI+LOI cost as a validated full-mission budget.** The v1 transfer spacecraft and v1.2 lander have not been modeled with consistent separation staging, vehicle masses, injection planes, or full-mission launch and descent constraints. The 2,390 m/s is the integral of thrust acceleration during descent, not an instantaneous engine burn.
+
+Outputs:
+- `08_deorbit_to_landing_full.png`: 100-km reference orbit, DOI coast, powered descent, touchdown.
+- `09_descent_groundtrack.png`: powered descent altitude vs downrange.
+- `10_descent_time_history.png`: altitude, radial/tangential velocity, thrust.
+- `11_descent_mass_budget.png`: propellant depletion relative to dry mass.
+- `descent_history.csv` and `descent_metrics.json`: reproducible sampled states and assumptions.
+
+**Not included:** lunar polar targeting; real Moon-fixed coordinates/rotation; landing site/time; Sun/Earth visibility or terrain/DEM; navigation covariance; engine restart dynamics, minimum throttle, gimbal limits, slew rates, thermal limits, leg contact or shock; lunar mascons and perturbations; actual fuel reserves and flight rules. All dimensions and performance numbers are illustrative. In particular, landing on the spherical mean lunar radius is **not** a hazardous-terrain-safe landing.
+
+Next integration for UMBRA / Lunar Margin: dated lunar polar orbit state → selected landing site (lat/lon) → rotating Moon frame and ground track → altitude relative to LOLA DEM → Sun/Earth line-of-sight intervals → altitude/speed/control constraints → fuel reserve and error Monte Carlo.
+
+
 ## Modeling boundaries
 
 **Modeled:** Earth and Moon point-mass gravity, moving inclined circular Moon, indirect third-body term, event-based first perilune detection, scalar phase targeting, instantaneous TLI and LOI, Earth-only energy conservation check, 14-hour capture propagation.
