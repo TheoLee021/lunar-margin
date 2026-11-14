@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -67,3 +67,39 @@ def test_arrival_moon_position_matches_independent_spice_query(data_dir: Path) -
         < 0.001
     )
     assert result.metrics.arrival_position_error_km < 0.05
+
+
+@pytest.mark.parametrize("day,flight_days", [(6, 1), (6, 4), (13, 5), (6, 10)])
+def test_arrival_approach_is_tangent_to_the_lunar_capture_orbit(
+    data_dir: Path, day: int, flight_days: int
+) -> None:
+    departure = datetime(2027, 1, day, tzinfo=UTC)
+    arrival = departure + timedelta(days=flight_days)
+    result = calculate_transfer(departure, arrival, data_dir)
+    tail = result.transfer[-3:]
+    times = np.array([sample.seconds - tail[-1].seconds for sample in tail])
+    positions = np.array([np.array(s.spacecraft_km) - s.moon_km for s in tail], dtype=np.float64)
+    velocity = np.array([np.polyfit(times, positions[:, axis], 2)[1] for axis in range(3)])
+    radial = np.asarray(positions[-1], dtype=np.float64).copy()
+    radial /= np.linalg.norm(radial)
+    assert abs(float(np.dot(velocity, radial))) < 0.005  # <5 m/s, sampled public trajectory
+    assert result.metrics.arrival_altitude_km == pytest.approx(100, abs=0.05)
+
+    head = result.capture[:3]
+    capture_times = np.array([sample.seconds - head[0].seconds for sample in head])
+    capture_positions = np.array(
+        [np.array(s.spacecraft_km) - s.moon_km for s in head], dtype=np.float64
+    )
+    capture_velocity = np.array(
+        [np.polyfit(capture_times, capture_positions[:, axis], 2)[1] for axis in range(3)]
+    )
+    alignment = np.dot(velocity, capture_velocity) / (
+        np.linalg.norm(velocity) * np.linalg.norm(capture_velocity)
+    )
+    assert alignment > 0.99999
+    assert np.array_equal(positions[-1], capture_positions[0])
+    # A tangential encounter must be the minimum distance, not an apolune.
+    assert np.linalg.norm(positions[-2]) > np.linalg.norm(positions[-1])
+    assert np.polyfit(times, np.linalg.norm(positions, axis=1), 2)[0] > 0
+    assert result.transfer[-1].seconds == flight_days * 86400
+    assert result.arrival == arrival

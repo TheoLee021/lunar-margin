@@ -151,7 +151,7 @@ export default function App() {
       </Suspense>
       {view === 'mission' ? (
         <a
-          className="hud-button fixed bottom-4 left-32 z-20"
+          className="hud-button fixed bottom-10 left-32 z-20"
           href={locationFor('analysis', selection, false)}
           onClick={(event) => {
             if (
