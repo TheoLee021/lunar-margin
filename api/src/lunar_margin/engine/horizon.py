@@ -12,6 +12,9 @@ from lunar_margin.engine.dem import PolarDem
 class HorizonProfile:
     azimuth_deg: NDArray[np.float64]  # 0°=북, 시계방향, 오름차순, [0, 360)
     elevation_deg: NDArray[np.float64]
+    # 모든 광선이 max_range까지 DEM 안에 머물렀는가. False면 DEM 밖 지형을 알 수 없어
+    # 수평선이 실제보다 낮게 계산됐을 수 있다 (값 자체는 DEM 안쪽 구간 기준으로 유효).
+    complete: bool = True
 
     def at(self, azimuth_deg: NDArray[np.float64]) -> NDArray[np.float64]:
         """임의 방위각의 수평선 고각 (360° 주기 선형 보간)."""
@@ -61,4 +64,6 @@ def horizon_profile(
     if not valid.any(axis=1).all():
         raise ValueError("a horizon ray has no valid DEM samples")
     best = np.where(valid, elevation, -np.inf).max(axis=1)
-    return HorizonProfile(azimuth_deg=az_deg, elevation_deg=np.degrees(best))
+    return HorizonProfile(
+        azimuth_deg=az_deg, elevation_deg=np.degrees(best), complete=bool(valid.all())
+    )

@@ -8,6 +8,7 @@
 | 이름 | 용도 | 출처 URL | 해상도 | 좌표계 | 버전 | 선정 이유 | 저장 위치 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | LOLA 남극 DEM `ldem_80s_80m_float` | 방위각별 지형 수평선 계산 | https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/float_img/ldem_80s_80m_float.img (+ `.lbl`) | 80 m/px, 7600×7600 (231 MB), 80°S~90°S | 극 입체투영(남극 중심, 경도 0°가 이미지 위쪽), 구 반경 1737.4 km, 높이는 그 구 기준 km, 평균지구/자전축(ME) 프레임 | LOLA GDR (PDS `lro-l-lola-3-rdr-v1`) | 80°S까지 덮어 먼 지형까지 수평선에 반영하고, 해커톤에서 다룰 수 있는 크기. 더 정밀한 `ldem_85s_20m_float`(920 MB)로 교체 가능 | `$DATA_DIR/dem/` |
+| LOLA 남극 DEM `ldem_75s_120m_float` (선택) | 후보지 탐색에서 수평선을 ROI 전체에서 DEM 안에서 계산 | https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/float_img/ldem_75s_120m_float.img (+ `.lbl`) | 120 m/px, 7624 x 7624 (232 MB), 75°S~90°S | 위와 같은 극 입체투영 | LOLA GDR (PDS `lro-l-lola-3-rdr-v1`) | 극에서 약 457 km까지 덮어 85°S 이남 ROI의 200 km 수평선 탐색이 DEM 밖으로 나가지 않는다. 해상도는 80 m 파일보다 거칠다 | `$DATA_DIR/dem/` (`pipeline.fetch --dem 75s_120m`) |
 | NAIF 윤초 `naif0012.tls` | UTC↔ET 변환 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls | - | - | N0012 | SPICE 시각 변환 필수 | `$DATA_DIR/spice/` |
 | JPL 천체력 `de440s.bsp` | 태양·지구·달 위치 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp | - | ICRF/J2000 | DE440 (축약형, 31 MB, 1849~2150) | 전체 DE440(114 MB)보다 작고 데모 기간을 충분히 덮음 | `$DATA_DIR/spice/` |
 | NAIF 행성 상수 `pck00011.tpc` | 천체 크기·방향 상수 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc | - | - | pck00011 | SPICE 기본 상수 | `$DATA_DIR/spice/` |

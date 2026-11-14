@@ -53,8 +53,169 @@
 - `series`: 시간 배열과 같은 길이의 배열들. `visible` = `body_elevation_deg > horizon(body_azimuth_deg)`.
 - `windows`, `dark_periods`: `visible` 연속 구간(`end` 미포함). 기간 경계에서 잘린 구간도 포함.
 
+## 후보지 탐색 결과 (`/candidates`)
+
+남극 후보지 탐색은 오래 걸려서(수 분~십수 분) CLI(`python -m lunar_margin.pipeline.candidates`)가 한 번 돌려 `DATA_DIR/candidates/{run_id}/`에 결과를 쓰고, API는 그 결과를 읽어서 돌려준다. 화면은 이 결과로 **탐색 과정**(거친 격자 -> 세밀화 -> 필터 -> 연결 영역 -> 선정)을 단계별로 재생한다. 설계는 `docs/candidates.md`.
+
+`run_id`는 `^[A-Za-z0-9_-]{1,64}$`. 없는 실행은 404, 형식이 틀리면 422.
+
+### `GET /candidates/runs`
+
+```json
+{ "runs": [ {
+  "id": "default", "generated_at": "2026-11-14T20:01:12+00:00", "dem": "80s_80m",
+  "window": { "start": "2027-01-01T00:00:00+00:00", "end": "2046-01-01T00:00:00+00:00", "step_minutes": 60 },
+  "selected": 100, "sampled_total": 183210
+} ] }
+```
+
+실행이 하나도 없으면 `{"runs": []}` (빈 상태).
+
+### `GET /candidates/runs/{run_id}`
+
+```json
+{
+  "id": "default",
+  "source": { "dem": {"name": "80s_80m", "file": "ldem_80s_80m_float.img", "sha256": "...", "resolution_m": 80.0},
+              "spice_kernels": [{"name": "de440s.bsp", "sha256": "..."}],
+              "window": {"start": "...", "end": "...", "step_minutes": 60},
+              "projection": "polar stereographic, scale 1 at the south pole, ...", "plan_id": "south_polar_dense" },
+  "config": { "...": "SearchConfig 전체 (roi, grid_spacing_m, coarse_spacing_m, refine_fraction, min_separation_m, top_k, thresholds, weights, window, dem ...)" },
+  "summary": {
+    "counts": { "coarse_sampled": 18073, "promoted_coarse": 2100, "refined": 61000, "coarse_only": 15973,
+                "sampled_total": 76973, "computed": 76973, "missing_all_metrics": 0,
+                "eligible": 76973, "excluded": 0, "unevaluated": 0, "horizon_incomplete": 40000,
+                "regions": 12, "in_regions": 58000, "selected": 100 },
+    "reasons": { "sun_fraction_below_min": 0, "not_refined": 15900, "within_min_separation": 3000, "beyond_top_k": 500 },
+    "distributions": { "sun_fraction": {"min": 0.0, "p10": 0.0, "p25": 0.1, "p50": 0.3, "p75": 0.4, "p90": 0.45, "max": 0.6},
+                       "earth_fraction": {"...": 0}, "sun_longest_dark_h": {"...": 0}, "earth_longest_blackout_h": {"...": 0} },
+    "warnings": ["격자 간격 500 m는 DEM 해상도 80 m의 6.25배로 더 거칩니다. ..."]
+  },
+  "run": { "generated_at": "...", "elapsed_seconds": 812.4, "workers": 14 },
+  "map": { "size_px": 607, "center_px": 303, "pixel_size_m": 500.0, "rho_max_m": 151712.3,
+           "layers": ["coarse_sun", "coarse_earth", "coarse_promoted", "sun", "earth", "stage",
+                      "eligibility", "regions", "quality"] },
+  "candidates": [ {
+    "id": "SP500_+12_-30", "rank": 1, "lat_deg": -89.31, "lon_deg": 222.4, "x_m": 6000.0, "y_m": -15000.0, "grid_spacing_m": 500.0,
+    "sun": {"fraction": 0.61, "longest_dark_hours": 210.0, "windows_per_24h": 0.04, "mean_elevation_deg": 0.7},
+    "earth": {"fraction": 0.52, "longest_blackout_hours": 190.0, "windows_per_24h": 0.04, "mean_elevation_deg": 3.1},
+    "eligibility": {"status": "eligible", "failed": [], "not_applied": []},
+    "score": {"total": 0.565, "sun_component": 0.61, "earth_component": 0.52, "components_used": 2},
+    "region_id": 3,
+    "data_quality": {"horizon_complete": true, "horizon_max_deg": 2.4, "missing_metrics": [], "stage": "fine"},
+    "selection": {"picked_as": "region_best", "note": ""}
+  } ]
+}
+```
+
+- 지표 값이 계산되지 않은 곳은 `null` (0이 아니다). `eligibility.status`는 `eligible | excluded | unevaluated`.
+- `candidates`는 순위순이고 최대 `config.top_k`개. 선정이 하나도 없으면 빈 배열.
+- `summary.counts.in_regions`는 연결 영역에 속한 세밀 점의 개수(적격한 점)다.
+- `summary.counts`로 단계별 개수(퍼널), `summary.reasons`로 탈락 사유별 개수를 그린다. `reasons` 키: 위반한 조건(`sun_fraction_below_min`, `sun_dark_hours_above_max`, `earth_fraction_below_min`, `earth_blackout_hours_above_max`, `horizon_incomplete`), `no_metrics`, `not_refined`, `within_min_separation`, `beyond_top_k`.
+- `summary.warnings`는 사용자에게 그대로 보여준다.
+
+### `GET /candidates/runs/{run_id}/layers/{name}.png`
+
+`name`은 위 `map.layers` 중 하나. 모두 `size_px` x `size_px` RGBA PNG이고 결측·해당 없음은 투명이다. **격자 한 칸이 한 픽셀**이며 `image-rendering: pixelated`로 확대해서 쓴다.
+픽셀 `(col, row)`의 투영 좌표는 `x_m = (col - center_px) * pixel_size_m`, `y_m = (center_px - row) * pixel_size_m` (경도 0°가 위쪽, 동쪽이 오른쪽). 거친 점은 간격만큼의 블록으로 칠해진다.
+
+| name | 단계 | 내용 |
+| --- | --- | --- |
+| `coarse_sun`, `coarse_earth` | 1. 거친 격자 | 거친 격자(2 km)의 일조율·지구 가시율 (0 보라 -> 1 노랑) |
+| `coarse_promoted` | 2. 세밀화 영역 | 세밀화 대상으로 고른 거친 점 (주황, 나머지 투명) |
+| `sun`, `earth` | 3. 세밀 결과 | 최종 일조율·지구 가시율 (세밀 점 + 세밀화 안 된 거친 점) |
+| `stage` | 3 | 세밀 점(청록) / 거친 점만(회청) |
+| `eligibility` | 4. 필터 | 적격(초록) / 제외(빨강) / 판정 불가(회색) |
+| `regions` | 5. 연결 영역 | 적격 점의 연결 영역마다 다른 색 |
+| `quality` | 품질 | 수평선이 DEM 밖으로 나간 점(주황) |
+
+선정 후보(6단계)는 레이어가 아니라 `candidates`의 `x_m`, `y_m`으로 지도 위에 그린다.
+
+`x_m`, `y_m` -> 위경도 변환식(프론트에서 필요하면): `rho = hypot(x, y)`, `lat = -90 + degrees(2*atan(rho / (2*1737400)))`, `lon = degrees(atan2(x, y)) mod 360`.
+임의의 점을 눌러 자세히 보려면 위 변환으로 위경도를 구해 `GET /analysis/illumination`, `GET /analysis/earth-visibility`를 호출하면 된다 (그 API는 한 번에 3년·10만 표본까지라서, `config.window.start`부터 1년을 쓴다).
+
+### `POST /candidates/search` (임무 입력으로 탐색 시작)
+
+사용자의 임무 조건을 받아 탐색을 **별도 프로세스로** 시작한다(수 분 걸림). 같은 입력은 같은 `run_id`를 갖고, 이미 끝난 결과가 있으면 다시 계산하지 않는다.
+
+요청 본문 (`MissionRequest`, 모르는 필드는 422):
+
+```json
+{
+  "landing_date": "2027-01-01",
+  "mission_duration_days": 14,
+  "max_continuous_darkness_hours": 24,
+  "max_communication_blackout_hours": 6,
+  "max_terrain_slope_degrees": 10,
+  "search_region": "south",
+  "optimization_priority": "balanced",
+  "observer_height_m": null
+}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `landing_date` | `YYYY-MM-DD` (UTC). 1850~2150 안. **착륙 날짜 + 임무 기간이 곧 분석 기간**이다 (`landing_date` 00:00 UTC ~ 임무 기간 뒤, 끝 미포함) |
+| `mission_duration_days` | 1~365 (지구일) |
+| `max_continuous_darkness_hours` | 임무 기간 중 직사광이 없는 최장 연속 시간 한도. `null`이면 조건 없음. 0 이상 |
+| `max_communication_blackout_hours` | 지구가 보이지 않는 최장 연속 시간(통신 두절) 한도. `null`이면 조건 없음. 0 이상 |
+| `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. **받아서 검증만 하고 적용하지 않는다**(지형 경사 분석 미구현). 값이 있으면 `summary.warnings`에 "적용하지 않았습니다" 경고가 남는다 |
+| `search_region` | `"south"`만 가능. `"global"`은 422 ("hybrid global search is planned and not available yet") |
+| `optimization_priority` | `"balanced"`(일조 0.5 : 지구 0.5), `"solar"`(0.75 : 0.25), `"earth"`(0.25 : 0.75). 점수 가중치이며 적격 여부와는 별개 |
+| `observer_height_m` | 0~100 또는 `null`(= 0, 지표면) |
+
+두 한도는 **필수 적격 조건**이라 넘는 지점은 후보에서 빠진다(`summary.reasons`에 사유별 개수). 두 한도가 모두 `null`이면 필터 없이 점수 순위만으로 뽑는다.
+
+응답:
+
+```json
+{ "run_id": "m-3f9a1c0b2d", "state": "queued", "cached": false }
+```
+
+| 상태 코드 | 의미 |
+| --- | --- |
+| 202 | 새 탐색을 시작했다 (`state`: `queued`) |
+| 200 | 이미 있다. `cached: true, state: "done"`이면 이전 결과를 그대로 쓴다. 같은 입력이 실행 중이면 `cached: false`와 현재 `state` |
+| 409 | **다른 입력의 탐색이 이미 실행 중**이다. `{"detail": {"message": "...", "running_run_id": "m-..."}}`. 탐색은 한 번에 하나만 돈다 |
+| 422 | 입력이 잘못됨 (범위 밖 값, 알 수 없는 필드, `search_region: "global"` 등) |
+| 500 | 탐색 프로세스를 시작하지 못함 |
+
+### `GET /candidates/runs/{run_id}/status`
+
+```json
+{ "run_id": "m-3f9a1c0b2d", "state": "running", "stage": "fine", "done": 41200, "total": 119037,
+  "error": null, "started_at": "2026-11-14T21:03:10+00:00", "updated_at": "2026-11-14T21:05:02+00:00" }
+```
+
+- `state`: `queued | running | done | failed`. 화면은 `done`이 될 때까지 몇 초 간격으로 이 주소를 부르고(폴링), `done`이면 `GET /candidates/runs/{run_id}`로 결과를 읽어 과정 화면을 연다.
+- `stage`: `queued`, `starting`, `coarse`(거친 격자), `fine`(세밀 격자), `writing`(결과 쓰는 중), `done`. `done`/`total`은 **그 단계 안에서** 계산한 지점 수와 전체 지점 수다 (단계가 바뀌면 다시 0부터).
+- `failed`이면 `error`에 이유가 있다. 탐색 프로세스가 중간에 사라진 경우도 `failed`다.
+- 없는 `run_id`는 404, 형식이 틀리면 422. CLI(`--run-id`)로 만든 예전 방식의 완료된 실행은 `state: "done"`으로 나온다.
+
+`GET /candidates/runs/{run_id}`의 응답에는 임무 입력으로 만든 실행이면 `mission`(위 요청 본문과 같은 모양)이 들어가고, 아니면 `null`이다.
+`GET /candidates/runs`는 **끝난 실행만** 나열한다 (진행 중인 실행은 `POST`가 준 `run_id`로 직접 추적한다).
+
 ## Tiles
 
 ### `GET /tiles/{layer}/{z}/{x}/{y}.png`
 
 TBD (layer 목록, 타일링 스킴, 투영)
+
+### 개발용 빠른 탐색: `POST /candidates/search/dev`
+
+요청 본문과 응답 형태는 `POST /candidates/search`와 같다. 동일한 남극 ROI와 임무 기간,
+NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m → 세밀 격자 10,000 m,
+워커 4개로 제한한다. 거리 방향 지형 표본 간격은 유지한다.
+`dev-v1-m-...` 실행 ID와 `config.json`으로 정밀 결과와 분리한다.
+일반 탐색과 같은 동시 실행 제한(409)을 적용하며, 같은 개발용 입력은 결과를 재사용한다.
+좁은 능선을 놓칠 수 있으므로 개발·화면 확인용이며 정밀 탐색의 대체 결과가 아니다.
+
+실행 상태 응답에 다음 nullable 필드를 추가한다. 과거 상태 파일에는 null이다.
+
+- `elapsed_seconds`: 처리 시작부터 현재 체크포인트까지, 완료/실패 시에는 고정된 총 초.
+  프로세스의 단조 시계로 측정하며 결과 파일 저장 시간을 포함한다. 대기 시간은 제외한다.
+- `completed_at`: 완료 또는 실패한 UTC 시각. 실행 중에는 null.
+
+실행 상세의 `run`에도 `total_elapsed_seconds`, `started_at`, `completed_at`을 추가한다.
+기존 `run.elapsed_seconds`는 계산 시간이며 `total_elapsed_seconds`는 결과 저장까지 포함한다.
+새 실행만 총 시간을 기록하며 과거 결과의 시간을 추측해 채우지 않는다.

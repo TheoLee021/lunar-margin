@@ -12,6 +12,7 @@
 | SPICE 태양·지구 방위각/고도 (`engine/ephemeris.py`) | 완료 |
 | 일조·지구 가시성 지표 (`engine/metrics.py`) | 완료 |
 | API `GET /analysis/illumination`, `GET /analysis/earth-visibility` | 완료 (`docs/api.md` 계약 반영) |
+| 착륙 후보지 탐색 (남극, 거친→세밀) | 구현 (`docs/candidates.md`) |
 | 오버레이 타일 사전 계산 (`/tiles/...`) | 미착수 |
 | CI에서 SPICE 커널 캐시 | 미착수 (아래 "알려진 한계") |
 
@@ -63,6 +64,19 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 두 데이터는 이렇게 합쳐진다: 천체의 고도가 그 방향의 지형 수평선보다 높으면 "보인다"고 판정하고,
 이 판정을 시간별로 쌓아 일조율·최장 암흑 시간·지구 가시율 같은 지표를 만든다 (자세한 방법은 아래 "계산 방법").
+
+## 착륙 후보지 탐색
+
+남극 ROI(기본 85°S 이남)를 격자로 훑어 일조·지구 가시성 지표를 계산하고, 필수 조건으로 거른 뒤
+서로 떨어진 대표 후보 Top-K를 뽑는다. 설계, 설정, 출력, 확장 방법은 [docs/candidates.md](../docs/candidates.md).
+
+```sh
+uv run python -m lunar_margin.pipeline.candidates --out out/candidates   # map.html, candidates.json ...
+```
+
+- 거친 격자(2 km)로 먼저 훑고 유망한 영역만 500 m로 세밀화한다. 14코어에서 수 분~십수 분.
+- 수평선이 DEM 밖으로 나가는 지점은 `horizon_complete=false`로 표시한다. `--dem 75s_120m`(232 MB, `pipeline.fetch --dem 75s_120m`로 받음)이면 ROI 전체가 DEM 안에 들어온다.
+- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 D와 정한다.
 
 ## 구조
 
