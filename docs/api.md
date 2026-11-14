@@ -7,7 +7,9 @@
 
 - Base URL: 로컬 `/api` (Vite proxy → `http://localhost:8000`), 배포 `VITE_API_URL` (Railway)
 - 시간: UTC ISO 8601 (`2027-01-15T12:00:00Z`)
-- 좌표: TBD (달 위경도 기준, 방위각 0°의 방향과 회전 방향을 여기 명시)
+- 좌표: 달 위경도는 MOON_ME 프레임의 행성중심(planetocentric) 위경도, 도 단위, 동경 양수(-180~180)
+  - 벡터(태양 방향 등)는 MOON_ME 직교좌표. Cesium 월드 좌표를 MOON_ME로 취급하며 변환하지 않는다
+  - 방위각: TBD (0°의 방향과 회전 방향을 여기 명시)
 - 에러: FastAPI 기본 `{"detail": ...}`
 
 ## Endpoints

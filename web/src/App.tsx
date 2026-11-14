@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchHealth } from './api/client'
+import MoonViewer from './moon/MoonViewer'
 
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
@@ -20,13 +21,16 @@ export default function App() {
   }, [])
 
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-4 bg-neutral-950 text-neutral-100">
-      <h1 className="text-3xl font-semibold tracking-tight">Lunar Margin</h1>
-      <p data-testid="api-status" className="text-sm text-neutral-400">
-        {health.kind === 'loading' && 'Connecting to API…'}
-        {health.kind === 'ok' && 'API connected'}
-        {health.kind === 'error' && `API unavailable: ${health.message}`}
-      </p>
+    <main className="relative h-svh overflow-hidden bg-black text-neutral-100">
+      <MoonViewer />
+      <header className="pointer-events-none absolute top-4 left-4 flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">Lunar Margin</h1>
+        <p data-testid="api-status" className="text-xs text-neutral-400">
+          {health.kind === 'loading' && 'Connecting to API…'}
+          {health.kind === 'ok' && 'API connected'}
+          {health.kind === 'error' && `API unavailable: ${health.message}`}
+        </p>
+      </header>
     </main>
   )
 }
