@@ -1,5 +1,5 @@
 import type { SiteAssessment } from '../api/siteAssessment'
-import { evaluateThresholds, type Check } from '../analysis/derive'
+import { evaluateThresholds } from '../analysis/derive'
 
 export interface MissionConstraints {
   minEarthPercent: number
@@ -9,7 +9,7 @@ export interface MissionConstraints {
 
 export interface SiteVerdict {
   pass: boolean
-  checks: Check[]
+  checks: Array<{ id: string; label: string; pass: boolean; reason: string }>
   score: number
 }
 
@@ -40,8 +40,8 @@ export function assessCandidate(
     { fraction: '일조율', dark: '연속 암흑' },
   )
   const slopePass = data.terrain.slope_deg <= constraints.maxSlopeDeg
-  const slopeCheck: Check = {
-    id: 'longest_dark',
+  const slopeCheck = {
+    id: 'slope',
     label: 'DEM 경사',
     pass: slopePass,
     reason: slopePass
