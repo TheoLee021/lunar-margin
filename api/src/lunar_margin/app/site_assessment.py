@@ -20,7 +20,7 @@ from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import body_azel, load_kernels, utc_range
 from lunar_margin.engine.horizon import horizon_profile
 from lunar_margin.engine.metrics import summarize, visibility_series
-from lunar_margin.engine.site_characteristics import characterize_site
+from lunar_margin.engine.site_characteristics import characterize_region, characterize_site
 from lunar_margin.pipeline.sources import DEM_SOURCES
 
 
@@ -33,6 +33,7 @@ class SiteQuery(BaseModel):
     step_minutes: int = Field(default=30, ge=5, le=360)
     slope_baseline_m: float = Field(default=160.0, ge=80.0, le=2000.0)
     roughness_window_m: float = Field(default=400.0, ge=160.0, le=2000.0)
+    assessment_radius_m: float = Field(default=250.0, ge=80.0, le=2000.0)
 
     @model_validator(mode="after")
     def check_times(self) -> Self:
@@ -61,6 +62,18 @@ class TerrainSummary(BaseModel):
     limitation: str
 
 
+class RegionSummary(BaseModel):
+    radius_m: float
+    sample_step_m: float
+    total_samples: int
+    valid_samples: int
+    coverage_fraction: float
+    slope_p95_deg: float | None
+    slope_max_deg: float | None
+    roughness_p95_m: float | None
+    landing_safety_status: str
+
+
 class SiteAssessment(BaseModel):
     lat: float
     lon: float
@@ -70,6 +83,7 @@ class SiteAssessment(BaseModel):
     sun: BodySummary
     earth: BodySummary
     terrain: TerrainSummary
+    region: RegionSummary
 
 
 Assessor = Callable[[SiteQuery], SiteAssessment]
@@ -104,6 +118,14 @@ def get_site_assessor(settings: Annotated[Settings, Depends(get_settings)]) -> A
             slope_baseline_m=query.slope_baseline_m,
             roughness_window_m=query.roughness_window_m,
         )
+        region = characterize_region(
+            dem,
+            query.lat,
+            query.lon,
+            radius_m=query.assessment_radius_m,
+            slope_baseline_m=query.slope_baseline_m,
+            roughness_window_m=query.roughness_window_m,
+        )
         # Coarse screening: reduced DEM ray sampling limits concurrent API memory.
         # The existing detailed analysis keeps its higher-resolution settings.
         horizon = horizon_profile(dem, query.lat, query.lon, azimuth_step_deg=2.0, step_m=160.0)
@@ -132,6 +154,27 @@ def get_site_assessor(settings: Annotated[Settings, Depends(get_settings)]) -> A
             step_minutes=query.step_minutes,
             sun=summary("SUN"),
             earth=summary("EARTH"),
+            region=RegionSummary(
+                radius_m=region.radius_m,
+                sample_step_m=region.sample_step_m,
+                total_samples=region.total_samples,
+                valid_samples=region.valid_samples,
+                coverage_fraction=round(region.coverage_fraction, 4),
+                slope_p95_deg=(
+                    round(region.slope_p95_deg, 3)
+                    if region.slope_p95_deg is not None
+                    else None
+                ),
+                slope_max_deg=(
+                    round(region.slope_max_deg, 3) if region.slope_max_deg is not None else None
+                ),
+                roughness_p95_m=(
+                    round(region.roughness_p95_m, 3)
+                    if region.roughness_p95_m is not None
+                    else None
+                ),
+                landing_safety_status="UNVERIFIED",
+            ),
             terrain=TerrainSummary(
                 elevation_m=round(terrain.elevation_m, 2),
                 slope_deg=round(terrain.slope_deg, 3),
