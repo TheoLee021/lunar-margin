@@ -170,7 +170,7 @@ export function MissionWorkspace({
           </aside>
         </>
       ) : null}
-      <div className="hud-panel absolute bottom-4 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
+      <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
         {apiStatus}
       </div>
       {children}

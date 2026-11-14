@@ -27,6 +27,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
     { timeout: 30_000 },
   )
   await expect(page.locator('.cesium-widget canvas')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Reset view to north up' }).click()
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   await rail.getByRole('button', { name: /후보 2/ }).click()
   await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(
