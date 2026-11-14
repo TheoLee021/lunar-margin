@@ -169,7 +169,7 @@ export default function MoonViewer({
         aria-label="Reset view to north up"
         title="North up"
         hidden={view.kind !== 'ready'}
-        className="absolute right-4 bottom-10 flex size-11 items-center justify-center rounded-full border border-white/15 bg-neutral-900/70 text-neutral-100 backdrop-blur hover:bg-neutral-800/80"
+        className="absolute right-4 bottom-4 flex size-11 items-center justify-center rounded-full border border-white/15 bg-neutral-900/70 text-neutral-100 backdrop-blur hover:bg-neutral-800/80"
       >
         <span ref={compassRef} className="flex flex-col items-center">
           <span className="text-[10px] leading-none font-semibold text-red-400">
