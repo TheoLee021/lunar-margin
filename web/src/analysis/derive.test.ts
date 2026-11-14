@@ -60,9 +60,9 @@ describe('sortPeriodRows', () => {
     expect(sortPeriodRows(rows, 'start', 'asc').map((r) => r.hours)).toEqual([
       10, 1,
     ])
-    expect(
-      sortPeriodRows(rows, 'hours', 'desc').map((r) => r.hours),
-    ).toEqual([10, 1])
+    expect(sortPeriodRows(rows, 'hours', 'desc').map((r) => r.hours)).toEqual([
+      10, 1,
+    ])
   })
 
   it('does not mutate the input', () => {
@@ -100,7 +100,10 @@ describe('evaluateThresholds', () => {
 })
 
 describe('horizonAtAzimuth', () => {
-  const horizon = { azimuth_deg: [0, 90, 180, 270], elevation_deg: [0, 2, 4, 2] }
+  const horizon = {
+    azimuth_deg: [0, 90, 180, 270],
+    elevation_deg: [0, 2, 4, 2],
+  }
 
   it('interpolates linearly', () => {
     expect(horizonAtAzimuth(horizon, 45)).toBeCloseTo(1)
