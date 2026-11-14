@@ -1,6 +1,6 @@
 """FastAPI contract checks; independent of DEM downloads or SPICE kernels."""
-from datetime import UTC, datetime, timedelta
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 from lunar_margin.app.main import create_app
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.site_assessment import (
+    BodySummary,
     SiteAssessment,
     SiteQuery,
     TerrainSummary,
-    BodySummary,
     get_site_assessor,
 )
 
