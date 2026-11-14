@@ -23,6 +23,8 @@ npm run dev
 
 Open http://localhost:5173.
 
+Analysis UI (illumination / Earth visibility detail view): with the backend running and data fetched (`cd api && uv run python -m lunar_margin.pipeline.fetch`), open the web app and pick a site. Without NASA data, `cd web && npm run stub` serves synthetic responses on :8000 (the Playwright scenarios in `web/e2e/analysis.spec.ts` rely on the stub's special coordinates).
+
 See [AGENTS.md](AGENTS.md) for conventions, commands, and ownership.
 
 ## License
