@@ -68,6 +68,83 @@ TLI injection uses an initial two-body vis-viva estimate; after arrival the whol
 
 The generated outputs are ignored by Git intentionally: the source code reproduces the results and the Plotly HTML alone is about 5 MB.
 
+## Launch-site and parking-orbit inputs (v1.1)
+
+The main script now exposes **four launch-geometry inputs**:
+
+| Input | Flag | Example | Interpretation |
+| --- | --- | --- | --- |
+| Launch pad (choose 1 of 4) | `--launch-site` | `kennedy` | Site latitude/longitude preset |
+| Earth parking altitude | `--parking-km` | `200` | Circular LEO altitude above reference sphere |
+| Desired parking inclination | `--parking-inc-deg` | `40` | Direct-insertion plane inclination, geocentric idealization |
+| Initial inertial heading | `--azimuth-deg` | `60.76` | Horizontal **inertial** azimuth clockwise from north, **not launch-pad command** |
+
+**Inclination and azimuth are intentionally cross-checked, not independent degrees of freedom.** Supply either one; the other will be inferred from the launch-site latitude. If both are supplied and conflict, the combined transfer command aborts with an explicit message. If both are omitted, a due-east idealized parking plane is assumed.
+
+Launch-pad presets:
+
+| Key | Facility | Latitude | Longitude | Notes |
+| --- | --- | ---: | ---: | --- |
+| `kennedy` | Kennedy LC-39A, USA | 28.608402° N | −80.604201° | Eastbound examples; actual range review required |
+| `vandenberg` | Vandenberg SLC-4E, USA | 34.6320° N | −120.6107° | Actual range favors high-inclination/polar launches; illustrative eastbound solutions may not be licensed |
+| `kourou` | Guiana Space Centre ELA-4, France/French Guiana | 5.256319° N | −52.786838° | Equatorial-access advantage |
+| `tanegashima` | Yoshinobu LP-2, Japan | 30.400938° N | 130.975640° E | Vehicle/flight-safety constraints not modeled |
+
+Sources for coordinates: [NASA LC-39A location](https://netspublic.grc.nasa.gov/main/LC%2048%20Environmental%20Assessment%20with%20Appendices_02.19.2019.pdf), [Falcon Payload User's Guide `6.5 SLC-4E](https://web.mit.edu/course/2/2.70/Reading%20Materials/SpaceX%20Falcon-users-guide-2021-09.pdf), [Launch Library ELA-4](https://lldev.thespacedevs.com/2.2.0/launch/7911261d-1a3a-4252-b00f-9de5b42de73d/?format=api), and [Launch Library Yoshinobu LP-2](https://lldev.thespacedevs.com/2.2.0/launch/3a4dc969-d264-48a1-b113-bf69a798a5c4/?format=api).
+
+Run a full example:
+
+```bash
+python lunar_transfer.py \
+  --launch-site kennedy \
+  --parking-km 200 \
+  --parking-inc-deg 40 \
+  --output output40
+```
+
+Run site screening only (including **physically inconsistent** examples):
+
+```bash
+python launch_geometry.py --launch-site vandenberg --parking-km 200 --parking-inc-deg 20 --output output_invalid
+```
+
+For the standalone screening output:
+
+- `launch_site_geometry.json`: selected-site inputs, geometric consistency, rotation/velocity metrics, limitations.
+- `launch_site_comparison.csv`: four site presets at shared target inclination (`--compare-inc-deg 40` default).
+- `08_launch_site_geometry_trade.png`: inclination access and heading trade, **not** rocket performance.
+- `mission_metrics.json` from main includes the screening verdict and the flag `transfer_plane_coupled_to_launch_site = false`.
+
+### Physical geometry and the important invariant
+
+The first-order spherical-Earth launch geometry is:
+
+```text
+cos(i) = cos(latitude) * sin(A_inertial)
+v_earth_east = omega_earth * R_earth * cos(latitude)
+v_earth_along_heading = v_earth_east * sin(A_inertial)
+```
+
+Therefore, for a **fixed target inclination** with a directly attainable plane:
+
+```text
+v_earth_along_heading = omega_earth * R_earth * cos(i)
+```
+
+This **is the same for all four sites** in the simplified model. For a 40° orbit the projection is about **356.29 m/s**, regardless of selected location, although the required inertial azimuth differs by site. A physically valid transfer comparison cannot infer "best launch site" solely from the eastward surface speed.
+
+The heading is **inertial at idealized insertion** and differs from actual pad azimuth due to rotating-Earth ascent, winds, gravity turn, winds aloft, launch vehicle steering and local constraints. No range-safety or downrange hazard avoidance is modeled. See the [NASA launch-azimuth geometry reference](https://www.govinfo.gov/content/pkg/GOVPUB-D301-PURL-gpo106217/pdf/GOVPUB-D301-PURL-gpo106217.pdf).
+
+**Critical separation:** The existing `lunar_transfer.py` propagator still assumes a fixed lunar-plane-aligned transfer (5.145° relative to its reference XY plane). The extra inputs currently diagnose the **ground-launch/parking-orbit** geometry; they do *not* rotate the TLI spacecraft state, retarget the Moon, change lunar arrival speed or imply successful TLI-plane alignment. Changing launch site at unchanged parking altitude therefore does not change its reported TLI + LOI. That is **intentional, not an optimization result.**
+
+To genuinely couple launch site to the transfer, a follow-on dated 3D boundary-value solver must include: UTC, Earth rotation/ECI–ECEF, RAAN, orbital argument of latitude at TLI, realistic Moon ephemerides, injection direction and speed, and range/launch vehicle constraints. An additional input—**launch UTC**—will be required at that fidelity level.
+
+Run the launch geometry tests from this folder:
+
+```bash
+python -m unittest -v test_launch_geometry.py
+```
+
 ## Modeling boundaries
 
 **Modeled:** Earth and Moon point-mass gravity, moving inclined circular Moon, indirect third-body term, event-based first perilune detection, scalar phase targeting, instantaneous TLI and LOI, Earth-only energy conservation check, 14-hour capture propagation.
