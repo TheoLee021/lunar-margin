@@ -1,4 +1,5 @@
 """Pure-data test: one terrain horizon shared by SUN and EARTH metrics."""
+
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -57,17 +58,13 @@ def test_combined_candidate_uses_single_horizon_and_real_mask_logic(
         calls.append(body)
         return (
             np.zeros(4),
-            np.array([1.0, 1.0, -1.0, -1.0])
-            if body == "SUN"
-            else np.array([1.0, -1.0, 1.0, -1.0]),
+            np.array([1.0, 1.0, -1.0, -1.0]) if body == "SUN" else np.array([1.0, -1.0, 1.0, -1.0]),
         )
 
     def fake_load(_path: Path) -> PolarDem:
         return dem
 
-    def fake_utc_range(
-        _start: datetime, _end: datetime, _step: int
-    ) -> NDArray[np.float64]:
+    def fake_utc_range(_start: datetime, _end: datetime, _step: int) -> NDArray[np.float64]:
         return times
 
     monkeypatch.setattr(module, "_load_dem", fake_load)
