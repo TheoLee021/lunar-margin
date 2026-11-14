@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // Needs VITE_CESIUM_ION_TOKEN in web/.env.local (the backend is not required).
 test('the Moon loads looking down on the south pole', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   const viewer = page.getByTestId('moon-viewer')
   await expect(viewer).toHaveAttribute('data-state', 'ready', {
     timeout: 30_000,
@@ -14,7 +14,7 @@ test('the Moon loads looking down on the south pole', async ({ page }) => {
 })
 
 test('clicking the Moon fills the analysis coordinates', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',

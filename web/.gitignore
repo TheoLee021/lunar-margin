@@ -29,3 +29,6 @@ dist-ssr
 /playwright/.cache/
 
 .env
+
+# Copied from the installed Cesium package
+/public/cesium/

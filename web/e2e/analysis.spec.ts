@@ -27,7 +27,7 @@ async function analyze(page: Page, preset: RegExp) {
 test('a sunlit ridge and a permanently shadowed crater give different answers', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await expect(page.getByTestId('api-status')).toContainText('connected')
 
   // 능선: 한 달 중 상당 시간 햇빛을 받는다
@@ -49,7 +49,7 @@ test('a sunlit ridge and a permanently shadowed crater give different answers', 
 })
 
 test('shows Earth visibility metrics for a ridge site', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await page.getByRole('tab', { name: '지구 가시성' }).click()
   await analyze(page, /Connecting Ridge/)
 
@@ -61,7 +61,7 @@ test('shows Earth visibility metrics for a ridge site', async ({ page }) => {
 })
 
 test('mission thresholds explain why a site fails', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await page.getByLabel('최소 일조 비율 (%)').fill('99')
   await analyze(page, /Connecting Ridge/)
 
@@ -71,7 +71,7 @@ test('mission thresholds explain why a site fails', async ({ page }) => {
 test('rejects an out-of-range latitude before calling the API', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await page.getByLabel('위도 (°)').fill('-70')
   await page.getByRole('button', { name: '분석 실행' }).click()
 
@@ -89,7 +89,7 @@ test('shows an error state with the status when the server fails', async ({
       body: JSON.stringify({ detail: 'boom' }),
     }),
   )
-  await page.goto('/')
+  await page.goto('/?view=analysis')
   await analyze(page, /Connecting Ridge/)
 
   await expect(page.getByTestId('analysis-error')).toContainText('500')
