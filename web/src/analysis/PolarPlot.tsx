@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { Analysis, AnalysisKind } from '../api/analysis'
 import { decimateIndices, niceTicks, polarToXY } from './derive'
-import { KIND_COPY } from './kinds'
+import { KIND_COPY, subject } from './kinds'
 import { linePath, round1, scale } from './svg'
 
 const SIZE = 440
@@ -190,7 +190,7 @@ export function PolarPlot({ kind, data, hoverIndex }: Props) {
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
         <span className="inline-flex items-center gap-1.5">
           <span className={`inline-block size-2 rounded-full ${copy.bg}`} />
-          {copy.body}이 보임
+          {subject(copy.body)} 보임
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block size-2 rounded-full bg-neutral-500" />

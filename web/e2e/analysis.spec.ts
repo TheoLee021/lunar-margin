@@ -45,7 +45,7 @@ test('a sunlit ridge and a permanently shadowed crater give different answers', 
   await analyze(page, /Shackleton/)
   await expect(page.getByTestId('analysis-error')).toHaveCount(0)
   await expect.poll(async () => metric(page, '평균 일조율')).toBe('0.0%')
-  await expect(page.getByText(/일조 창이\(가\) 한 번도 없습니다/)).toBeVisible()
+  await expect(page.getByText(/일조 창이 한 번도 없습니다/)).toBeVisible()
 })
 
 test('shows Earth visibility metrics for a ridge site', async ({ page }) => {

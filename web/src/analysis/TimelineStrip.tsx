@@ -6,7 +6,7 @@ import {
   formatUtc,
   longestPeriod,
 } from './derive'
-import { KIND_COPY } from './kinds'
+import { KIND_COPY, subject } from './kinds'
 import { round1, scale } from './svg'
 
 const W = 900
@@ -121,8 +121,8 @@ export function TimelineStrip({ kind, data, hoverIndex }: Props) {
       </svg>
       {data.windows.length === 0 ? (
         <p className="text-xs text-amber-300">
-          이 기간에는 {copy.windowLabel}이(가) 한 번도 없습니다 ({copy.body}이
-          계속 지형에 가려집니다).
+          이 기간에는 {subject(copy.windowLabel)} 한 번도 없습니다 (
+          {subject(copy.body)} 계속 지형에 가려집니다).
         </p>
       ) : null}
       {longest ? (
@@ -135,7 +135,7 @@ export function TimelineStrip({ kind, data, hoverIndex }: Props) {
         </p>
       ) : (
         <p className="text-xs text-emerald-300">
-          이 기간에는 {copy.darkPeriodLabel}이(가) 없습니다.
+          이 기간에는 {subject(copy.darkPeriodLabel)} 없습니다.
         </p>
       )}
     </figure>

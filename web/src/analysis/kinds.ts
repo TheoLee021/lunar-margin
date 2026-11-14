@@ -86,3 +86,11 @@ export const PRESETS: readonly Preset[] = [
   { name: '극점 부근 고지대', lat: -89.8, lon: 210 },
   { name: 'Shackleton 크레이터 안쪽 (영구 음영 예시)', lat: -89.7, lon: 130 },
 ]
+
+/** 한글 단어에 주격 조사(이/가)를 붙인다. 받침이 있으면 '이', 없으면 '가'. */
+export function subject(word: string): string {
+  const last = word.charCodeAt(word.length - 1)
+  const isHangul = last >= 0xac00 && last <= 0xd7a3
+  const hasFinalConsonant = (last - 0xac00) % 28 !== 0
+  return word + (isHangul && !hasFinalConsonant ? '가' : '이')
+}

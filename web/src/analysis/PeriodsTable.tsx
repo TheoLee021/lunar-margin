@@ -9,7 +9,7 @@ import {
   type SortDir,
   type SortKey,
 } from './derive'
-import { KIND_COPY } from './kinds'
+import { KIND_COPY, subject } from './kinds'
 
 type Filter = 'all' | PeriodRow['kind']
 
@@ -98,9 +98,9 @@ export function PeriodsTable({
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-800 px-4 py-6 text-center text-sm text-neutral-500">
           {filter === 'window'
-            ? `이 기간에는 ${copy.windowLabel}이(가) 없습니다.`
+            ? `이 기간에는 ${subject(copy.windowLabel)} 없습니다.`
             : filter === 'dark'
-              ? `이 기간에는 ${copy.darkPeriodLabel}이(가) 없습니다.`
+              ? `이 기간에는 ${subject(copy.darkPeriodLabel)} 없습니다.`
               : '표시할 구간이 없습니다.'}
         </p>
       ) : (
