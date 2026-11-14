@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.site_characteristics import (
     characterize_site,
+    characterize_region,
     local_roughness_rms_m,
     local_slope_deg,
 )
@@ -80,3 +81,38 @@ def test_invalid_scales_are_rejected() -> None:
         local_roughness_rms_m(dem, -90.0, 0.0, window_m=0.0)
     with pytest.raises(ValueError, match="samples_per_axis"):
         local_roughness_rms_m(dem, -90.0, 0.0, samples_per_axis=2)
+
+
+def test_circular_region_on_flat_dem_is_complete_and_level() -> None:
+    dem = make_dem(np.zeros((N, N), dtype=np.float32))
+    region = characterize_region(dem, -90.0, 0.0, radius_m=250.0)
+    assert region.total_samples == 21
+    assert region.valid_samples == region.total_samples
+    assert region.coverage_fraction == 1.0
+    assert region.sample_step_m == 100.0
+    assert region.slope_p95_deg == pytest.approx(0.0, abs=1e-6)
+    assert region.slope_max_deg == pytest.approx(0.0, abs=1e-6)
+    assert region.roughness_p95_m == pytest.approx(0.0, abs=1e-5)
+
+
+def test_circular_region_slope_detects_incline() -> None:
+    x, _ = xy_grid()
+    dem = make_dem((math.tan(math.radians(12.0)) * x).astype(np.float32))
+    region = characterize_region(dem, -90.0, 0.0)
+    assert region.coverage_fraction == 1.0
+    assert region.slope_p95_deg == pytest.approx(12.0, abs=0.05)
+
+
+def test_circular_region_missing_dem_samples_reduce_coverage() -> None:
+    heights = np.zeros((N, N), dtype=np.float32)
+    heights[C, C + 1] = np.nan
+    dem = make_dem(heights)
+    region = characterize_region(dem, -90.0, 0.0)
+    assert 0 < region.coverage_fraction < 1
+    assert region.valid_samples < region.total_samples
+
+
+def test_circular_region_rejects_nonpositive_radius() -> None:
+    dem = make_dem(np.zeros((N, N), dtype=np.float32))
+    with pytest.raises(ValueError, match="radius"):
+        characterize_region(dem, -90.0, 0.0, radius_m=0)
