@@ -45,15 +45,25 @@ export function assessCandidate(
     label: 'DEM 경사',
     pass: slopePass,
     reason: slopePass
-      ? 'DEM 경사 ' + data.terrain.slope_deg.toFixed(2) + '° ≤ ' + constraints.maxSlopeDeg + '°'
-      : 'DEM 경사 ' + data.terrain.slope_deg.toFixed(2) + '° > 허용 ' + constraints.maxSlopeDeg + '°',
+      ? 'DEM 경사 ' +
+        data.terrain.slope_deg.toFixed(2) +
+        '° ≤ ' +
+        constraints.maxSlopeDeg +
+        '°'
+      : 'DEM 경사 ' +
+        data.terrain.slope_deg.toFixed(2) +
+        '° > 허용 ' +
+        constraints.maxSlopeDeg +
+        '°',
   }
   const checks = [...earthChecks, ...sunChecks, slopeCheck]
   const weight = earthWeightPercent / 100
   return {
     pass: checks.every((check) => check.pass),
     checks,
-    score: 100 * (weight * data.earth.visible_fraction +
-      (1 - weight) * data.sun.visible_fraction),
+    score:
+      100 *
+      (weight * data.earth.visible_fraction +
+        (1 - weight) * data.sun.visible_fraction),
   }
 }
