@@ -90,3 +90,8 @@ def test_combined_candidate_uses_single_horizon_and_real_mask_logic(
     assert result.earth.longest_dark_hours == pytest.approx(0.5)
     assert result.terrain.slope_deg == pytest.approx(0.0)
     assert result.terrain.roughness_rms_m == pytest.approx(0.0)
+    assert result.region.radius_m == 250.0
+    assert result.region.coverage_fraction == 1.0
+    assert result.region.slope_p95_deg == pytest.approx(0.0)
+    assert result.region.roughness_p95_m == pytest.approx(0.0)
+    assert result.region.landing_safety_status == "UNVERIFIED"
