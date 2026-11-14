@@ -29,6 +29,18 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(grid.locator('thead th')).toHaveCount(6)
   await expect(grid.locator('thead')).toContainText('Jan 04')
   await expect(grid.locator('thead')).toContainText('Jan 08')
+
+  const timeline = dialog.getByRole('region', { name: '미션 기간 타임라인' })
+  await expect(
+    timeline.getByRole('img', {
+      name: '고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인',
+    }),
+  ).toBeVisible()
+  await timeline.getByRole('slider', { name: '타임라인 검토 시점' }).fill('1')
+  await expect(timeline.locator('output')).toHaveText('D+1 00:00')
+  await expect(
+    timeline.getByText('태양 −1.2° · 햇빛 있음', { exact: true }),
+  ).toBeVisible()
   const combination = dialog.getByRole('button', {
     name: /출발 2027-01-07, 착륙 2027-01-11,/,
   })

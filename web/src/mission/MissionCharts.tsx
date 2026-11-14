@@ -1,5 +1,6 @@
 import { BASE_DAY, iso } from './missionDates'
 import type { Analysis } from './types'
+import { MissionTimeline } from './MissionTimeline'
 
 type Series = { x: number[]; y: number[]; color: string; dashed?: boolean }
 type PlotProps = {
@@ -14,7 +15,6 @@ type PlotProps = {
   series: Series[]
   height?: number
   marker: number
-  band?: { t: number[]; on: boolean[]; color: string }
   best?: { x: number; y: number }
   onSelect?: (x: number) => void
 }
@@ -30,7 +30,6 @@ function Plot({
   series,
   height = 90,
   marker,
-  band,
   best,
   onSelect,
 }: PlotProps) {
@@ -79,18 +78,6 @@ function Plot({
           {xLabel(x)}
         </text>
       ))}
-      {band?.t.map((t, k) =>
-        band.on[k] && k < band.t.length - 1 ? (
-          <rect
-            key={t}
-            x={X(t)}
-            y={top + ih + 1}
-            width={Math.max(1, X(band.t[k + 1]) - X(t))}
-            height="5"
-            fill={band.color}
-          />
-        ) : null,
-      )}
       {series.map((s, i) => (
         <polyline
           key={i}
@@ -175,20 +162,9 @@ export function MissionCharts({
         </section>
       </div>
     )
-  const { xs, ys, day, duration, timeline: tl } = analysis
+  const { xs, ys, day, duration, timeline } = analysis
   const best = ys.indexOf(Math.max(...ys)),
     ticks = [day - 60, day - 15, day + 30, day + 75, day + 120]
-  const timeTicks = Array.from(
-    {
-      length:
-        duration <= 7
-          ? duration + 1
-          : duration <= 14
-            ? duration / 2 + 1
-            : duration / 7 + 1,
-    },
-    (_, i) => i * (duration <= 7 ? 1 : duration <= 14 ? 2 : 7),
-  )
   return (
     <div className="planner-charts">
       <section className="group chart">
@@ -213,57 +189,15 @@ export function MissionCharts({
           최고 점수.
         </p>
       </section>
-      <section className="group chart">
-        <h2>미션 기간 타임라인</h2>
-        <div className="cap">
-          <span style={{ color: 'var(--sun)' }}>●</span> 태양 고도 (°) · 아래 띠
-          = 햇빛
+      <section
+        className="group chart mission-timeline-panel"
+        aria-label="미션 기간 타임라인"
+      >
+        <div className="mission-timeline-heading">
+          <h2>미션 기간 타임라인</h2>
+          <span className="example-label">예시 데이터</span>
         </div>
-        <Plot
-          title="태양 고도와 지형 지평선"
-          x0={0}
-          x1={duration}
-          y0={-3}
-          y1={4}
-          yTicks={[-2, 0, 2, 4]}
-          xTicks={timeTicks}
-          xLabel={(x) => `D+${x}`}
-          marker={hour / 24}
-          series={[
-            { x: tl.t, y: tl.sunHz, color: 'var(--muted)', dashed: true },
-            { x: tl.t, y: tl.sunEl, color: 'var(--sun)' },
-          ]}
-          band={{ t: tl.t, on: tl.sunVis, color: 'var(--sun)' }}
-        />
-        <div className="cap">
-          <span style={{ color: 'var(--earth)' }}>●</span> 지구 고도 (°) · 아래
-          띠 = 통신 가능
-        </div>
-        <Plot
-          title="지구 고도와 통신 가시성"
-          x0={0}
-          x1={duration}
-          y0={-10}
-          y1={12}
-          yTicks={[-8, 0, 8]}
-          xTicks={timeTicks}
-          xLabel={(x) => `D+${x}`}
-          marker={hour / 24}
-          series={[
-            {
-              x: tl.t,
-              y: tl.earthHz.map((y) => y + 2),
-              color: 'var(--muted)',
-              dashed: true,
-            },
-            { x: tl.t, y: tl.earthEl, color: 'var(--earth)' },
-          ]}
-          band={{ t: tl.t, on: tl.earthVis, color: 'var(--earth)' }}
-        />
-        <p className="hint">
-          실선은 고도, 점선은 지형 지평선입니다. 지구가 지평선보다 2° 이상
-          높으면 통신 가능으로 봅니다.
-        </p>
+        <MissionTimeline timeline={timeline} duration={duration} hour={hour} />
       </section>
     </div>
   )
