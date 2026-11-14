@@ -117,7 +117,7 @@ def test_parallel_workers_give_exactly_the_same_result_as_one_process(data_dir: 
     )
 
     one = compute_field(dem, sites_at(coords), short, workers=1)
-    two = compute_field(dem, sites_at(coords), short, workers=2, dem_files=dem_files)
+    two = compute_field(dem, sites_at(coords), short, workers=2, dem_files=[dem_files])
 
     for name in ("sun_fraction", "earth_fraction", "sun_longest_dark_h", "horizon_max_deg"):
         assert np.array_equal(getattr(one, name), getattr(two, name), equal_nan=True), name
@@ -155,3 +155,82 @@ def test_chunking_does_not_change_the_result() -> None:
 
     for name in ("sun_fraction", "earth_fraction", "earth_longest_blackout_h", "horizon_max_deg"):
         assert np.array_equal(getattr(whole, name), getattr(pieces, name), equal_nan=True), name
+
+
+# --- 사전 계산한 수평선 테이블 -----------------------------------------------------------
+
+
+def small_table(tmp_path: Path):  # noqa: ANN201
+    from lunar_margin.engine.candidates.config import Roi
+    from lunar_margin.engine.candidates.horizon_table import (
+        HorizonTable,
+        HorizonTableSpec,
+        build_horizon_table,
+    )
+
+    spec = HorizonTableSpec(
+        dem_id="synthetic",
+        roi=Roi(min_lat_deg=-90.0, max_lat_deg=-89.95),
+        spacing_m=500.0,
+        azimuth_step_deg=1.0,
+        max_range_m=10_000.0,
+        observer_height_m=0.0,
+    )
+    build_horizon_table(tmp_path / "t", spec, synthetic_dem())
+    return HorizonTable.open(tmp_path / "t")
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_table_results_match_direct_computation(tmp_path: Path) -> None:
+    from lunar_margin.engine.candidates.grid import polar_grid
+
+    table = small_table(tmp_path)
+    sites = polar_grid(table.spec.roi, 500.0)
+
+    direct = compute_field(synthetic_dem(), sites, settings(max_range_m=10_000.0))
+    cached = compute_field(synthetic_dem(), sites, settings(max_range_m=10_000.0), table=table)
+
+    # 수평선을 0.01° 단위로 저장하므로 가시 판정이 바뀌는 시간 표본이 극히 드물다
+    assert np.allclose(direct.sun_fraction, cached.sun_fraction, atol=0.01)
+    assert np.allclose(direct.earth_fraction, cached.earth_fraction, atol=0.01)
+    assert np.array_equal(direct.horizon_complete, cached.horizon_complete)
+    assert np.array_equal(direct.computed, cached.computed)
+    assert np.allclose(direct.horizon_max_deg, cached.horizon_max_deg, atol=0.006)
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_sites_found_in_the_table_never_recompute_the_horizon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import lunar_margin.engine.candidates.field as field_module
+    from lunar_margin.engine.candidates.grid import polar_grid
+
+    table = small_table(tmp_path)
+    sites = polar_grid(table.spec.roi, 500.0)
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise AssertionError("horizon_profile must not be called for cached sites")
+
+    monkeypatch.setattr(field_module, "horizon_profile", boom)
+
+    result = compute_field(synthetic_dem(), sites, settings(max_range_m=10_000.0), table=table)
+
+    assert bool(result.computed.all())
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_sites_missing_from_the_table_are_computed_directly(tmp_path: Path) -> None:
+    from lunar_margin.engine.candidates.config import Roi
+    from lunar_margin.engine.candidates.grid import polar_grid
+
+    table = small_table(tmp_path)  # ROI: 극에서 약 1.5 km
+    wide = polar_grid(Roi(min_lat_deg=-90.0, max_lat_deg=-89.9), 500.0)  # 약 3 km
+    outside = wide.subset(np.hypot(wide.x_m, wide.y_m) > 2500.0)
+    assert len(outside) > 0 and bool(np.all(table.rows_for(outside) == -1))
+
+    a = compute_field(synthetic_dem(), outside, settings(max_range_m=10_000.0), table=table)
+    b = compute_field(synthetic_dem(), outside, settings(max_range_m=10_000.0))
+
+    assert np.array_equal(a.sun_fraction, b.sun_fraction, equal_nan=True)
+    assert np.array_equal(a.horizon_max_deg, b.horizon_max_deg, equal_nan=True)
+    assert bool(a.computed.all())

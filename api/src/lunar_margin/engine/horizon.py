@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from lunar_margin.engine.dem import PolarDem
+from lunar_margin.engine.dem import Dem
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class HorizonProfile:
 
 
 def horizon_profile(
-    dem: PolarDem,
+    dem: Dem,
     lat_deg: float,
     lon_deg: float,
     *,

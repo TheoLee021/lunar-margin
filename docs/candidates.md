@@ -51,11 +51,10 @@ pipeline/
 
 ```sh
 cd api
-uv run python -m lunar_margin.pipeline.fetch                  # 처음 한 번 (DEM 80 m + SPICE)
-uv run python -m lunar_margin.pipeline.fetch --dem 75s_120m   # 선택: 완전한 수평선용 DEM
+uv run python -m lunar_margin.pipeline.fetch                  # 처음 한 번 (DEM 80 m·120 m + SPICE)
 
 uv run python -m lunar_margin.pipeline.candidates                     # 결과: DATA_DIR/candidates/default/
-uv run python -m lunar_margin.pipeline.candidates --run-id exp1 --config my.json --dem 75s_120m --workers 8
+uv run python -m lunar_margin.pipeline.candidates --run-id exp1 --config my.json --workers 8
 open data/candidates/exp1/map.html                                    # 독립 실행 HTML 지도
 ```
 
@@ -88,7 +87,8 @@ open data/candidates/exp1/map.html                                    # 독립 �
 | `thresholds.*` | 모두 `null` | 필수 조건. `null`이면 적용 안 함. 경계값 포함 (min은 `>=`, max는 `<=`) |
 | `weights.sun` / `earth` | 0.5 / 0.5 | 점수 가중치 (비율만 의미) |
 | `window` | 2027-01-01 ~ 2046-01-01, 60분 | 분석 기간 (아래 참고) |
-| `dem` | `80s_80m` | `75s_120m`이면 ROI 전체의 수평선이 DEM 안에서 계산됨 |
+| `dem` | `80s_80m` | 주 DEM (우선 쓰는 고해상도 DEM) |
+| `fallback_dem` | `75s_120m` | 주 DEM 바깥(80°S 바깥)과 결측을 메우는 보충 DEM (합성 DEM). `null`이면 쓰지 않는다 |
 | `max_range_m` | 200000 | 수평선 탐색 거리 |
 | `coarse_azimuth_step_deg` / `fine_azimuth_step_deg` | 2 / 1 | 수평선 방위각 간격 |
 | `exclude_incomplete_horizon` | false | true면 수평선이 불완전한 점을 적격에서 제외 |
@@ -153,6 +153,27 @@ open data/candidates/exp1/map.html                                    # 독립 �
 - **수평선 완전성**: 수평선 탐색 광선이 DEM 밖으로 나가면 `data_quality.horizon_complete = false`로 표시한다 (값은 DEM 안쪽 구간 기준으로 계산).
   기본은 표시만 하고, `exclude_incomplete_horizon`을 켜면 적격에서 뺀다.
 - DEM 밖 지점은 모든 지표가 결측이고 `computed = false`다.
+
+## 6a. 수평선: 보충 DEM과 사전 계산 테이블
+
+**보충 DEM (합성 DEM)**: 주 DEM(`80s_80m`)은 80°S까지만 덮어서 ROI 바깥쪽 지점은 수평선 탐색이 DEM 밖으로 나간다.
+`fallback_dem`(기본 `75s_120m`, 75°S 이남)을 두면 **80 m DEM을 우선 쓰고, 그 밖과 결측은 120 m DEM으로 메운다** (`CompositeDem`).
+두 DEM이 같은 극 입체투영이라 투영 좌표로 바로 겹친다. 두 DEM 모두 `pipeline.fetch`가 함께 받고, 파일이 없으면 탐색이 오류와 함께 `fetch` 실행을 안내한다.
+실데이터 테스트로 ROI 가장자리에서 `horizon_complete=false`가 0개가 되는 것을 확인했다.
+
+**수평선 테이블**: 수평선은 지점·DEM·탐색 거리·관측 높이로만 정해지고 날짜와 제약에는 무관하다.
+임무 입력 탐색에서는 시간 계산이 지점당 0.2 ms인데 수평선은 55 ms라서, 총 시간의 거의 전부가 같은 수평선의 반복 계산이었다.
+그래서 한 번만 계산해 `DATA_DIR/horizons/{id}/`에 저장해 두고 이후 탐색은 읽기만 한다.
+
+```sh
+uv run python -m lunar_margin.pipeline.horizons --workers 12   # 기본 설정이면 약 29만 지점, 약 20분, 약 210 MB
+```
+
+- 고각은 0.01° 단위 int16으로 저장한다 (오차 0.005° 이내).
+- 테이블 id는 DEM 파일, ROI, 격자 간격, 방위 간격, 탐색 거리, 관측 높이로 정해지고, 조건이 같고 ROI를 덮는 테이블이 있으면 자동으로 쓴다.
+  없으면 지점마다 직접 계산하고 `summary.warnings`에 안내를 남긴다.
+- 테이블을 쓰면 거친·세밀 단계가 모두 테이블의 방위 간격(기본 1°)을 쓴다.
+- `meta.json`이 마지막에 쓰이므로 만들던 중인 테이블은 열리지 않는다.
 
 ## 7. 검증으로 확인한 것
 

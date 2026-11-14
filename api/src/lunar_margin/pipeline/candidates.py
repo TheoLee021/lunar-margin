@@ -23,7 +23,7 @@ from pydantic import TypeAdapter
 
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig, Thresholds
-from lunar_margin.engine.candidates.field import FieldSettings, MetricField, compute_field
+from lunar_margin.engine.candidates.field import FieldSettings, MetricField, compute_field, open_dem
 from lunar_margin.engine.candidates.filtering import (
     FilterResult,
     Status,
@@ -32,12 +32,12 @@ from lunar_margin.engine.candidates.filtering import (
     reason_names,
 )
 from lunar_margin.engine.candidates.grid import SitePoints, polar_grid, refine_points
+from lunar_margin.engine.candidates.horizon_table import find_table
 from lunar_margin.engine.candidates.mission import MissionRequest, plan_search
 from lunar_margin.engine.candidates.projection import polar_radius_m
 from lunar_margin.engine.candidates.ranking import RankScores, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
-from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.pipeline.candidate_map import (
     MapCandidate,
@@ -66,8 +66,9 @@ from lunar_margin.pipeline.candidate_schema import (
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, StatusKeeper
 from lunar_margin.pipeline.candidates_export import simple_json
+from lunar_margin.pipeline.horizons import TABLES_DIR, resolve_dems, table_spec_for
 from lunar_margin.pipeline.png import encode_png
-from lunar_margin.pipeline.sources import DEM_SOURCES, SPICE_SOURCES
+from lunar_margin.pipeline.sources import SPICE_SOURCES
 
 _REASON_KEYS = (
     "sun_fraction_below_min",
@@ -128,6 +129,11 @@ class SearchOutcome:
 
 def _json_float(value: float) -> float | None:
     return None if math.isnan(value) else round(float(value), 6)
+
+
+def _fallback_resolution(dem: object) -> float:
+    fallback = getattr(dem, "fallback", None)
+    return float(fallback.label.map_scale_m) if fallback is not None else 0.0
 
 
 def _hashes(directory: Path, names: list[str]) -> dict[str, str]:
@@ -205,19 +211,22 @@ def run_search(
     extra_warnings: list[str] | None = None,
 ) -> SearchOutcome:
     started = time.perf_counter()
-    if config.dem not in DEM_SOURCES:
-        raise ValueError(f"unknown DEM '{config.dem}'. choices: {', '.join(DEM_SOURCES)}")
-    img_source, lbl_source = DEM_SOURCES[config.dem]
-    dem_files = (data_dir / "dem" / img_source.filename, data_dir / "dem" / lbl_source.filename)
-    if not all(p.exists() for p in dem_files):
-        raise FileNotFoundError(
-            f"DEM files not found in {data_dir / 'dem'}; "
-            f"run `uv run python -m lunar_margin.pipeline.fetch --dem {config.dem}`"
+    selection = resolve_dems(config, data_dir)
+    img_source = selection.primary
+    dem_pairs = selection.pairs
+    fallback_source = selection.fallback
+    warnings: list[str] = list(extra_warnings or [])
+    table_spec = table_spec_for(config, data_dir)
+    table = find_table(data_dir / TABLES_DIR, table_spec)
+    if table is None:
+        warnings.append(
+            "수평선 테이블이 없어 지점마다 수평선을 직접 계산했습니다(느림). "
+            "`uv run python -m lunar_margin.pipeline.horizons`로 미리 계산해 두면 "
+            "같은 조건의 이후 탐색이 훨씬 빨라집니다."
         )
     load_kernels(data_dir / "spice")
-    dem = PolarDem.from_files(*dem_files)
+    dem = open_dem(dem_pairs)
     workers = config.workers or os.cpu_count() or 1
-    warnings: list[str] = list(extra_warnings or [])
 
     def reporter(stage: str) -> Callable[[int, int], None] | None:
         callback = progress
@@ -264,8 +273,9 @@ def run_search(
             coarse,
             _field_settings(config, config.coarse_azimuth_step_deg),
             workers=workers,
-            dem_files=dem_files,
+            dem_files=dem_pairs,
             on_progress=reporter("coarse"),
+            table=table,
         )
         coarse_filter = evaluate(
             coarse_field,
@@ -292,8 +302,9 @@ def run_search(
         fine,
         _field_settings(config, config.fine_azimuth_step_deg),
         workers=workers,
-        dem_files=dem_files,
+        dem_files=dem_pairs,
         on_progress=reporter("fine"),
+        table=table,
     )
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
@@ -394,8 +405,8 @@ def run_search(
         warnings.append(
             f"{counts['horizon_incomplete']}개 지점({share:.0f}%)의 수평선이 DEM 범위 밖으로 "
             "나갑니다. DEM 밖 지형은 알 수 없어 수평선이 낮게 계산됐을 수 있습니다"
-            "(data_quality.horizon_complete=false). `--dem 75s_120m`이면 ROI 전체가 DEM 안에 "
-            "들어옵니다."
+            "(data_quality.horizon_complete=false). 이 지점들은 "
+            "탐색 거리 안에 DEM이 없는 방향이 있습니다."
         )
     if counts["missing_all_metrics"]:
         warnings.append(
@@ -435,6 +446,14 @@ def run_search(
             sha256=_hashes(data_dir / "dem", [img_source.filename])[img_source.filename],
             resolution_m=dem.label.map_scale_m,
         ),
+        dem_fallback=None
+        if fallback_source is None
+        else DemSource(
+            name=str(config.fallback_dem),
+            file=fallback_source.filename,
+            sha256=_hashes(data_dir / "dem", [fallback_source.filename])[fallback_source.filename],
+            resolution_m=_fallback_resolution(dem),
+        ),
         spice_kernels=[
             KernelSource(
                 name=k.filename, sha256=_hashes(data_dir / "spice", [k.filename])[k.filename]
@@ -448,6 +467,7 @@ def run_search(
         ),
         projection=_PROJECTION,
         plan_id=fine.plan_id,
+        horizon_table=None if table is None else table.directory.name,
     )
     return SearchOutcome(
         config=config,
