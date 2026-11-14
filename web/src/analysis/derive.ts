@@ -286,3 +286,58 @@ export function parseForm(values: FormValues): ParseResult {
     },
   }
 }
+
+// ---------- 축 눈금 ----------
+
+/** [min, max] 안에 들어가는 보기 좋은 눈금 (1·2·5 × 10^n 간격). */
+export function niceTicks(min: number, max: number, target = 5): number[] {
+  if (!(max > min)) return [min]
+  const rough = (max - min) / Math.max(1, target)
+  const magnitude = 10 ** Math.floor(Math.log10(rough))
+  const normalized = rough / magnitude
+  const factor =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  const step = factor * magnitude
+  const ticks: number[] = []
+  const first = Math.ceil(min / step) * step
+  for (let value = first; value <= max + step * 1e-9; value += step) {
+    ticks.push(Number(value.toFixed(10)))
+  }
+  return ticks
+}
+
+// ---------- 기준 입력 ----------
+
+export interface ThresholdInputs {
+  minVisiblePercent: string
+  maxDarkHours: string
+}
+
+export interface ThresholdParse {
+  thresholds: Thresholds
+  errors: Partial<Record<keyof ThresholdInputs, string>>
+}
+
+/** 빈 칸은 "기준 없음". 잘못된 값은 오류로 알리고 해당 기준은 적용하지 않는다. */
+export function parseThresholds(inputs: ThresholdInputs): ThresholdParse {
+  const thresholds: Thresholds = {}
+  const errors: ThresholdParse['errors'] = {}
+
+  if (inputs.minVisiblePercent.trim() !== '') {
+    const percent = parseNumber(inputs.minVisiblePercent)
+    if (percent === null || percent < 0 || percent > 100) {
+      errors.minVisiblePercent = '0 ~ 100 사이의 숫자를 입력하세요.'
+    } else {
+      thresholds.minVisibleFraction = percent / 100
+    }
+  }
+  if (inputs.maxDarkHours.trim() !== '') {
+    const hours = parseNumber(inputs.maxDarkHours)
+    if (hours === null || hours < 0) {
+      errors.maxDarkHours = '0 이상의 숫자를 입력하세요.'
+    } else {
+      thresholds.maxDarkHours = hours
+    }
+  }
+  return { thresholds, errors }
+}

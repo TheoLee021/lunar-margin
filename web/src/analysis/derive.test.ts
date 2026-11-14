@@ -7,7 +7,9 @@ import {
   horizonAtAzimuth,
   longestPeriod,
   nearestIndex,
+  niceTicks,
   parseForm,
+  parseThresholds,
   polarToXY,
   sortPeriodRows,
   toPeriodRows,
@@ -194,5 +196,42 @@ describe('parseForm', () => {
     const result = parseForm({ ...valid, ...patch })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.errors[field]).toBeTruthy()
+  })
+})
+
+describe('niceTicks', () => {
+  it('returns round values inside the range', () => {
+    expect(niceTicks(-1.3, 6.2, 5)).toEqual([0, 2, 4, 6])
+    expect(niceTicks(0, 1, 5)).toEqual([0, 0.2, 0.4, 0.6, 0.8, 1])
+  })
+
+  it('handles a degenerate range', () => {
+    expect(niceTicks(3, 3)).toEqual([3])
+  })
+})
+
+describe('parseThresholds', () => {
+  it('treats empty inputs as no threshold', () => {
+    expect(
+      parseThresholds({ minVisiblePercent: '', maxDarkHours: ' ' }),
+    ).toEqual({ thresholds: {}, errors: {} })
+  })
+
+  it('converts percent to a fraction', () => {
+    const { thresholds } = parseThresholds({
+      minVisiblePercent: '70',
+      maxDarkHours: '48',
+    })
+    expect(thresholds).toEqual({ minVisibleFraction: 0.7, maxDarkHours: 48 })
+  })
+
+  it('reports invalid values and leaves that threshold unset', () => {
+    const { thresholds, errors } = parseThresholds({
+      minVisiblePercent: '120',
+      maxDarkHours: '-3',
+    })
+    expect(thresholds).toEqual({})
+    expect(errors.minVisiblePercent).toBeTruthy()
+    expect(errors.maxDarkHours).toBeTruthy()
   })
 })
