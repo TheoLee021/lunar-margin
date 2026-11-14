@@ -64,7 +64,7 @@ TBD (layer 목록, 타일링 스킴, 투영)
 
 후보 하나에 대해 동일한 기간의 태양 일조·지구 기하학적 가시성·LOLA DEM 지형 특성을 함께 계산한다. 기존 /analysis/* 응답은 변경하지 않는다.
 
-쿼리: lat (-90~-80), lon (-360~360), start/end (timezone-aware UTC, 종료 > 시작, 최대 28일), step_minutes (기본 30, 5~360), slope_baseline_m (기본 160, 80~2000), roughness_window_m (기본 400, 160~2000).
+쿼리: lat (-90~-80), lon (-360~360), start/end (timezone-aware UTC, 종료 > 시작, 최대 28일), step_minutes (기본 30, 5~360), slope_baseline_m (기본 160, 80~2000), roughness_window_m (기본 400, 160~2000), assessment_radius_m (기본 250, 80~2000).
 
 응답 예시(설명용 수치이며 NASA 실측 아님):
 
@@ -85,6 +85,12 @@ TBD (layer 목록, 타일링 스킴, 투영)
     "longest_dark_hours": 48,
     "windows_per_24h": 0.5
   },
+  "region": {
+    "radius_m": 250, "sample_step_m": 80,
+    "total_samples": 29, "valid_samples": 29, "coverage_fraction": 1.0,
+    "slope_p95_deg": 3.5, "slope_max_deg": 5,
+    "roughness_p95_m": 2.0, "landing_safety_status": "UNVERIFIED"
+  },
   "terrain": {
     "elevation_m": 400,
     "slope_deg": 3.5,
@@ -100,9 +106,11 @@ TBD (layer 목록, 타일링 스킴, 투영)
 계산 방식:
 - 기존 horizon_profile()을 후보마다 1회 계산하여 Sun/Earth 두 시계열에 함께 적용한다. 후보 스크리닝 계산은 방위각 2° 간격, DEM ray 160 m 간격을 사용한다(상세 분석은 기본 1°/80 m). 따라서 메인 HUD의 선별 점수와 상세 분석의 가시율은 약간 차이 날 수 있다.
 - 기존 SPICE, visibility_series(), summarize()를 그대로 재사용한다.
-- site_characteristics.py에서 160 m 간격의 2D 중심 유한차분 경사와 400 m 창의 평면 제거 RMS를 계산한다. 80 m DEM 해상도로 착륙선 발판 수준의 장애물 안전성을 보증하지 않는다.
+- site_characteristics.py에서 160 m 간격의 2D 중심 유한차분 경사와 400 m 창의 평면 제거 RMS를 계산한다. 또한 후보 중심의 250 m 원형 영역을 DEM 픽셀 간격으로 샘플링하여 경사 P95·최대 경사·거칠기 P95·유효 표본 비율을 산출한다. 결측 샘플은 0으로 대체하지 않는다. 80 m DEM 해상도로 착륙선 발판 수준의 장애물 안전성을 보증하지 않는다.
 - 별도의 우주선·태양전지 발전량·RF 링크 성공률 모델은 없다.
 - 외부 NASA 자료가 준비되지 않으면 503, 유효 범위 밖·DEM 결측은 422를 반환한다.
 
-메인 HUD는 같은 기간에 대해 후보별 평가를 요청하고, 지구 가시율 하한·최장 연속 암흑 상한·경사 상한을 모두 만족할 때 PASS로 판정한다. FAIL 결과도 목록에 유지하며 판정 근거를 표시한다. 임무 점수는 PASS 이후의 가시율 가중 순위 도구이고 실패 확률이 아니다.
+메인 HUD는 같은 기간에 대해 후보별 평가를 요청하고, 지구 가시율 하한·최장 연속 암흑 상한·지역 경사 P95 상한·원형 영역의 DEM 표본 완전성(100%)을 모두 만족할 때 환경 스크리닝 PASS로 판정한다. FAIL 결과도 목록에 유지하며 판정 근거를 표시한다. 임무 점수는 PASS 이후의 가시율 가중 순위 도구이고 실패 확률이 아니다.
 
+
+- `region.landing_safety_status`는 항상 `UNVERIFIED`다. 환경 스크리닝 PASS는 착륙 안전 인증이 아니며, 위치 분산·발판 접지력·미세 장애물·지반 지지력·플룸 위험은 평가하지 않는다.
