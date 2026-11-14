@@ -32,7 +32,7 @@ export default function App() {
         {analysis ? <AnalysisWorkspace /> : <MissionApp />}
       </Suspense>
       <a
-        className="hud-button fixed bottom-4 left-32 z-20"
+        className={`hud-button fixed bottom-10 z-20 ${analysis ? 'left-4' : 'left-32'}`}
         href={analysis ? '/' : '/?view=analysis'}
       >
         {analysis ? '미션 대시보드' : '상세 분석'}

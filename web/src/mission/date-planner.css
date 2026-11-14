@@ -49,7 +49,7 @@
     padding: 0;
     margin: auto;
     color: var(--fg);
-    background: var(--glass);
+    background: rgba(15, 18, 23, 0.94);
     border: 1px solid var(--edge);
     border-radius: 12px;
     overflow: hidden;
