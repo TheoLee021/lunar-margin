@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.settings import Settings
 
 
@@ -21,6 +22,8 @@ def create_app(settings: Settings) -> FastAPI:
         allow_methods=["GET"],
         allow_headers=["*"],
     )
+
+    app.include_router(analysis_router)
 
     @app.get("/health")
     def health() -> Health:  # pyright: ignore[reportUnusedFunction]

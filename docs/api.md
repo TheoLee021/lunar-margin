@@ -7,7 +7,8 @@
 
 - Base URL: 로컬 `/api` (Vite proxy → `http://localhost:8000`), 배포 `VITE_API_URL` (Railway)
 - 시간: UTC ISO 8601 (`2027-01-15T12:00:00Z`)
-- 좌표: TBD (달 위경도 기준, 방위각 0°의 방향과 회전 방향을 여기 명시)
+- 좌표: 달 planetocentric 위도(남쪽 음수, 도), 동경 양수 경도(도, 0~360 또는 -180~180 입력 허용). 방위각 0°=북, 시계방향(동쪽 90°). 기준 구 반경 1737.4 km
+  - 프레임: MOON_ME (백엔드 SPICE·LOLA DEM과 같음). 벡터(태양 방향 등)는 MOON_ME 직교좌표이며, 프론트는 Cesium 월드 좌표를 MOON_ME로 취급하고 변환하지 않는다
 - 에러: FastAPI 기본 `{"detail": ...}`
 
 ## Endpoints
@@ -17,6 +18,40 @@
 ```json
 { "status": "ok" }
 ```
+
+### `GET /analysis/illumination`, `GET /analysis/earth-visibility`
+
+지형 수평선 대비 태양(`illumination`) 또는 지구(`earth-visibility`) 가시성을 계산한다. 두 엔드포인트의 응답 형태는 같다.
+
+쿼리: `lat` (-90~-80), `lon`, `start`, `end` (타임존 포함 UTC ISO 8601, `end > start`, 최대 3년), `step_minutes` (기본 30, 5~360), `observer_height_m` (기본 0, 0~100). 잘못된 입력은 422.
+
+```json
+{
+  "lat": -89.7, "lon": 130.0,
+  "start": "2027-01-01T00:00:00Z", "end": "2027-02-01T00:00:00Z", "step_minutes": 30,
+  "observer_height_m": 0,
+  "metrics": {
+    "visible_fraction": 0.42,
+    "longest_dark_hours": 96.5,
+    "windows_per_24h": 0.9,
+    "mean_elevation_deg": 0.8
+  },
+  "horizon": { "azimuth_deg": [0, 1, 2], "elevation_deg": [1.2, 1.3, 1.1] },
+  "series": {
+    "times": ["2027-01-01T00:00:00Z"],
+    "body_azimuth_deg": [212.4],
+    "body_elevation_deg": [0.7],
+    "visible": [true]
+  },
+  "windows": [{ "start": "2027-01-01T00:00:00Z", "end": "2027-01-01T11:30:00Z" }],
+  "dark_periods": [{ "start": "2027-01-01T11:30:00Z", "end": "2027-01-04T12:00:00Z" }]
+}
+```
+
+- `metrics`: illumination은 평균 일조율, 최장 연속 암흑 시간, 24시간당 일조 창 횟수. earth-visibility는 평균 지구 가시율, 최장 통신 두절 시간, 가시 구간 평균 지구 고도각 (`mean_elevation_deg`는 가시 구간이 없으면 `null`).
+- `horizon`: 방위각별 지형 수평선 고각(도). 관측점 기준.
+- `series`: 시간 배열과 같은 길이의 배열들. `visible` = `body_elevation_deg > horizon(body_azimuth_deg)`.
+- `windows`, `dark_periods`: `visible` 연속 구간(`end` 미포함). 기간 경계에서 잘린 구간도 포함.
 
 ## Tiles
 
