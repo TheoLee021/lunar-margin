@@ -46,7 +46,9 @@ def doi_to_pdi(cfg):
     v_p=np.sqrt(MU_M*(2/r_p-1/a))
     dt=np.pi*np.sqrt(a**3/MU_M)
     # Exact Keplerian analytic impulse at apolune and coast to perilune.
+    doi_fuel=cfg['mass_kg']*(1-np.exp(-(v_circ-v_a)/(cfg['isp_s']*G0)))
     return dict(doi_delta_v_m_s=float(v_circ-v_a),doi_coast_s=float(dt),
+                doi_propellant_kg=float(doi_fuel),
                 pdi_tangential_speed_m_s=float(v_p),pdi_radius_m=float(r_p),
                 initial_circular_speed_m_s=float(v_circ))
 
@@ -92,7 +94,8 @@ def solve(cfg):
     doi=doi_to_pdi(cfg)
     r0=doi['pdi_radius_m']
     # After half of the elliptic deorbit coast the PDI point is opposite DOI.
-    initial=[r0,np.pi,0.0,doi['pdi_tangential_speed_m_s'],cfg['mass_kg']]
+    pdi_mass=cfg['mass_kg']-doi['doi_propellant_kg']
+    initial=[r0,np.pi,0.0,doi['pdi_tangential_speed_m_s'],pdi_mass]
     def touch(t,y,cfg):return y[0]-R_M
     touch.terminal=True;touch.direction=-1
     sim=solve_ivp(dynamics,(0,2400),initial,args=(cfg,),events=touch,
@@ -103,7 +106,7 @@ def solve(cfg):
     states=sim.sol(times).T
     controls=np.array([guidance(y,cfg) for y in states])
     yfinal=sim.y_events[0][0]
-    fuel_used=cfg['mass_kg']-yfinal[4]
+    fuel_used=pdi_mass-yfinal[4]
     propellant_capacity=cfg['mass_kg']-cfg['dry_mass_kg']
     # Correct thrust-integral effective delta-v; not a second instantaneous burn.
     dv_equiv=np.trapezoid(controls[:,2]/states[:,4],times)
@@ -120,6 +123,7 @@ def solve(cfg):
                 touchdown_speed_m_s=float(landing_speed),
                 touchdown_propellant_remaining_kg=float(yfinal[4]-cfg['dry_mass_kg']),
                 descent_propellant_used_kg=float(fuel_used),
+                total_DOI_plus_descent_propellant_used_kg=float(cfg['mass_kg']-yfinal[4]),
                 descent_propellant_capacity_kg=float(propellant_capacity),
                 finite_thrust_integral_m_s=float(dv_equiv),
                 max_thrust_used_n=float(np.max(controls[:,2])),
@@ -139,6 +143,32 @@ def plots(out,t,y,u,report):
     plt.rcParams.update({'font.size':10,'axes.spines.top':False,'axes.spines.right':False})
     h=(y[:,0]-R_M)/1000
     downrange=R_M*(y[:,1]-np.pi)/1000
+    # Full trajectory: circular orbit reference, impulsive DOI at apoapsis,
+    # coast on Kepler ellipse, and a controlled descent after PDI.
+    ra=R_M+report['input']['orbit_km']*1000
+    rp=R_M+report['input']['pdi_km']*1000
+    sma=(ra+rp)/2
+    ecc=(ra-rp)/(ra+rp)
+    E=np.linspace(np.pi,2*np.pi,450)
+    rc=sma*(1-ecc*np.cos(E))
+    f=2*np.arctan2(np.sqrt(1+ecc)*np.sin(E/2),np.sqrt(1-ecc)*np.cos(E/2))
+    phi=f-np.pi
+    coast_xy=np.column_stack((rc*np.cos(phi),rc*np.sin(phi)))/1000
+    descent_xy=np.column_stack((y[:,0]*np.cos(y[:,1]),y[:,0]*np.sin(y[:,1])))/1000
+    ang=np.linspace(0,2*np.pi,600)
+    fig,ax=plt.subplots(figsize=(9,9))
+    ax.plot(ra*np.cos(ang)/1000,ra*np.sin(ang)/1000,'--',color='#9ba8b4',lw=1.6,label='100-km circular parking orbit')
+    ax.plot(coast_xy[:,0],coast_xy[:,1],color='#f28c28',lw=2.6,label='DOI to 15-km coast')
+    ax.plot(descent_xy[:,0],descent_xy[:,1],color='#087f8c',lw=2.9,label='Finite-thrust descent')
+    ax.plot(R_M*np.cos(ang)/1000,R_M*np.sin(ang)/1000,color='#6b6259',lw=2,label='Mean lunar sphere')
+    ax.scatter(coast_xy[0,0],coast_xy[0,1],color='#e07f21',s=60,zorder=6,label='DOI burn')
+    ax.scatter(coast_xy[-1,0],coast_xy[-1,1],color='#b62b4d',s=60,zorder=6,label='PDI at 15 km')
+    ax.scatter(descent_xy[-1,0],descent_xy[-1,1],color='#174c8b',s=80,zorder=8,label='Touchdown')
+    ax.set(xlabel='Moon-centered x [km]',ylabel='Moon-centered y [km]',
+           title='100-km Circular Orbit → Deorbit Coast → Powered Descent → Touchdown')
+    ax.set_aspect('equal');ax.grid(alpha=.23);ax.legend(loc='upper right',fontsize=9)
+    fig.tight_layout();fig.savefig(out/'08_deorbit_to_landing_full.png',dpi=180);plt.close(fig)
+
     fig,ax=plt.subplots(figsize=(10,5.5))
     ax.plot(downrange,h,lw=2.4,color='#087f8c',label='Finite-thrust descent')
     ax.scatter([0],[report['input']['pdi_km']],color='#f28c28',label='Powered descent initiation',zorder=5)
