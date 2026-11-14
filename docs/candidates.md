@@ -52,7 +52,7 @@ pipeline/
 ```sh
 cd api
 uv run python -m lunar_margin.pipeline.fetch                  # 처음 한 번 (DEM 80 m + SPICE)
-uv run python -m lunar_margin.pipeline.fetch --dem 75s_120m   # 선택: 완전한 수평선용 DEM
+uv run python -m lunar_margin.pipeline.fetch --dem 75s_120m   # 필수: 완전한 수평선용 보충 DEM
 
 uv run python -m lunar_margin.pipeline.candidates                     # 결과: DATA_DIR/candidates/default/
 uv run python -m lunar_margin.pipeline.candidates --run-id exp1 --config my.json --dem 75s_120m --workers 8
@@ -158,7 +158,8 @@ open data/candidates/exp1/map.html                                    # 독립 �
 
 **보충 DEM (합성 DEM)**: 주 DEM(`80s_80m`)은 80°S까지만 덮어서 ROI 바깥쪽 지점은 수평선 탐색이 DEM 밖으로 나간다.
 `fallback_dem`(기본 `75s_120m`, 75°S 이남)을 두면 **80 m DEM을 우선 쓰고, 그 밖과 결측은 120 m DEM으로 메운다** (`CompositeDem`).
-두 DEM이 같은 극 입체투영이라 투영 좌표로 바로 겹친다. 보충 DEM 파일이 없으면 경고만 남기고 주 DEM으로 계산한다 (`pipeline.fetch --dem 75s_120m`).
+두 DEM이 같은 극 입체투영이라 투영 좌표로 바로 겹친다. **보충 DEM은 완전한 결과에 필수다** (`pipeline.fetch --dem 75s_120m`). 없으면 탐색은 경고와 함께 주 DEM만으로 진행하지만,
+ROI의 약 절반에서 수평선이 불완전(`horizon_complete=false`)해서 불완전한 결과로 봐야 한다.
 실데이터 테스트로 ROI 가장자리에서 `horizon_complete=false`가 0개가 되는 것을 확인했다.
 
 **수평선 테이블**: 수평선은 지점·DEM·탐색 거리·관측 높이로만 정해지고 날짜와 제약에는 무관하다.
