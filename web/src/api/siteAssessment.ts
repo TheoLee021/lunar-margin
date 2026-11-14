@@ -17,6 +17,17 @@ export const SiteAssessmentSchema = z.object({
     longest_dark_hours: z.number(),
     windows_per_24h: z.number(),
   }),
+  region: z.object({
+    radius_m: z.number(),
+    sample_step_m: z.number(),
+    total_samples: z.number(),
+    valid_samples: z.number(),
+    coverage_fraction: z.number(),
+    slope_p95_deg: z.number().nullable(),
+    slope_max_deg: z.number().nullable(),
+    roughness_p95_m: z.number().nullable(),
+    landing_safety_status: z.string(),
+  }),
   terrain: z.object({
     elevation_m: z.number(),
     slope_deg: z.number(),
