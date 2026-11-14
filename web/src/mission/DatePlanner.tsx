@@ -38,7 +38,8 @@ export function DatePlanner({
     .flatMap((l) => departures.map((d) => exampleCost(d, l)))
     .filter((p): p is number => p !== null)
   const minimum = Math.min(...prices)
-  const analysis = analyze(draft)
+  const validDraft = ScheduleSchema.safeParse(draft).success
+  const analysis = validDraft ? analyze(draft) : null
   const [formError, setFormError] = useState('')
   useEffect(() => {
     const dialog = ref.current!,
@@ -53,6 +54,11 @@ export function DatePlanner({
     setAnchors((a) => ({
       departure: iso(dayOf(a.departure) + step),
       landing: iso(dayOf(a.landing) + step),
+    }))
+    setDraft((d) => ({
+      ...d,
+      departure: iso(dayOf(d.departure) + step),
+      landing: iso(dayOf(d.landing) + step),
     }))
   }
   function selectLanding(landing: string) {
@@ -134,6 +140,7 @@ export function DatePlanner({
                     if (DateSchema.safeParse(value).success) {
                       setFormError('')
                       setAnchors((a) => ({ ...a, departure: value }))
+                      setDraft((d) => ({ ...d, departure: value }))
                     } else setFormError('유효한 출발일을 입력하세요.')
                   }}
                 />
@@ -149,6 +156,7 @@ export function DatePlanner({
                     if (DateSchema.safeParse(value).success) {
                       setFormError('')
                       setAnchors((a) => ({ ...a, landing: value }))
+                      setDraft((d) => ({ ...d, landing: value }))
                     } else setFormError('유효한 착륙일을 입력하세요.')
                   }}
                 />
@@ -271,12 +279,23 @@ export function DatePlanner({
               <span>열: 출발일 · 행: 착륙일 / UTC</span>
             </div>
           </section>
-          <TransferOrbit schedule={draft} />
-          <MissionCharts
-            analysis={analysis}
-            hour={hour}
-            onLanding={selectLanding}
-          />
+          {validDraft ? (
+            <>
+              <TransferOrbit schedule={draft} />
+              <MissionCharts
+                analysis={analysis}
+                hour={hour}
+                onLanding={selectLanding}
+              />
+            </>
+          ) : (
+            <section className="group" role="status">
+              <h2>일정을 확인하세요</h2>
+              <p className="hint">
+                착륙일을 출발일 이후로 선택하면 비행 궤도와 분석이 표시됩니다.
+              </p>
+            </section>
+          )}
         </div>
       </div>
       <footer className="planner-footer">
@@ -292,6 +311,7 @@ export function DatePlanner({
           <button
             type="button"
             id="applyWindow"
+            disabled={!validDraft}
             onClick={() => {
               const result = ScheduleSchema.safeParse(draft)
               if (result.success) {

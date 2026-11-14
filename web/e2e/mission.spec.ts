@@ -22,6 +22,24 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await opener.click()
   const dialog = page.getByRole('dialog', { name: '미션 날짜 UTC' })
   await expect(dialog).toBeVisible()
+
+  await dialog
+    .getByLabel('기준 출발일 · UTC', { exact: true })
+    .fill('2026-10-13')
+  await dialog
+    .getByLabel('기준 착륙일 · UTC', { exact: true })
+    .fill('2026-10-22')
+  await expect(dialog.locator('.planner-footer [aria-live]')).toHaveText(
+    'Oct 13 → Oct 22',
+  )
+  await expect(dialog.locator('.transfer-stats')).toContainText('2026.10.13')
+  await expect(dialog.locator('.transfer-stats')).toContainText('2026.10.22')
+  await dialog
+    .getByLabel('기준 출발일 · UTC', { exact: true })
+    .fill('2027-01-06')
+  await dialog
+    .getByLabel('기준 착륙일 · UTC', { exact: true })
+    .fill('2027-01-10')
   const grid = dialog.getByRole('table', {
     name: '출발일과 착륙일별 예시 비용',
   })
