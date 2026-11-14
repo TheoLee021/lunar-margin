@@ -24,17 +24,31 @@ export interface RequestOptions {
 
 const DEFAULT_BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
-async function getJson<T>(
+// FastAPI 에러 본문 `{"detail": ...}` 를 메시지에 담는다.
+async function failureMessage(
+  path: string,
+  response: Response,
+): Promise<string> {
+  const base = `GET ${path} failed with ${response.status}`
+  try {
+    const body: unknown = await response.json()
+    const parsed = z.object({ detail: z.unknown() }).safeParse(body)
+    if (!parsed.success) return base
+    const detail = parsed.data.detail
+    return `${base}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`
+  } catch {
+    return base
+  }
+}
+
+export async function getJson<T>(
   path: string,
   schema: z.ZodType<T>,
   { baseUrl = DEFAULT_BASE_URL, fetchFn = fetch, signal }: RequestOptions = {},
 ): Promise<T> {
   const response = await fetchFn(`${baseUrl}${path}`, { signal })
   if (!response.ok) {
-    throw new ApiError(
-      `GET ${path} failed with ${response.status}`,
-      response.status,
-    )
+    throw new ApiError(await failureMessage(path, response), response.status)
   }
   const parsed = schema.safeParse(await response.json())
   if (!parsed.success) {

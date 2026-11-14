@@ -34,6 +34,8 @@ Open http://localhost:5173.
 
 Backend details (NASA data ingestion, illumination and Earth-visibility analysis): see [api/README.md](api/README.md).
 
+Analysis UI (illumination / Earth visibility detail view): with the backend running and data fetched (`cd api && uv run python -m lunar_margin.pipeline.fetch`), open the web app and pick a site. Without NASA data, `cd web && npm run stub` serves synthetic responses on :8000. `npm run e2e` runs against the real backend with NASA data (start the API first).
+
 See [AGENTS.md](AGENTS.md) for conventions, commands, and ownership.
 
 ## License
