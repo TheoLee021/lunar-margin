@@ -10,9 +10,9 @@ from lunar_margin.app.main import create_app
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.site_assessment import (
     BodySummary,
+    RegionSummary,
     SiteAssessment,
     SiteQuery,
-    RegionSummary,
     TerrainSummary,
     get_site_assessor,
 )
