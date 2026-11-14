@@ -7,6 +7,7 @@
 import math
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Literal
 
 import numpy as np
@@ -21,21 +22,25 @@ _KERNELS = (
     "moon_pa_de440_200625.bpc",
     "moon_de440_250416.tf",
 )
+# CSPICE has process-global kernel/error state and is not thread-safe.
+# All CSPICE entry points below share this lock; pure NumPy/DEM work stays parallel.
+_SPICE_LOCK = Lock()
 _loaded: set[Path] = set()
 
 
 def load_kernels(spice_dir: Path) -> None:
     """필요한 커널을 한 번만 로드한다. 없는 파일이 있으면 FileNotFoundError."""
-    directory = spice_dir.resolve()
-    if directory in _loaded:
-        return
-    for name in _KERNELS:
-        path = directory / name
-        if not path.exists():
-            raise FileNotFoundError(f"missing SPICE kernel {path}; run the fetch pipeline")
-    for name in _KERNELS:
-        spiceypy.furnsh(str(directory / name))
-    _loaded.add(directory)
+    with _SPICE_LOCK:
+        directory = spice_dir.resolve()
+        if directory in _loaded:
+            return
+        for name in _KERNELS:
+            path = directory / name
+            if not path.exists():
+                raise FileNotFoundError(f"missing SPICE kernel {path}; run the fetch pipeline")
+        for name in _KERNELS:
+            spiceypy.furnsh(str(directory / name))
+        _loaded.add(directory)
 
 
 def utc_range(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.float64]:
@@ -47,7 +52,8 @@ def utc_range(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.f
     if step_minutes <= 0:
         raise ValueError("step_minutes must be positive")
     start_utc = start.astimezone(UTC).replace(tzinfo=None)
-    et0 = float(spiceypy.str2et(start_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+    with _SPICE_LOCK:
+        et0 = float(spiceypy.str2et(start_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
     step_s = step_minutes * 60.0
     count = math.ceil((end - start).total_seconds() / step_s)
     return et0 + step_s * np.arange(count, dtype=np.float64)
@@ -67,7 +73,8 @@ def body_azel(
     north = np.cross(up, east)  # up と east の外積が north
     observer_km = up * (MOON_RADIUS_M + observer_height_m) / 1000.0
 
-    positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
+    with _SPICE_LOCK:
+        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
     vectors = np.asarray(positions, dtype=np.float64) - observer_km  # (N, 3)
 
     e, n, u = vectors @ east, vectors @ north, vectors @ up
