@@ -51,3 +51,9 @@ Set `VITE_CESIUM_ION_TOKEN` in `web/.env.local` and add Cesium Moon (ion asset 2
 For local checks while another project occupies port 5173, use `E2E_BASE_URL=http://localhost:5174 API_PROXY_TARGET=http://localhost:8001 npm run e2e` from `web/`, with the API running on port 8001.
 
 The default `/` screen is the mission HUD. `/?view=analysis` preserves the existing detailed analysis workspace, including Moon surface picking, presets, thresholds and comparison. The navigation links switch between these screens; each mounts one shared Moon viewer.
+
+## Mission date planner
+
+Click the mission dates to open the HUD-style planner. Its 5×5 price grid covers each reference departure/landing date ±2 days. Choosing a cell updates the example transfer path; applying commits departure, landing and duration to the shared selection. Closing or pressing Escape discards the draft, including duration. Dates and the applied schedule are validated with zod.
+
+Costs, flight paths and analysis chart shapes are explicitly illustrative fixtures. No trajectory optimization, site ranking over time, terrain shadow calculation or new backend endpoints are introduced here. The existing site candidates remain examples; actual date-dependent recommendations require the future calculation API.
