@@ -57,7 +57,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const slope = page.getByRole('slider', { name: /경사 ≤/ })
   await slope.fill('0')
   await expect(
-    rail.getByText('조건을 만족하는 예시 후보가 없습니다. 필터를 완화하세요.'),
+    rail.getByText(/실제 계산된 후보 중 모든 기준을 충족하는 지점이 없습니다/),
   ).toBeVisible()
   await slope.fill('12')
   await expect(rail.getByRole('button', { name: /후보 2/ })).toBeVisible()
