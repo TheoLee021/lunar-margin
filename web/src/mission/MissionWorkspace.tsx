@@ -53,7 +53,7 @@ export function MissionWorkspace({
       </header>
       <button
         type="button"
-        className="hud-button absolute bottom-4 left-4 z-10"
+        className="hud-button absolute bottom-8 left-4 z-10"
         aria-pressed={collapsed}
         onClick={() => setCollapsed((value) => !value)}
       >
