@@ -30,37 +30,50 @@ const site: SiteAssessment = {
 }
 
 it('passes when every hard constraint is met', () => {
-  const result = assessCandidate(site, {
-    minEarthPercent: 60,
-    maxDarkHours: 48,
-    maxSlopeDeg: 10,
-  }, 50)
+  const result = assessCandidate(
+    site,
+    {
+      minEarthPercent: 60,
+      maxDarkHours: 48,
+      maxSlopeDeg: 10,
+    },
+    50,
+  )
   expect(result.pass).toBe(true)
   expect(result.checks).toHaveLength(3)
   expect(result.score).toBeCloseTo(75)
 })
 
 it('reports which requirement failed without masking it with high Sun fraction', () => {
-  const result = assessCandidate({
-    ...site,
-    earth: { ...site.earth, visible_fraction: 0.3 },
-    terrain: { ...site.terrain, slope_deg: 15 },
-  }, {
-    minEarthPercent: 60,
-    maxDarkHours: 48,
-    maxSlopeDeg: 10,
-  }, 50)
+  const result = assessCandidate(
+    {
+      ...site,
+      earth: { ...site.earth, visible_fraction: 0.3 },
+      terrain: { ...site.terrain, slope_deg: 15 },
+    },
+    {
+      minEarthPercent: 60,
+      maxDarkHours: 48,
+      maxSlopeDeg: 10,
+    },
+    50,
+  )
   expect(result.pass).toBe(false)
-  expect(result.checks.filter((check) => !check.pass).map((check) => check.id))
-    .toEqual(['visible_fraction', 'slope'])
+  expect(
+    result.checks.filter((check) => !check.pass).map((check) => check.id),
+  ).toEqual(['visible_fraction', 'slope'])
 })
 
 it('uses inclusive bounds at exact constraints', () => {
-  const result = assessCandidate(site, {
-    minEarthPercent: 70,
-    maxDarkHours: 36,
-    maxSlopeDeg: 3.5,
-  }, 100)
+  const result = assessCandidate(
+    site,
+    {
+      minEarthPercent: 70,
+      maxDarkHours: 36,
+      maxSlopeDeg: 3.5,
+    },
+    100,
+  )
   expect(result.pass).toBe(true)
   expect(result.score).toBeCloseTo(70)
 })
