@@ -28,7 +28,10 @@ export function MissionWorkspace({
     [darkness, setDarkness] = useState(48),
     [slope, setSlope] = useState(10),
     [weight, setWeight] = useState(50)
-  const { results, errors, loading, retry } = useSiteAssessments(DEMO_SITES, selection)
+  const { results, errors, loading, retry } = useSiteAssessments(
+    DEMO_SITES,
+    selection,
+  )
   const constraints = {
     minEarthPercent: earth,
     maxDarkHours: darkness,
@@ -37,15 +40,24 @@ export function MissionWorkspace({
   const evaluated = DEMO_SITES.flatMap((site) => {
     const result = results[site.id]
     if (!result) return []
-    return [{ site, data: result, verdict: assessCandidate(result, constraints, weight) }]
+    return [
+      {
+        site,
+        data: result,
+        verdict: assessCandidate(result, constraints, weight),
+      },
+    ]
   })
-  const candidates = evaluated.toSorted((a, b) =>
-    Number(b.verdict.pass) - Number(a.verdict.pass) ||
-    b.verdict.score - a.verdict.score,
+  const candidates = evaluated.toSorted(
+    (a, b) =>
+      Number(b.verdict.pass) - Number(a.verdict.pass) ||
+      b.verdict.score - a.verdict.score,
   )
   const selected =
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
-  const selectedEvaluation = evaluated.find((entry) => entry.site.id === selected.id)
+  const selectedEvaluation = evaluated.find(
+    (entry) => entry.site.id === selected.id,
+  )
   const errorCount = Object.keys(errors).length
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
@@ -139,12 +151,27 @@ export function MissionWorkspace({
             </section>
             <section className="hud-section">
               <h2>요구조건 충족 후보 · 계산값</h2>
-              <p className="mb-2 text-[10px] text-neutral-400">동일한 기간의 Sun/Earth 가시성 및 LOLA 80 m DEM 경사 기준. 우선 PASS 후보, 다음 FAIL 후보. 점수는 두 가시율의 가중 평균이며 안전성 확률이 아닙니다.</p>
-              {loading ? <p role="status" className="text-xs text-sky-300">NASA 후보 분석 계산 중… ({evaluated.length}/{DEMO_SITES.length})</p> : null}
+              <p className="mb-2 text-[10px] text-neutral-400">
+                동일한 기간의 Sun/Earth 가시성 및 LOLA 80 m DEM 경사 기준. 우선
+                PASS 후보, 다음 FAIL 후보. 점수는 두 가시율의 가중 평균이며
+                안전성 확률이 아닙니다.
+              </p>
+              {loading ? (
+                <p role="status" className="text-xs text-sky-300">
+                  NASA 후보 분석 계산 중… ({evaluated.length}/
+                  {DEMO_SITES.length})
+                </p>
+              ) : null}
               {errorCount > 0 ? (
                 <div role="alert" className="my-2 text-xs text-red-300">
                   {errorCount}개 후보 분석 실패 · 해당 후보는 순위에서 제외됨.
-                  <button type="button" className="ml-2 underline" onClick={retry}>재시도</button>
+                  <button
+                    type="button"
+                    className="ml-2 underline"
+                    onClick={retry}
+                  >
+                    재시도
+                  </button>
                 </div>
               ) : null}
               <ol className="space-y-1">
@@ -163,16 +190,24 @@ export function MissionWorkspace({
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
                       </span>
                       <span className="ml-auto font-mono">
-                        {verdict.pass ? 'PASS' : 'FAIL'} · {verdict.score.toFixed(0)}
+                        {verdict.pass ? 'PASS' : 'FAIL'} ·{' '}
+                        {verdict.score.toFixed(0)}
                       </span>
                     </button>
-                    <span className="block text-[10px] text-neutral-400">일조 {(data.sun.visible_fraction * 100).toFixed(1)}% · 지구 {(data.earth.visible_fraction * 100).toFixed(1)}% · 경사 {data.terrain.slope_deg.toFixed(1)}°</span>
+                    <span className="block text-[10px] text-neutral-400">
+                      일조 {(data.sun.visible_fraction * 100).toFixed(1)}% ·
+                      지구 {(data.earth.visible_fraction * 100).toFixed(1)}% ·
+                      경사 {data.terrain.slope_deg.toFixed(1)}°
+                    </span>
                   </li>
                 ))}
               </ol>
-              {!loading && errorCount === 0 && candidates.every((entry) => !entry.verdict.pass) ? (
+              {!loading &&
+              errorCount === 0 &&
+              candidates.every((entry) => !entry.verdict.pass) ? (
                 <p className="text-xs text-neutral-400">
-                  실제 계산된 후보 중 모든 기준을 충족하는 지점이 없습니다. 실패 후보를 선택해 원인을 확인하거나 조건을 완화하세요.
+                  실제 계산된 후보 중 모든 기준을 충족하는 지점이 없습니다. 실패
+                  후보를 선택해 원인을 확인하거나 조건을 완화하세요.
                 </p>
               ) : null}
             </section>
@@ -189,16 +224,44 @@ export function MissionWorkspace({
             <MissionMetrics result={analysis} />
             {selectedEvaluation ? (
               <section className="mt-3 border-t border-white/10 pt-3 text-xs">
-                <h3 className="font-semibold">Mission Constraints · {selectedEvaluation.verdict.pass ? 'PASS' : 'FAIL'}</h3>
-                <p className="mt-1 text-neutral-400">LOLA DEM: 경사 {selectedEvaluation.data.terrain.slope_deg.toFixed(2)}° ({selectedEvaluation.data.terrain.slope_baseline_m.toFixed(0)} m 기준) · 거칠기 RMS {selectedEvaluation.data.terrain.roughness_rms_m.toFixed(2)} m ({selectedEvaluation.data.terrain.roughness_window_m.toFixed(0)} m 창)</p>
-                <p className="mt-1 text-neutral-400">DEM 80 m 해상도: 미세 지형·착륙 위험물 판정 불가</p>
+                <h3 className="font-semibold">
+                  Mission Constraints ·{' '}
+                  {selectedEvaluation.verdict.pass ? 'PASS' : 'FAIL'}
+                </h3>
+                <p className="mt-1 text-neutral-400">
+                  LOLA DEM: 경사{' '}
+                  {selectedEvaluation.data.terrain.slope_deg.toFixed(2)}° (
+                  {selectedEvaluation.data.terrain.slope_baseline_m.toFixed(0)}{' '}
+                  m 기준) · 거칠기 RMS{' '}
+                  {selectedEvaluation.data.terrain.roughness_rms_m.toFixed(2)} m
+                  (
+                  {selectedEvaluation.data.terrain.roughness_window_m.toFixed(
+                    0,
+                  )}{' '}
+                  m 창)
+                </p>
+                <p className="mt-1 text-neutral-400">
+                  DEM 80 m 해상도: 미세 지형·착륙 위험물 판정 불가
+                </p>
                 <ul className="mt-2 space-y-1">
                   {selectedEvaluation.verdict.checks.map((check) => (
-                    <li key={check.id} className={check.pass ? 'text-emerald-300' : 'text-red-300'}>{check.pass ? '✓ ' : '✗ '}{check.reason}</li>
+                    <li
+                      key={check.id}
+                      className={
+                        check.pass ? 'text-emerald-300' : 'text-red-300'
+                      }
+                    >
+                      {check.pass ? '✓ ' : '✗ '}
+                      {check.reason}
+                    </li>
                   ))}
                 </ul>
               </section>
-            ) : <p className="mt-3 text-xs text-neutral-400">후보 지형·제약 판정 결과 대기 중</p>}
+            ) : (
+              <p className="mt-3 text-xs text-neutral-400">
+                후보 지형·제약 판정 결과 대기 중
+              </p>
+            )}
           </aside>
         </>
       ) : null}
