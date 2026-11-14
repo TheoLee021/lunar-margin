@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from lunar_margin.app import site_assessment as module
 from lunar_margin.app.settings import Settings
@@ -51,8 +52,8 @@ def test_combined_candidate_uses_single_horizon_and_real_mask_logic(
         body: str,
         _lat: float,
         _lon: float,
-        _times: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
+        _times: NDArray[np.float64],
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         calls.append(body)
         return (
             np.zeros(4),
@@ -61,9 +62,17 @@ def test_combined_candidate_uses_single_horizon_and_real_mask_logic(
             else np.array([1.0, -1.0, 1.0, -1.0]),
         )
 
-    monkeypatch.setattr(module, "_load_dem", lambda _path: dem)
+    def fake_load(_path: Path) -> PolarDem:
+        return dem
+
+    def fake_utc_range(
+        _start: datetime, _end: datetime, _step: int
+    ) -> NDArray[np.float64]:
+        return times
+
+    monkeypatch.setattr(module, "_load_dem", fake_load)
     monkeypatch.setattr(module, "horizon_profile", fake_horizon)
-    monkeypatch.setattr(module, "utc_range", lambda *_: times)
+    monkeypatch.setattr(module, "utc_range", fake_utc_range)
     monkeypatch.setattr(module, "body_azel", fake_azel)
 
     assessor = module.get_site_assessor(Settings(data_dir=Path("unused")))
