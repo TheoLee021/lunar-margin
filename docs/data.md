@@ -2,6 +2,20 @@
 
 관리: D (선정), B (다운로드·변환·저장). 대용량 데이터(DEM, SPICE 커널)는 git과 `web/public/`에 넣지 않고 백엔드 Volume 또는 Supabase Storage에 둔다.
 
+> 아래 목록은 인제스천 구현(`inseon` 브랜치) 때 잠정 선정한 값이다. **D의 확정을 기다리는 중**이다.
+> 다운로드와 검증: `cd api && uv run python -m lunar_margin.pipeline.fetch` (자세한 내용은 [api/README.md](../api/README.md)).
+
 | 이름 | 용도 | 출처 URL | 해상도 | 좌표계 | 버전 | 선정 이유 | 저장 위치 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TBD | | | | | | | |
+| LOLA 남극 DEM `ldem_80s_80m_float` | 방위각별 지형 수평선 계산 | https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/float_img/ldem_80s_80m_float.img (+ `.lbl`) | 80 m/px, 7600×7600 (231 MB), 80°S~90°S | 극 입체투영(남극 중심, 경도 0°가 이미지 위쪽), 구 반경 1737.4 km, 높이는 그 구 기준 km, 평균지구/자전축(ME) 프레임 | LOLA GDR (PDS `lro-l-lola-3-rdr-v1`) | 80°S까지 덮어 먼 지형까지 수평선에 반영하고, 해커톤에서 다룰 수 있는 크기. 더 정밀한 `ldem_85s_20m_float`(920 MB)로 교체 가능 | `$DATA_DIR/dem/` |
+| NAIF 윤초 `naif0012.tls` | UTC↔ET 변환 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls | - | - | N0012 | SPICE 시각 변환 필수 | `$DATA_DIR/spice/` |
+| JPL 천체력 `de440s.bsp` | 태양·지구·달 위치 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp | - | ICRF/J2000 | DE440 (축약형, 31 MB, 1849~2150) | 전체 DE440(114 MB)보다 작고 데모 기간을 충분히 덮음 | `$DATA_DIR/spice/` |
+| NAIF 행성 상수 `pck00011.tpc` | 천체 크기·방향 상수 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc | - | - | pck00011 | SPICE 기본 상수 | `$DATA_DIR/spice/` |
+| 달 자전 `moon_pa_de440_200625.bpc` | 달 몸체 고정 프레임 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/moon_pa_de440_200625.bpc | - | 달 주축(PA) | DE440 (2020-06-25) | 정밀 달 자전(libration) 반영 | `$DATA_DIR/spice/` |
+| 달 프레임 정의 `moon_de440_250416.tf` | `MOON_ME` 프레임 정의 | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/fk/satellites/moon_de440_250416.tf | - | `MOON_ME` | DE440 (2025-04-16) | LOLA DEM이 쓰는 평균지구/자전축 프레임과 일치 | `$DATA_DIR/spice/` |
+
+## 처리 메모
+
+- 다운로드는 크기와 sha256을 `manifest.json`에 기록하고, 다음 실행에서 파일이 달라졌으면 다시 받는다.
+- DEM 이미지는 PDS3 라벨(`.lbl`)로 해석한다. 32-bit little-endian float(`PC_REAL`), 값 단위 km.
+- 격자 방향은 Malapert 산(약 +5 km)과 Shoemaker·Haworth·Faustini 크레이터 바닥(약 -3.4~-4 km)으로 검증했다 (`api/tests/engine/test_dem_real.py`).
