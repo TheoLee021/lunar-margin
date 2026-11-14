@@ -58,3 +58,51 @@
 ### `GET /tiles/{layer}/{z}/{x}/{y}.png`
 
 TBD (layer 목록, 타일링 스킴, 투영)
+
+
+### GET /analysis/site-assessment (새 API — 팀 리뷰 대기)
+
+후보 하나에 대해 동일한 기간의 태양 일조·지구 기하학적 가시성·LOLA DEM 지형 특성을 함께 계산한다. 기존 /analysis/* 응답은 변경하지 않는다.
+
+쿼리: lat (-90~-80), lon (-360~360), start/end (timezone-aware UTC, 종료 > 시작, 최대 28일), step_minutes (기본 30, 5~360), slope_baseline_m (기본 160, 80~2000), roughness_window_m (기본 400, 160~2000).
+
+응답 예시(설명용 수치이며 NASA 실측 아님):
+
+```json
+{
+  "lat": -89.5,
+  "lon": 222.0,
+  "start": "2027-01-10T00:00:00Z",
+  "end": "2027-01-17T00:00:00Z",
+  "step_minutes": 30,
+  "sun": {
+    "visible_fraction": 0.8,
+    "longest_dark_hours": 36,
+    "windows_per_24h": 1
+  },
+  "earth": {
+    "visible_fraction": 0.7,
+    "longest_dark_hours": 48,
+    "windows_per_24h": 0.5
+  },
+  "terrain": {
+    "elevation_m": 400,
+    "slope_deg": 3.5,
+    "roughness_rms_m": 1.0,
+    "slope_baseline_m": 160,
+    "roughness_window_m": 400,
+    "dem_pixel_m": 80,
+    "limitation": "DEM-scale terrain proxy; NOT boulder, footpad or landing-hazard clearance"
+  }
+}
+```
+
+계산 방식:
+- 기존 horizon_profile()을 후보마다 1회 계산하여 Sun/Earth 두 시계열에 함께 적용한다.
+- 기존 SPICE, visibility_series(), summarize()를 그대로 재사용한다.
+- site_characteristics.py에서 160 m 간격의 2D 중심 유한차분 경사와 400 m 창의 평면 제거 RMS를 계산한다. 80 m DEM 해상도로 착륙선 발판 수준의 장애물 안전성을 보증하지 않는다.
+- 별도의 우주선·태양전지 발전량·RF 링크 성공률 모델은 없다.
+- 외부 NASA 자료가 준비되지 않으면 503, 유효 범위 밖·DEM 결측은 422를 반환한다.
+
+메인 HUD는 같은 기간에 대해 후보별 평가를 요청하고, 지구 가시율 하한·최장 연속 암흑 상한·경사 상한을 모두 만족할 때 PASS로 판정한다. FAIL 결과도 목록에 유지하며 판정 근거를 표시한다. 임무 점수는 PASS 이후의 가시율 가중 순위 도구이고 실패 확률이 아니다.
+
