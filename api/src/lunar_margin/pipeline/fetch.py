@@ -1,6 +1,6 @@
 """NASA 원천 데이터를 DATA_DIR로 내려받고 크기·sha256을 manifest.json에 기록한다.
 
-실행: uv run python -m lunar_margin.pipeline.fetch [--dem 80s_80m]
+실행: uv run python -m lunar_margin.pipeline.fetch
 """
 
 import argparse
@@ -80,12 +80,16 @@ def ensure_file(source: Source, dest_dir: Path, client: httpx.Client | None = No
     return final
 
 
-def fetch_all(data_dir: Path, dem: str = "80s_80m") -> None:
-    if dem not in DEM_SOURCES:
-        raise ValueError(f"unknown DEM '{dem}'. choices: {', '.join(DEM_SOURCES)}")
-    for source in DEM_SOURCES[dem]:
-        print(f"[dem] {source.filename}", flush=True)
-        ensure_file(source, data_dir / "dem")
+def fetch_all(data_dir: Path, dem: str = "80s_80m", fallback_dem: str | None = "75s_120m") -> None:
+    """주 DEM, 보충 DEM, SPICE 커널을 모두 내려받는다. 보충 DEM은 80 m DEM 바깥을 메운다."""
+    for name in (dem, fallback_dem):
+        if name is not None and name not in DEM_SOURCES:
+            raise ValueError(f"unknown DEM '{name}'. choices: {', '.join(DEM_SOURCES)}")
+    names = [dem] + ([fallback_dem] if fallback_dem is not None and fallback_dem != dem else [])
+    for name in names:
+        for source in DEM_SOURCES[name]:
+            print(f"[dem] {source.filename}", flush=True)
+            ensure_file(source, data_dir / "dem")
     for source in SPICE_SOURCES:
         print(f"[spice] {source.filename}", flush=True)
         ensure_file(source, data_dir / "spice")
@@ -94,8 +98,15 @@ def fetch_all(data_dir: Path, dem: str = "80s_80m") -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dem", default="80s_80m", choices=list(DEM_SOURCES))
+    parser.add_argument(
+        "--fallback-dem",
+        default="75s_120m",
+        choices=[*DEM_SOURCES, "none"],
+        help="주 DEM 바깥을 메우는 보충 DEM (기본 75s_120m, none이면 받지 않음)",
+    )
     args = parser.parse_args()
-    fetch_all(Settings().data_dir, args.dem)
+    fallback = None if args.fallback_dem == "none" else args.fallback_dem
+    fetch_all(Settings().data_dir, args.dem, fallback)
     print("done")
 
 

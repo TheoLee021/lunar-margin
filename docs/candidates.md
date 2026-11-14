@@ -51,11 +51,10 @@ pipeline/
 
 ```sh
 cd api
-uv run python -m lunar_margin.pipeline.fetch                  # 처음 한 번 (DEM 80 m + SPICE)
-uv run python -m lunar_margin.pipeline.fetch --dem 75s_120m   # 필수: 완전한 수평선용 보충 DEM
+uv run python -m lunar_margin.pipeline.fetch                  # 처음 한 번 (DEM 80 m·120 m + SPICE)
 
 uv run python -m lunar_margin.pipeline.candidates                     # 결과: DATA_DIR/candidates/default/
-uv run python -m lunar_margin.pipeline.candidates --run-id exp1 --config my.json --dem 75s_120m --workers 8
+uv run python -m lunar_margin.pipeline.candidates --run-id exp1 --config my.json --workers 8
 open data/candidates/exp1/map.html                                    # 독립 실행 HTML 지도
 ```
 
@@ -88,7 +87,8 @@ open data/candidates/exp1/map.html                                    # 독립 �
 | `thresholds.*` | 모두 `null` | 필수 조건. `null`이면 적용 안 함. 경계값 포함 (min은 `>=`, max는 `<=`) |
 | `weights.sun` / `earth` | 0.5 / 0.5 | 점수 가중치 (비율만 의미) |
 | `window` | 2027-01-01 ~ 2046-01-01, 60분 | 분석 기간 (아래 참고) |
-| `dem` | `80s_80m` | `75s_120m`이면 ROI 전체의 수평선이 DEM 안에서 계산됨 |
+| `dem` | `80s_80m` | 주 DEM (우선 쓰는 고해상도 DEM) |
+| `fallback_dem` | `75s_120m` | 주 DEM 바깥(80°S 바깥)과 결측을 메우는 보충 DEM (합성 DEM). `null`이면 쓰지 않는다 |
 | `max_range_m` | 200000 | 수평선 탐색 거리 |
 | `coarse_azimuth_step_deg` / `fine_azimuth_step_deg` | 2 / 1 | 수평선 방위각 간격 |
 | `exclude_incomplete_horizon` | false | true면 수평선이 불완전한 점을 적격에서 제외 |
@@ -158,8 +158,7 @@ open data/candidates/exp1/map.html                                    # 독립 �
 
 **보충 DEM (합성 DEM)**: 주 DEM(`80s_80m`)은 80°S까지만 덮어서 ROI 바깥쪽 지점은 수평선 탐색이 DEM 밖으로 나간다.
 `fallback_dem`(기본 `75s_120m`, 75°S 이남)을 두면 **80 m DEM을 우선 쓰고, 그 밖과 결측은 120 m DEM으로 메운다** (`CompositeDem`).
-두 DEM이 같은 극 입체투영이라 투영 좌표로 바로 겹친다. **보충 DEM은 완전한 결과에 필수다** (`pipeline.fetch --dem 75s_120m`). 없으면 탐색은 경고와 함께 주 DEM만으로 진행하지만,
-ROI의 약 절반에서 수평선이 불완전(`horizon_complete=false`)해서 불완전한 결과로 봐야 한다.
+두 DEM이 같은 극 입체투영이라 투영 좌표로 바로 겹친다. 두 DEM 모두 `pipeline.fetch`가 함께 받고, 파일이 없으면 탐색이 오류와 함께 `fetch` 실행을 안내한다.
 실데이터 테스트로 ROI 가장자리에서 `horizon_complete=false`가 0개가 되는 것을 확인했다.
 
 **수평선 테이블**: 수평선은 지점·DEM·탐색 거리·관측 높이로만 정해지고 날짜와 제약에는 무관하다.

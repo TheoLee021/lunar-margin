@@ -105,3 +105,56 @@ def test_partial_download_never_visible_at_final_path(
         ensure_file(_source(base), tmp_path)
 
     assert not (tmp_path / "file.bin").exists()
+
+
+# --- fetch_all: 두 DEM과 SPICE 커널을 한 번에 ---------------------------------------------
+
+
+def _recorded_fetch(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    import lunar_margin.pipeline.fetch as fetch_module
+
+    calls: list[tuple[str, str]] = []
+
+    def fake(source: Source, dest_dir: Path, client: httpx.Client | None = None) -> Path:
+        calls.append((source.filename, dest_dir.name))
+        return dest_dir / source.filename
+
+    monkeypatch.setattr(fetch_module, "ensure_file", fake)
+    return calls
+
+
+def test_fetch_all_downloads_both_dems_and_the_kernels_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.fetch import fetch_all
+
+    calls = _recorded_fetch(monkeypatch)
+
+    fetch_all(tmp_path)
+
+    names = {name for name, _ in calls}
+    assert {"ldem_80s_80m_float.img", "ldem_80s_80m_float.lbl"} <= names
+    assert {"ldem_75s_120m_float.img", "ldem_75s_120m_float.lbl"} <= names
+    assert {"de440s.bsp", "naif0012.tls"} <= names
+    assert {folder for _, folder in calls} == {"dem", "spice"}
+
+
+def test_fetch_all_can_skip_the_supplementary_dem(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.fetch import fetch_all
+
+    calls = _recorded_fetch(monkeypatch)
+
+    fetch_all(tmp_path, fallback_dem=None)
+
+    assert not any("75s_120m" in name for name, _ in calls)
+
+
+def test_fetch_all_rejects_unknown_dem_names(tmp_path: Path) -> None:
+    from lunar_margin.pipeline.fetch import fetch_all
+
+    with pytest.raises(ValueError, match="unknown DEM"):
+        fetch_all(tmp_path, dem="nope")
+    with pytest.raises(ValueError, match="unknown DEM"):
+        fetch_all(tmp_path, fallback_dem="nope")

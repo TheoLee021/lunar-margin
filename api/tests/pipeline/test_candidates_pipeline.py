@@ -405,9 +405,6 @@ def test_failed_mission_also_records_completion_time(tmp_path: Path) -> None:
 
 
 def test_the_fallback_dem_removes_every_incomplete_horizon(data_dir: Path, tmp_path: Path) -> None:
-    from lunar_margin.pipeline.fetch import fetch_all
-
-    fetch_all(data_dir, "75s_120m")  # 보충 DEM (이미 있으면 검증만 한다)
     # ROI 바깥 경계(남위 85°) 근처의 가는 띠: 80°S DEM만으로는 일부 방향의 탐색이 DEM 밖으로 나간다
     ring = SMALL.model_copy(
         update={
@@ -434,7 +431,9 @@ def test_the_fallback_dem_removes_every_incomplete_horizon(data_dir: Path, tmp_p
     assert without.source.dem_fallback is None
 
 
-def test_a_missing_fallback_dem_only_warns(data_dir: Path, tmp_path: Path) -> None:
+def test_a_missing_supplementary_dem_is_an_error_like_the_main_one(
+    data_dir: Path, tmp_path: Path
+) -> None:
     import shutil
 
     shutil.copytree(data_dir / "spice", tmp_path / "spice")
@@ -442,7 +441,6 @@ def test_a_missing_fallback_dem_only_warns(data_dir: Path, tmp_path: Path) -> No
     for name in ("ldem_80s_80m_float.img", "ldem_80s_80m_float.lbl"):
         (tmp_path / "dem" / name).symlink_to((data_dir / "dem" / name).resolve())
 
-    outcome = run_search(SMALL, tmp_path, log=lambda _: None)  # 기본값: 75s_120m 보충, 파일은 없다
-
-    assert outcome.source.dem_fallback is None
-    assert any("보충 DEM" in w and "pipeline.fetch" in w for w in outcome.summary.warnings)
+    # 기본값은 75s_120m 보충 DEM을 쓰는데 그 파일이 없다
+    with pytest.raises(FileNotFoundError, match=r"ldem_75s_120m.*pipeline\.fetch"):
+        run_search(SMALL, tmp_path, log=lambda _: None)

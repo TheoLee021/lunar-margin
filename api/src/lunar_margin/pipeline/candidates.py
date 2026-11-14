@@ -215,7 +215,7 @@ def run_search(
     img_source = selection.primary
     dem_pairs = selection.pairs
     fallback_source = selection.fallback
-    warnings: list[str] = list(extra_warnings or []) + selection.warnings
+    warnings: list[str] = list(extra_warnings or [])
     table_spec = table_spec_for(config, data_dir)
     table = find_table(data_dir / TABLES_DIR, table_spec)
     if table is None:
@@ -405,8 +405,8 @@ def run_search(
         warnings.append(
             f"{counts['horizon_incomplete']}개 지점({share:.0f}%)의 수평선이 DEM 범위 밖으로 "
             "나갑니다. DEM 밖 지형은 알 수 없어 수평선이 낮게 계산됐을 수 있습니다"
-            "(data_quality.horizon_complete=false). 보충 DEM(`--fallback-dem`)을 "
-            "쓰면 ROI 전체가 DEM 안에 들어옵니다."
+            "(data_quality.horizon_complete=false). 이 지점들은 "
+            "탐색 거리 안에 DEM이 없는 방향이 있습니다."
         )
     if counts["missing_all_metrics"]:
         warnings.append(

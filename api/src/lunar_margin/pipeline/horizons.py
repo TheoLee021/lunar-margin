@@ -27,11 +27,10 @@ class DemSelection:
     pairs: list[tuple[Path, Path]]  # 첫째가 주 DEM, 둘째(있으면)가 보충 DEM
     primary: Source
     fallback: Source | None
-    warnings: list[str]
 
 
 def resolve_dems(config: SearchConfig, data_dir: Path) -> DemSelection:
-    """설정의 DEM 파일을 찾는다. 보충 DEM이 없으면 경고만 남기고 주 DEM만 쓴다."""
+    """설정의 DEM 파일을 찾는다. 주 DEM과 보충 DEM 모두 없으면 같은 방식으로 오류를 낸다."""
     if config.dem not in DEM_SOURCES:
         raise ValueError(f"unknown DEM '{config.dem}'. choices: {', '.join(DEM_SOURCES)}")
     img, lbl = DEM_SOURCES[config.dem]
@@ -39,26 +38,23 @@ def resolve_dems(config: SearchConfig, data_dir: Path) -> DemSelection:
     if not all(p.exists() for p in primary):
         raise FileNotFoundError(
             f"DEM files not found in {data_dir / 'dem'}; "
-            f"run `uv run python -m lunar_margin.pipeline.fetch --dem {config.dem}`"
+            "run `uv run python -m lunar_margin.pipeline.fetch`"
         )
     pairs = [primary]
-    warnings: list[str] = []
     fallback: Source | None = None
     if config.fallback_dem is not None:
         if config.fallback_dem not in DEM_SOURCES:
             raise ValueError(f"unknown DEM '{config.fallback_dem}'")
         fb_img, fb_lbl = DEM_SOURCES[config.fallback_dem]
         fb = (data_dir / "dem" / fb_img.filename, data_dir / "dem" / fb_lbl.filename)
-        if all(p.exists() for p in fb):
-            pairs.append(fb)
-            fallback = fb_img
-        else:
-            warnings.append(
-                f"보충 DEM({fb_img.filename})이 없어 주 DEM 바깥의 지형은 알 수 없습니다. "
-                f"`uv run python -m lunar_margin.pipeline.fetch --dem {config.fallback_dem}`로 "
-                "받으면 수평선이 ROI 전체에서 완전해집니다."
+        if not all(p.exists() for p in fb):
+            raise FileNotFoundError(
+                f"DEM files {fb_img.filename} not found in {data_dir / 'dem'}; "
+                "run `uv run python -m lunar_margin.pipeline.fetch`"
             )
-    return DemSelection(pairs=pairs, primary=img, fallback=fallback, warnings=warnings)
+        pairs.append(fb)
+        fallback = fb_img
+    return DemSelection(pairs=pairs, primary=img, fallback=fallback)
 
 
 def table_spec_for(config: SearchConfig, data_dir: Path) -> HorizonTableSpec:
