@@ -5,10 +5,11 @@ analyses. All outcomes are geometric/DEM-scale screening, NOT a certified
 landing hazard assessment, power model or actual RF link budget.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Callable, Self
+from typing import Annotated, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -136,7 +137,9 @@ def get_site_assessor(settings: Annotated[Settings, Depends(get_settings)]) -> A
                 slope_baseline_m=terrain.slope_baseline_m,
                 roughness_window_m=terrain.roughness_window_m,
                 dem_pixel_m=float(dem.label.map_scale_m),
-                limitation="DEM-scale terrain proxy; NOT boulder, footpad or landing-hazard clearance",
+                limitation=(
+                    "DEM-scale terrain proxy; NOT boulder, footpad or landing-hazard clearance"
+                ),
             ),
         )
 
