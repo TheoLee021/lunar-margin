@@ -154,7 +154,7 @@ export function MissionWorkspace({
             <section className="hud-section">
               <h2>요구조건 충족 후보 · 계산값</h2>
               <p className="mb-2 text-[10px] text-neutral-400">
-                동일한 기간의 Sun/Earth 가시성 및 LOLA 80 m DEM 경사 기준. 우선
+                동일 기간 Sun/Earth 가시성과 250 m 원형 지역 경사 P95·DEM 완전성 기준. 우선
                 PASS 후보, 다음 FAIL 후보. 점수는 두 가시율의 가중 평균이며
                 안전성 확률이 아닙니다.
               </p>
@@ -199,7 +199,7 @@ export function MissionWorkspace({
                     <span className="block text-[10px] text-neutral-400">
                       일조 {(data.sun.visible_fraction * 100).toFixed(1)}% ·
                       지구 {(data.earth.visible_fraction * 100).toFixed(1)}% ·
-                      경사 {data.terrain.slope_deg.toFixed(1)}°
+                      지역 경사 P95 {data.region.slope_p95_deg?.toFixed(1) ?? 'N/A'}°
                     </span>
                   </li>
                 ))}
@@ -261,6 +261,22 @@ export function MissionWorkspace({
                     0,
                   )}{' '}
                   m 창)
+                </p>
+                <p className="mt-1 text-neutral-400">
+                  250 m 평가 원: 경사 P95{' '}
+                  {selectedEvaluation.data.region.slope_p95_deg?.toFixed(2) ?? 'N/A'}° ·
+                  최대 경사{' '}
+                  {selectedEvaluation.data.region.slope_max_deg?.toFixed(2) ?? 'N/A'}° ·
+                  거칠기 P95{' '}
+                  {selectedEvaluation.data.region.roughness_p95_m?.toFixed(2) ?? 'N/A'} m
+                </p>
+                <p className="mt-1 text-neutral-400">
+                  지역 유효 표본{' '}
+                  {(selectedEvaluation.data.region.coverage_fraction * 100).toFixed(1)}%
+                  ({selectedEvaluation.data.region.valid_samples}/
+                  {selectedEvaluation.data.region.total_samples}) ·
+                  DEM {selectedEvaluation.data.region.sample_step_m.toFixed(0)} m
+                  간격 · 착륙 안전성 UNVERIFIED
                 </p>
                 <p className="mt-1 text-neutral-400">
                   DEM 80 m 해상도: 미세 지형·착륙 위험물 판정 불가
