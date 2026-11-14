@@ -34,38 +34,42 @@ export function useSiteAssessments(
     const publish = () => {
       if (active) setStored({ key, results: { ...results }, errors: { ...errors }, completed })
     }
+    // Limit the number of concurrent DEM horizon traversals on the API host.
     const timer = setTimeout(() => {
       publish()
-      for (const site of sites) {
-        void fetchSiteAssessment(
-          {
-            lat: site.latitude,
-            lon: site.longitude,
-            start,
-            end,
-            step_minutes: 30,
-          },
-          { signal: controller.signal },
-        )
-          .then((data) => {
-            if (!active) return
-            if (data.lat !== site.latitude || data.lon !== site.longitude ||
-                Date.parse(data.start) !== Date.parse(start) ||
-                Date.parse(data.end) !== Date.parse(end)) {
-              errors[site.id] = '분석 응답의 지점·기간이 요청과 일치하지 않습니다.'
-            } else {
-              results[site.id] = data
+      const process = async () => {
+        for (let i = 0; i < sites.length && active; i += 2) {
+          const batch = sites.slice(i, i + 2)
+          await Promise.all(batch.map(async (site) => {
+            try {
+              const data = await fetchSiteAssessment(
+                {
+                  lat: site.latitude,
+                  lon: site.longitude,
+                  start,
+                  end,
+                  step_minutes: 30,
+                },
+                { signal: controller.signal },
+              )
+              if (!active) return
+              if (data.lat !== site.latitude || data.lon !== site.longitude ||
+                  Date.parse(data.start) !== Date.parse(start) ||
+                  Date.parse(data.end) !== Date.parse(end)) {
+                errors[site.id] = '분석 응답의 지점·기간이 요청과 일치하지 않습니다.'
+              } else {
+                results[site.id] = data
+              }
+            } catch {
+              if (!active) return
+              errors[site.id] = 'NASA 후보 분석을 불러오지 못했습니다.'
             }
             completed += 1
             publish()
-          })
-          .catch(() => {
-            if (!active) return
-            errors[site.id] = 'NASA 후보 분석을 불러오지 못했습니다.'
-            completed += 1
-            publish()
-          })
+          }))
+        }
       }
+      void process()
     }, 200)
     return () => {
       active = false
