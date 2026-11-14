@@ -25,11 +25,9 @@ import { parseSunDirection } from './sun'
 /** Cesium Moon Terrain (3D Tiles). The ion account must have it under My Assets, or it 404s. */
 const CESIUM_MOON_ASSET_ID = 2684829
 
-/** Shackleton crater centre, the demo's south-pole anchor. */
-const SHACKLETON: LunarLocation = { lat: -89.67, lon: 129.78 }
-
-const INTRO_START = { lat: -55, lon: 129.78, heightM: 4_500_000 }
-const INTRO_RANGE_M = 70_000 // ≈ 50 km above the surface at a 45° pitch
+// Start straight above the south pole, high enough to frame the polar cap down to about 84°S,
+// with 0° longitude at the top of the screen as on south-polar maps.
+const START_HEIGHT_M = 400_000
 const SITE_RANGE_M = 30_000
 const OBLIQUE_PITCH = CesiumMath.toRadians(-45)
 const MIN_ZOOM_DISTANCE_M = 150
@@ -67,7 +65,6 @@ export interface MoonSceneOptions {
   signal: AbortSignal
   onPick: (location: LunarLocation) => void
   onHeadingChange: (headingRad: number) => void
-  onIntroComplete: () => void
 }
 
 export interface MoonScene {
@@ -182,34 +179,20 @@ export async function createMoonScene(
     ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
   )
 
-  const flyToLocation = (
-    location: LunarLocation,
-    range: number,
-    duration: number,
-    complete?: () => void,
-  ) => {
-    camera.flyToBoundingSphere(
-      new BoundingSphere(Cartesian3.fromDegrees(location.lon, location.lat), 0),
-      {
-        offset: new HeadingPitchRange(0, OBLIQUE_PITCH, range),
-        duration,
-        complete,
-      },
-    )
-  }
-
   camera.setView({
-    destination: Cartesian3.fromDegrees(
-      INTRO_START.lon,
-      INTRO_START.lat,
-      INTRO_START.heightM,
-    ),
+    destination: Cartesian3.fromDegrees(0, -90, START_HEIGHT_M),
+    orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 },
   })
-  flyToLocation(SHACKLETON, INTRO_RANGE_M, 4, options.onIntroComplete)
 
   return {
     flyTo(location) {
-      flyToLocation(location, SITE_RANGE_M, 2)
+      flyAround(
+        Cartesian3.fromDegrees(location.lon, location.lat),
+        0,
+        OBLIQUE_PITCH,
+        SITE_RANGE_M,
+        2,
+      )
     },
     setSunDirection(direction) {
       if (direction === null) {

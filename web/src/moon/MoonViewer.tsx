@@ -75,9 +75,6 @@ export default function MoonViewer({ ref, onPick }: MoonViewerProps) {
             if (compassRef.current)
               compassRef.current.style.transform = `rotate(${-heading}rad)`
           },
-          onIntroComplete: () => {
-            container.dataset.intro = 'done'
-          },
         }),
       )
       .then((created) => {
