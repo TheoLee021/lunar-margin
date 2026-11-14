@@ -161,17 +161,13 @@ def get_site_assessor(settings: Annotated[Settings, Depends(get_settings)]) -> A
                 valid_samples=region.valid_samples,
                 coverage_fraction=round(region.coverage_fraction, 4),
                 slope_p95_deg=(
-                    round(region.slope_p95_deg, 3)
-                    if region.slope_p95_deg is not None
-                    else None
+                    round(region.slope_p95_deg, 3) if region.slope_p95_deg is not None else None
                 ),
                 slope_max_deg=(
                     round(region.slope_max_deg, 3) if region.slope_max_deg is not None else None
                 ),
                 roughness_p95_m=(
-                    round(region.roughness_p95_m, 3)
-                    if region.roughness_p95_m is not None
-                    else None
+                    round(region.roughness_p95_m, 3) if region.roughness_p95_m is not None else None
                 ),
                 landing_safety_status="UNVERIFIED",
             ),
