@@ -119,6 +119,7 @@ def characterize_site(
         roughness_window_m=float(roughness_window_m),
     )
 
+
 @dataclass(frozen=True)
 class RegionalTerrain:
     """Coarse DEM-scale statistics within a circular candidate assessment area."""
