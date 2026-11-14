@@ -36,6 +36,34 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 첫 `pytest` 실행은 데이터를 내려받는다(네트워크 필요).
 
+## 사용하는 NASA 데이터 (두 가지)
+
+`uv run python -m lunar_margin.pipeline.fetch`가 `DATA_DIR`(기본 `api/data/`, git 제외)에 합계 약 269 MB를 받는다.
+크기와 sha256을 `manifest.json`에 기록하고, 다시 실행하면 손상된 파일을 검증해 새로 받는다.
+선정은 잠정이며 D 확정 대기다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
+
+| | 지형 데이터: LOLA 남극 DEM | 천체 위치 데이터: SPICE 커널 |
+| --- | --- | --- |
+| 출처 | NASA 달 궤도선(LRO)의 레이저 고도계 LOLA, PDS Geosciences | NASA JPL NAIF |
+| 내용 | 달 남위 80°~90°의 높이 지도. 80 m 간격 7600×7600 격자, 반경 1737.4 km 구 기준 높이(km) | 어느 시각에 태양·지구가 달 하늘의 어디에 있는지 |
+| 용도 | 한 지점에서 사방을 둘러볼 때 지형이 하늘을 가리는 정도(지형 수평선) 계산 | 시각별 태양·지구의 방위각·고도 계산 |
+| 위치·크기 | `api/data/dem/` (225 MB) | `api/data/spice/` (44 MB) |
+
+파일 목록:
+
+| 파일 | 크기 | 역할 |
+| --- | --- | --- |
+| `ldem_80s_80m_float.img` | 231 MB | LOLA 높이 값 본체 |
+| `ldem_80s_80m_float.lbl` | 4.8 KB | 격자 크기·투영 정보 (PDS3 라벨) |
+| `de440s.bsp` | 32.7 MB | 태양·지구·달 위치 (JPL DE440 천체력, 축약형) |
+| `moon_pa_de440_200625.bpc` | 12.9 MB | 달의 정밀한 자전·방향 |
+| `moon_de440_250416.tf` | 19 KB | 달 좌표계 `MOON_ME` 정의 (LOLA DEM과 같은 좌표계) |
+| `pck00011.tpc` | 131 KB | 천체 크기 등 기본 상수 |
+| `naif0012.tls` | 5 KB | 윤초 정보 (UTC 시각 변환) |
+
+두 데이터는 이렇게 합쳐진다: 천체의 고도가 그 방향의 지형 수평선보다 높으면 "보인다"고 판정하고,
+이 판정을 시간별로 쌓아 일조율·최장 암흑 시간·지구 가시율 같은 지표를 만든다 (자세한 방법은 아래 "계산 방법").
+
 ## 구조
 
 ```

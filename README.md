@@ -2,6 +2,15 @@
 
 A mission decision tool for comparing and evaluating landing sites and landing times near the lunar south pole.
 
+## NASA data
+
+The analysis is computed from two NASA datasets (about 269 MB, downloaded by `cd api && uv run python -m lunar_margin.pipeline.fetch`, never committed to git):
+
+- **Terrain**: LRO LOLA south-pole DEM (`ldem_80s_80m_float`, 80 m/px, 80°S–90°S) from PDS Geosciences. Used to compute the terrain horizon seen from a site.
+- **Sun and Earth positions**: NAIF SPICE kernels (DE440s ephemeris, lunar orientation and frame kernels, leap seconds) from NASA JPL. Used to compute where the Sun and Earth are in the lunar sky over time.
+
+A body counts as visible when its elevation is above the terrain horizon in its direction. Sources, versions, and file list: [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
+
 ## Quick start
 
 ```sh
