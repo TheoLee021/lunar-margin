@@ -5,7 +5,10 @@ A mission decision tool for comparing and evaluating landing sites and landing t
 ## Quick start
 
 ```sh
-# Backend
+# Backend (Docker)
+docker compose up --build
+
+# Backend (local development, Python 3.14 + uv)
 cd api
 uv sync
 cp .env.example .env

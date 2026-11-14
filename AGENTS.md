@@ -7,7 +7,7 @@
 
 ## Stack
 - Frontend (`web/`): Vite, React, TypeScript (strict), Tailwind v4, zod, CesiumJS (Cesium Moon 3D Tiles)
-- Backend (`api/`): FastAPI, Python 3.14 (uv), Docker
+- Backend (`api/`): FastAPI, Python 3.14 (uv), Docker (`api/Dockerfile`은 Railway 배포와 로컬 `compose.yaml` 공용)
 - DB/Storage: Supabase (필요할 때만, Auth 사용 안 함)
 - 배포: Vercel (`web/`), Railway (`api/`, Dockerfile + Volume)
 - CI: GitHub Actions (`.github/workflows/ci.yml` 하나)
@@ -30,7 +30,10 @@ docs/                  api.md (API 계약), data.md (데이터셋)
 
 ## Commands
 ```sh
-# 백엔드 (api/)
+# 백엔드를 띄우기만 할 때 (repo 루트, Docker만 필요)
+docker compose up --build                          # http://localhost:8000, api/src 변경 시 자동 재시작
+
+# 백엔드를 개발할 때 (api/, Python 3.14 + uv)
 uv sync
 uv run fastapi dev src/lunar_margin/app/main.py   # http://localhost:8000
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
