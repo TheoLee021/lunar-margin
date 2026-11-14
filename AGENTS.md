@@ -45,14 +45,6 @@ npm run check      # lint + format:check + typecheck + test + build
 npm run e2e        # 백엔드를 띄운 상태에서 실행 (처음엔 npx playwright install chromium)
 ```
 
-## Ownership
-- A (UIUX, 프론트엔드): 프론트엔드 전체. 3D 뷰어(카메라 조작감, 조명, 마커)와 착륙지·날짜 비교 UI, 착륙지·날짜 추천(랭킹) 기능
-- B (Tech Lead): 통합, API 계약 관리, NASA 데이터 다운로드·변환·저장 (`docs/data.md` 기준), 오버레이 타일 사전 계산, CI·배포, PR 리뷰·머지. 셋업 후 프론트 지원
-- C (Backend): 계산 엔진과 API. SPICE 태양·지구 위치, DEM 지평선, 일조율·통신 가능 시간 계산, FastAPI 엔드포인트
-- D (프로덕트 리드, 항공우주): 착륙지 후보, 일조·지형 모델, 데모 시나리오 내용, 사용할 NASA 데이터셋 선정 (`docs/data.md`: 출처 URL, 해상도, 좌표계, 버전, 선정 이유)
-- E (통신): 지구 직접 통신(DTE) 가능 조건과 모델
-- F (비즈니스): 데모 스토리·영상·발표, 제출물(프로젝트 페이지, README 소개·데이터 출처), 일반 사용자용 UI 문구·용어 설명
-
 ## Contracts
 - 프론트 ↔ 백엔드: `docs/api.md`. 변경 시 B에게 먼저 공유, 기존 응답을 깨지 않게 필드 추가 위주로
 - 뷰어 ↔ 타일: `/tiles/{layer}/{z}/{x}/{y}.png`

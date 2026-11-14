@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { MoonViewer } from './MoonViewer'
+import { MissionMoonViewer } from './MissionMoonViewer'
 import { DEMO_SITES } from './demoSites'
 import type { MissionSelection } from './types'
 
@@ -40,7 +40,7 @@ export function MissionWorkspace({
   ]
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
-      <MoonViewer
+      <MissionMoonViewer
         selection={selection}
         sites={DEMO_SITES}
         onSelect={onSelect}

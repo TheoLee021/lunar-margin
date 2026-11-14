@@ -15,7 +15,33 @@ const DatePlanner = lazy(() =>
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
+const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
+
 export default function App() {
+  const analysis =
+    new URLSearchParams(window.location.search).get('view') === 'analysis'
+  return (
+    <>
+      <Suspense
+        fallback={
+          <p role="status" className="p-4 text-sm text-neutral-300">
+            분석 화면을 불러오는 중입니다.
+          </p>
+        }
+      >
+        {analysis ? <AnalysisWorkspace /> : <MissionApp />}
+      </Suspense>
+      <a
+        className="hud-button fixed bottom-4 left-32 z-20"
+        href={analysis ? '/' : '/?view=analysis'}
+      >
+        {analysis ? '미션 대시보드' : '상세 분석'}
+      </a>
+    </>
+  )
+}
+
+function MissionApp() {
   const [planner, setPlanner] = useState(false)
   const [selection, setSelection] = useState(INITIAL_SELECTION)
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })
