@@ -81,3 +81,14 @@ def body_azel(
     elevation = np.degrees(np.arctan2(u, np.hypot(e, n)))
     azimuth = np.degrees(np.arctan2(e, n)) % 360.0
     return azimuth, elevation
+
+
+def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Geometric Earth-centered J2000 Moon states, km and km/s (no light-time correction)."""
+    if start.tzinfo is None:
+        raise ValueError("start must include a timezone")
+    utc = start.astimezone(UTC).replace(tzinfo=None)
+    with _SPICE_LOCK:
+        et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+        states, _ = spiceypy.spkezr("MOON", (et + seconds).tolist(), "J2000", "NONE", "EARTH")
+    return np.asarray(states, dtype=np.float64)
