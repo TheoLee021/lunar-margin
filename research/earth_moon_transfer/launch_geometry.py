@@ -198,24 +198,43 @@ def export(out: Path, selected: dict, sites: list[dict]):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(10,5.8),dpi=150)
-    names=[s["launch_site"]["name"].replace(" Space Center","") for s in sites]
-    good=[s["geometry"]["input_consistency_pass"] for s in sites]
-    vals=[s["geometry"]["earth_rotational_velocity_along_heading_km_s"] or 0 for s in sites]
-    bars=ax.bar(names, np.array(vals)*1000,
-                color=["#157a8c" if x else "#b26c6c" for x in good],width=.62)
-    for b,s in zip(bars,sites):
-        az=s["inputs"]["inertial_launch_azimuth_deg"]
-        label=f'Az {az:.1f}°' if az is not None else 'Not geometrically possible'
-        ax.text(b.get_x()+b.get_width()/2,b.get_height()+8,label,ha="center",fontsize=9)
-    ax.set(ylabel="Earth rotation along idealized insertion velocity [m/s]",
-           title=f"Four launch-site geometry cases | {selected['inputs']['parking_altitude_km']:.0f} km LEO"
-             f" | Target inclination {sites[0]['inputs']['target_inclination_deg']:.1f}°")
-    ax.set_ylim(0,max(500,max(vals)*1200));ax.grid(axis="y",alpha=.2)
-    ax.tick_params(axis="x",labelrotation=15)
-    fig.text(.5,.01,"Inertial azimuth only. NOT vehicle performance, TLI cost or launch-range authorization.",
-             fontsize=9,ha="center")
-    fig.tight_layout(rect=(0,.04,1,1))
+    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(11, 9), dpi=150)
+    names = [s["launch_site"]["name"].split(" ")[0] for s in sites]
+    latitudes = [abs(s["launch_site"]["latitude_deg"]) for s in sites]
+    target = sites[0]["inputs"]["target_inclination_deg"]
+    good = [s["geometry"]["input_consistency_pass"] for s in sites]
+    azimuths = [s["inputs"]["inertial_launch_azimuth_deg"] for s in sites]
+    colors = ["#157a8c" if flag else "#b26c6c" for flag in good]
+    xpos = np.arange(len(sites))
+    ax0.bar(xpos, latitudes, color=colors, width=.64)
+    ax0.axhline(target, color="#d47b19", linestyle="--", linewidth=2,
+                label=f"Target parking inclination = {target:.1f}°")
+    for k, lat in enumerate(latitudes):
+        ax0.text(k, lat + 1.1, f"{lat:.2f}°", ha="center", fontsize=10)
+    ax0.set(xticks=xpos, xticklabels=names,
+            ylabel="Minimum directly achievable inclination [deg]",
+            title="Direct-insertion latitude screening (geometric only)")
+    ax0.legend();ax0.grid(axis="y",alpha=.2)
+    ax0.set_ylim(0, max(50, target+10, max(latitudes)+10))
+    ax1.bar(xpos, [az if az is not None else 0 for az in azimuths],
+            color=colors, width=.64)
+    for k, az in enumerate(azimuths):
+        ax1.text(k, (az if az is not None else 0) + 1.2,
+                 f"{az:.2f}°" if az is not None else "No direct geometry",
+                 ha="center", fontsize=10)
+    ax1.set(xticks=xpos, xticklabels=names,
+            ylabel="Northbound inertial heading [deg, N clockwise]",
+            xlabel="Launch site preset",
+            title="Heading needed for the same target inclination")
+    ax1.grid(axis="y",alpha=.2)
+    ax1.set_ylim(0, max(100, max([v or 0 for v in azimuths])+12))
+    boost = OMEGA_E*R_E*np.cos(np.deg2rad(target))*1000
+    fig.suptitle(f"Four launch sites | {selected['inputs']['parking_altitude_km']:.0f} km parking orbit\n"
+                 f"Along-track Earth spin projection is {boost:.1f} m/s for ALL feasible sites at a fixed inclination",
+                 fontsize=13, y=.99)
+    fig.text(.5,.012,"No launch corridor authorization, ascent optimization, TLI plane or dated Moon ephemeris.",
+             ha="center",fontsize=9)
+    fig.tight_layout(rect=(0,.025,1,.93))
     fig.savefig(out/"08_launch_site_geometry_trade.png",dpi=180)
     plt.close(fig)
 
