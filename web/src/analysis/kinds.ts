@@ -13,6 +13,9 @@ export interface KindCopy {
   thirdHint: string
   windowLabel: string
   darkPeriodLabel: string
+  /** 기준 판정 문구용 짧은 용어 */
+  fractionWord: string
+  darkWord: string
   /** 시계열·궤적 선 색 (Tailwind stroke/fill/text 클래스) */
   stroke: string
   fill: string
@@ -37,6 +40,8 @@ export const KIND_COPY: Record<AnalysisKind, KindCopy> = {
       '태양이 수평선 위로 떠오르는 "일조 창"이 하루 평균 몇 번 열리는지입니다. 0에 가까우면 햇빛이 드물다는 뜻입니다.',
     windowLabel: '일조 창',
     darkPeriodLabel: '암흑 구간',
+    fractionWord: '일조율',
+    darkWord: '최장 연속 암흑',
     stroke: 'stroke-amber-400',
     fill: 'fill-amber-400',
     bg: 'bg-amber-400',
@@ -58,6 +63,8 @@ export const KIND_COPY: Record<AnalysisKind, KindCopy> = {
       '지구가 보이는 동안 수평선에서 올려다본 평균 각도입니다. 클수록 지형에 가릴 여유가 큽니다.',
     windowLabel: '통신 가능 구간',
     darkPeriodLabel: '통신 두절 구간',
+    fractionWord: '지구 가시율',
+    darkWord: '최장 통신 두절',
     stroke: 'stroke-sky-400',
     fill: 'fill-sky-400',
     bg: 'bg-sky-400',

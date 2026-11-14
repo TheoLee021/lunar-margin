@@ -85,7 +85,7 @@ export function Verdict(props: { checks: readonly Check[] }) {
   if (checks.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-neutral-800 px-4 py-3 text-sm text-neutral-500">
-        왼쪽 &lsquo;임무 기준&rsquo;에 값을 넣으면 이 지점이 기준을 만족하는지
+        &lsquo;임무 기준&rsquo; 입력란에 값을 넣으면 이 지점이 기준을 만족하는지
         판정합니다.
       </p>
     )

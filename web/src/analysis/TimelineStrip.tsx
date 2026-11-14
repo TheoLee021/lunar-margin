@@ -105,12 +105,14 @@ export function TimelineStrip({ kind, data, hoverIndex }: Props) {
             strokeWidth={1}
           />
         ) : null}
-        {ticks.map((tick) => (
+        {ticks.map((tick, i) => (
           <text
             key={tick}
             x={round1(x(tick))}
             y={50}
-            textAnchor="middle"
+            textAnchor={
+              i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle'
+            }
             className="fill-neutral-500 text-[10px]"
           >
             {new Date(tick).toISOString().slice(5, 10)}

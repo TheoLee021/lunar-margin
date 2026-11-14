@@ -160,9 +160,11 @@ export function ComparePanel({ pins, thresholds, onRemove, onClear }: Props) {
                   임무 기준 판정
                 </th>
                 {pins.map((pin) => {
+                  const pinCopy = KIND_COPY[pin.kind]
                   const failed = evaluateThresholds(
                     pin.data.metrics,
                     thresholds,
+                    { fraction: pinCopy.fractionWord, dark: pinCopy.darkWord },
                   ).filter((check) => !check.pass)
                   return (
                     <td key={pin.id} className="px-3 py-2 text-xs">

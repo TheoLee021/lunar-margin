@@ -97,9 +97,18 @@ export interface Check {
   reason: string
 }
 
+/** 판정 문구에 쓰는 용어. 종류(일조/지구 가시성)에 따라 다르다. */
+export interface CheckWords {
+  fraction: string
+  dark: string
+}
+
+const DEFAULT_WORDS: CheckWords = { fraction: '가시율', dark: '최장 연속 암흑' }
+
 export function evaluateThresholds(
   metrics: Metrics,
   thresholds: Thresholds,
+  words: CheckWords = DEFAULT_WORDS,
 ): Check[] {
   const checks: Check[] = []
   if (thresholds.minVisibleFraction !== undefined) {
@@ -108,11 +117,11 @@ export function evaluateThresholds(
     const need = formatPercent(thresholds.minVisibleFraction)
     checks.push({
       id: 'visible_fraction',
-      label: `가시율 ≥ ${need}`,
+      label: `${words.fraction} ≥ ${need}`,
       pass,
       reason: pass
-        ? `가시율 ${actual}로 기준 ${need} 이상입니다.`
-        : `가시율 ${actual}로 기준 ${need}에 못 미칩니다.`,
+        ? `${words.fraction} ${actual}로 기준 ${need} 이상입니다.`
+        : `${words.fraction} ${actual}로 기준 ${need}에 못 미칩니다.`,
     })
   }
   if (thresholds.maxDarkHours !== undefined) {
@@ -121,11 +130,11 @@ export function evaluateThresholds(
     const limit = formatDuration(thresholds.maxDarkHours)
     checks.push({
       id: 'longest_dark',
-      label: `최장 연속 암흑 ≤ ${limit}`,
+      label: `${words.dark} ≤ ${limit}`,
       pass,
       reason: pass
-        ? `최장 연속 암흑 ${actual}로 허용 ${limit} 이내입니다.`
-        : `최장 연속 암흑 ${actual}로 허용 ${limit}을 넘습니다.`,
+        ? `${words.dark} ${actual}로 허용 ${limit} 이내입니다.`
+        : `${words.dark} ${actual}로 허용 ${limit}을 넘습니다.`,
     })
   }
   return checks

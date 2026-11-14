@@ -28,7 +28,10 @@ export function ResultView({
   const copy = KIND_COPY[kind]
   // 두 차트가 같은 시점을 가리키도록 hover 인덱스만 공유한다 (뷰어 상태 아님).
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-  const checks = evaluateThresholds(data.metrics, thresholds)
+  const checks = evaluateThresholds(data.metrics, thresholds, {
+    fraction: copy.fractionWord,
+    dark: copy.darkWord,
+  })
 
   return (
     <div className="flex flex-col gap-6">
