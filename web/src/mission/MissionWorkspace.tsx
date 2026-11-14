@@ -53,6 +53,8 @@ export function MissionWorkspace({
       Number(b.verdict.pass) - Number(a.verdict.pass) ||
       b.verdict.score - a.verdict.score,
   )
+  // Keep every candidate selectable while its NASA assessment is pending.
+  const pendingSites = DEMO_SITES.filter((site) => !results[site.id])
   const selected =
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
   const selectedEvaluation = evaluated.find(
@@ -201,6 +203,26 @@ export function MissionWorkspace({
                     </span>
                   </li>
                 ))}
+                {pendingSites.map((site) => (
+                  <li key={site.id}>
+                    <button
+                      type="button"
+                      aria-current={selection.siteId === site.id}
+                      onClick={() => onSelect(site.id)}
+                      className="flex w-full items-center gap-2 rounded border border-transparent p-2 text-left text-xs text-neutral-400 hover:bg-white/5 aria-[current=true]:border-white/20 aria-[current=true]:bg-white/5"
+                    >
+                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-neutral-800 font-mono text-white">
+                        —
+                      </span>
+                      <span>
+                        {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
+                      </span>
+                      <span className="ml-auto font-mono">
+                        {errors[site.id] ? '분석 실패' : '계산 대기'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
               </ol>
               {!loading &&
               errorCount === 0 &&
@@ -259,7 +281,9 @@ export function MissionWorkspace({
               </section>
             ) : (
               <p className="mt-3 text-xs text-neutral-400">
-                후보 지형·제약 판정 결과 대기 중
+                {errors[selected.id]
+                  ? '이 지점의 NASA 지형·제약 분석이 실패했습니다. 재시도를 선택하세요.'
+                  : '후보 지형·제약 판정 결과 대기 중'}
               </p>
             )}
           </aside>
