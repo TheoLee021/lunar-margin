@@ -4,6 +4,8 @@ import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import { MissionMoonViewer } from './MissionMoonViewer'
 import { DEMO_SITES } from './demoSites'
+import { assessCandidate } from './siteDecision'
+import { useSiteAssessments } from './useSiteAssessments'
 import type { MissionSelection } from './types'
 
 export function MissionWorkspace({
@@ -22,20 +24,28 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [earth, setEarth] = useState(40),
-    [darkness, setDarkness] = useState(252),
-    [slope, setSlope] = useState(12),
+  const [earth, setEarth] = useState(60),
+    [darkness, setDarkness] = useState(48),
+    [slope, setSlope] = useState(10),
     [weight, setWeight] = useState(50)
-  const score = (site: (typeof DEMO_SITES)[number]) =>
-    (site.earth * weight + site.sun * (100 - weight)) / 100
-  const candidates = DEMO_SITES.filter(
-    (site) =>
-      site.earth >= earth &&
-      site.longestDarkness <= darkness &&
-      site.slope <= slope,
-  ).toSorted((a, b) => score(b) - score(a))
+  const { results, errors, loading, retry } = useSiteAssessments(DEMO_SITES, selection)
+  const constraints = {
+    minEarthPercent: earth,
+    maxDarkHours: darkness,
+    maxSlopeDeg: slope,
+  }
+  const evaluated = DEMO_SITES.flatMap((site) => {
+    const result = results[site.id]
+    if (!result) return []
+    return [{ site, data: result, verdict: assessCandidate(result, constraints, weight) }]
+  })
+  const candidates = evaluated
+    .filter((entry) => entry.verdict.pass)
+    .toSorted((a, b) => b.verdict.score - a.verdict.score)
   const selected =
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
+  const selectedEvaluation = evaluated.find((entry) => entry.site.id === selected.id)
+  const errorCount = Object.keys(errors).length
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -48,7 +58,7 @@ export function MissionWorkspace({
           Lunar Margin
         </h1>
         <span className="border border-amber-400/60 bg-black/50 px-2 py-0.5 font-mono text-[10px] text-amber-300">
-          선택 지점: NASA 분석 · 후보 순위: 예시
+          선택 지점: NASA 분석 · 후보 순위: 계산값 기반
         </span>
       </header>
       <button
@@ -70,7 +80,7 @@ export function MissionWorkspace({
               {summary}
             </section>
             <section className="hud-section">
-              <h2>조건 필터 · 예시 데이터</h2>
+              <h2>조건 필터 · NASA 분석</h2>
               {(
                 [
                   ['지구 가시 시간 ≥', earth, setEarth, 0, 100, 5, '%'],
@@ -127,9 +137,17 @@ export function MissionWorkspace({
               </div>
             </section>
             <section className="hud-section">
-              <h2>TOP 5 후보 · 예시 순위</h2>
+              <h2>요구조건 충족 후보 · 계산값</h2>
+              <p className="mb-2 text-[10px] text-neutral-400">동일한 기간의 Sun/Earth 가시성 및 LOLA 80 m DEM 경사 기준. 수평선 기반 지구 가시성은 RF 통신 품질이 아닙니다.</p>
+              {loading ? <p role="status" className="text-xs text-sky-300">NASA 후보 분석 계산 중… ({evaluated.length}/{DEMO_SITES.length})</p> : null}
+              {errorCount > 0 ? (
+                <div role="alert" className="my-2 text-xs text-red-300">
+                  {errorCount}개 후보 분석 실패 · 해당 후보는 순위에서 제외됨.
+                  <button type="button" className="ml-2 underline" onClick={retry}>재시도</button>
+                </div>
+              ) : null}
               <ol className="space-y-1">
-                {candidates.map((site, index) => (
+                {candidates.map(({ site, data, verdict }, index) => (
                   <li key={site.id}>
                     <button
                       type="button"
@@ -144,15 +162,16 @@ export function MissionWorkspace({
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
                       </span>
                       <span className="ml-auto font-mono">
-                        {score(site).toFixed(0)}
+                        {verdict.score.toFixed(0)}
                       </span>
                     </button>
+                    <span className="block text-[10px] text-neutral-400">일조 {(data.sun.visible_fraction * 100).toFixed(1)}% · 지구 {(data.earth.visible_fraction * 100).toFixed(1)}% · 경사 {data.terrain.slope_deg.toFixed(1)}°</span>
                   </li>
                 ))}
               </ol>
-              {candidates.length === 0 ? (
+              {!loading && errorCount === 0 && candidates.length === 0 ? (
                 <p className="text-xs text-neutral-400">
-                  조건을 만족하는 예시 후보가 없습니다. 필터를 완화하세요.
+                  실제 계산된 후보 중 모든 기준을 충족하는 지점이 없습니다. 조건을 완화하세요.
                 </p>
               ) : null}
             </section>
@@ -167,6 +186,18 @@ export function MissionWorkspace({
               {Math.abs(selected.longitude).toFixed(1)}°W
             </p>
             <MissionMetrics result={analysis} />
+            {selectedEvaluation ? (
+              <section className="mt-3 border-t border-white/10 pt-3 text-xs">
+                <h3 className="font-semibold">Mission Constraints · {selectedEvaluation.verdict.pass ? 'PASS' : 'FAIL'}</h3>
+                <p className="mt-1 text-neutral-400">LOLA DEM: 경사 {selectedEvaluation.data.terrain.slope_deg.toFixed(2)}° ({selectedEvaluation.data.terrain.slope_baseline_m.toFixed(0)} m 기준) · 거칠기 RMS {selectedEvaluation.data.terrain.roughness_rms_m.toFixed(2)} m ({selectedEvaluation.data.terrain.roughness_window_m.toFixed(0)} m 창)</p>
+                <p className="mt-1 text-neutral-400">DEM 80 m 해상도: 미세 지형·착륙 위험물 판정 불가</p>
+                <ul className="mt-2 space-y-1">
+                  {selectedEvaluation.verdict.checks.map((check) => (
+                    <li key={check.id} className={check.pass ? 'text-emerald-300' : 'text-red-300'}>{check.pass ? '✓ ' : '✗ '}{check.reason}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : <p className="mt-3 text-xs text-neutral-400">후보 지형·제약 판정 결과 대기 중</p>}
           </aside>
         </>
       ) : null}
