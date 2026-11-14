@@ -117,7 +117,7 @@ def test_parallel_workers_give_exactly_the_same_result_as_one_process(data_dir: 
     )
 
     one = compute_field(dem, sites_at(coords), short, workers=1)
-    two = compute_field(dem, sites_at(coords), short, workers=2, dem_files=dem_files)
+    two = compute_field(dem, sites_at(coords), short, workers=2, dem_files=[dem_files])
 
     for name in ("sun_fraction", "earth_fraction", "sun_longest_dark_h", "horizon_max_deg"):
         assert np.array_equal(getattr(one, name), getattr(two, name), equal_nan=True), name

@@ -1,7 +1,7 @@
 """지점별 일조·지구 가시성 지표 장(field). 값이 NaN이면 '계산되지 않음(결측)'이다."""
 
 import math
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 from lunar_margin.engine.candidates.config import AnalysisWindow
 from lunar_margin.engine.candidates.grid import SitePoints
-from lunar_margin.engine.dem import PolarDem
+from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
 from lunar_margin.engine.horizon import horizon_profile
 from lunar_margin.engine.metrics import summarize, visibility_series
@@ -72,7 +72,7 @@ class FieldSettings:
 
 @dataclass(frozen=True)
 class _Context:
-    dem: PolarDem
+    dem: Dem
     sun_vectors: NDArray[np.float64]
     earth_vectors: NDArray[np.float64]
     settings: FieldSettings
@@ -123,15 +123,23 @@ _worker_ctx: _Context | None = None
 
 
 def _init_worker(
-    dem_img: str,
-    dem_lbl: str,
+    dem_pairs: tuple[tuple[str, str], ...],
     sun_vectors: NDArray[np.float64],
     earth_vectors: NDArray[np.float64],
     settings: FieldSettings,
 ) -> None:
     global _worker_ctx
-    dem = PolarDem.from_files(Path(dem_img), Path(dem_lbl))
-    _worker_ctx = _Context(dem, sun_vectors, earth_vectors, settings)
+    _worker_ctx = _Context(open_dem(dem_pairs), sun_vectors, earth_vectors, settings)
+
+
+def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
+    """(이미지, 라벨) 파일 쌍으로 DEM을 연다. 쌍이 둘이면 첫째가 주(고해상도), 둘째가 보충이다."""
+    dems = [PolarDem.from_files(Path(img), Path(lbl)) for img, lbl in pairs]
+    if len(dems) == 1:
+        return dems[0]
+    if len(dems) == 2:
+        return CompositeDem(dems[0], dems[1])
+    raise ValueError("expected one or two DEM file pairs")
 
 
 def _worker_chunk(args: tuple[NDArray[np.float64], NDArray[np.float64]]) -> NDArray[np.float64]:
@@ -146,12 +154,12 @@ def _chunks(n: int, size: int) -> Iterator[slice]:
 
 
 def compute_field(
-    dem: PolarDem,
+    dem: Dem,
     sites: SitePoints,
     settings: FieldSettings,
     *,
     workers: int = 1,
-    dem_files: tuple[Path, Path] | None = None,
+    dem_files: Sequence[tuple[Path, Path]] | None = None,
     chunk_size: int = 64,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> MetricField:
@@ -179,7 +187,8 @@ def compute_field(
     else:
         assert dem_files is not None
         jobs = [(sites.lat_deg[sl], sites.lon_deg[sl]) for sl in slices]
-        init_args = (str(dem_files[0]), str(dem_files[1]), sun, earth, settings)
+        pairs = tuple((str(img), str(lbl)) for img, lbl in dem_files)
+        init_args = (pairs, sun, earth, settings)
         with ProcessPoolExecutor(
             max_workers=workers, initializer=_init_worker, initargs=init_args
         ) as pool:

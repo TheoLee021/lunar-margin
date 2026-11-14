@@ -88,6 +88,9 @@ class SearchConfig(_Frozen):
     weights: Weights = Weights()
     window: AnalysisWindow = AnalysisWindow()
     dem: str = "80s_80m"
+    # 주 DEM 밖(80°S 바깥)의 수평선 광선을 메우는 보충 DEM. 없으면(None) 보충하지 않는다.
+    # 파일이 없으면 경고만 남기고 주 DEM만으로 계산한다
+    fallback_dem: str | None = "75s_120m"
     observer_height_m: float = Field(default=0.0, ge=0.0, le=100.0)
     max_range_m: float = Field(default=200_000.0, gt=0.0)
     coarse_azimuth_step_deg: float = Field(default=2.0, gt=0.0, le=10.0)

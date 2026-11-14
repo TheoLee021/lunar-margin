@@ -23,7 +23,7 @@ from pydantic import TypeAdapter
 
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig, Thresholds
-from lunar_margin.engine.candidates.field import FieldSettings, MetricField, compute_field
+from lunar_margin.engine.candidates.field import FieldSettings, MetricField, compute_field, open_dem
 from lunar_margin.engine.candidates.filtering import (
     FilterResult,
     Status,
@@ -37,7 +37,6 @@ from lunar_margin.engine.candidates.projection import polar_radius_m
 from lunar_margin.engine.candidates.ranking import RankScores, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
-from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.pipeline.candidate_map import (
     MapCandidate,
@@ -130,6 +129,11 @@ def _json_float(value: float) -> float | None:
     return None if math.isnan(value) else round(float(value), 6)
 
 
+def _fallback_resolution(dem: object) -> float:
+    fallback = getattr(dem, "fallback", None)
+    return float(fallback.label.map_scale_m) if fallback is not None else 0.0
+
+
 def _hashes(directory: Path, names: list[str]) -> dict[str, str]:
     manifest = directory / "manifest.json"
     entries = _MANIFEST.validate_json(manifest.read_text()) if manifest.exists() else {}
@@ -214,10 +218,26 @@ def run_search(
             f"DEM files not found in {data_dir / 'dem'}; "
             f"run `uv run python -m lunar_margin.pipeline.fetch --dem {config.dem}`"
         )
-    load_kernels(data_dir / "spice")
-    dem = PolarDem.from_files(*dem_files)
-    workers = config.workers or os.cpu_count() or 1
+    dem_pairs = [dem_files]
+    fallback_source = None
     warnings: list[str] = list(extra_warnings or [])
+    if config.fallback_dem is not None:
+        if config.fallback_dem not in DEM_SOURCES:
+            raise ValueError(f"unknown DEM '{config.fallback_dem}'")
+        fb_img, fb_lbl = DEM_SOURCES[config.fallback_dem]
+        fb_files = (data_dir / "dem" / fb_img.filename, data_dir / "dem" / fb_lbl.filename)
+        if all(p.exists() for p in fb_files):
+            dem_pairs.append(fb_files)
+            fallback_source = fb_img
+        else:
+            warnings.append(
+                f"보충 DEM({fb_img.filename})이 없어 주 DEM 바깥의 지형은 알 수 없습니다. "
+                f"`uv run python -m lunar_margin.pipeline.fetch --dem {config.fallback_dem}`로 "
+                "받으면 수평선이 ROI 전체에서 완전해집니다."
+            )
+    load_kernels(data_dir / "spice")
+    dem = open_dem(dem_pairs)
+    workers = config.workers or os.cpu_count() or 1
 
     def reporter(stage: str) -> Callable[[int, int], None] | None:
         callback = progress
@@ -264,7 +284,7 @@ def run_search(
             coarse,
             _field_settings(config, config.coarse_azimuth_step_deg),
             workers=workers,
-            dem_files=dem_files,
+            dem_files=dem_pairs,
             on_progress=reporter("coarse"),
         )
         coarse_filter = evaluate(
@@ -292,7 +312,7 @@ def run_search(
         fine,
         _field_settings(config, config.fine_azimuth_step_deg),
         workers=workers,
-        dem_files=dem_files,
+        dem_files=dem_pairs,
         on_progress=reporter("fine"),
     )
     fine_filter = evaluate(
@@ -394,8 +414,8 @@ def run_search(
         warnings.append(
             f"{counts['horizon_incomplete']}개 지점({share:.0f}%)의 수평선이 DEM 범위 밖으로 "
             "나갑니다. DEM 밖 지형은 알 수 없어 수평선이 낮게 계산됐을 수 있습니다"
-            "(data_quality.horizon_complete=false). `--dem 75s_120m`이면 ROI 전체가 DEM 안에 "
-            "들어옵니다."
+            "(data_quality.horizon_complete=false). 보충 DEM(`--fallback-dem`)을 "
+            "쓰면 ROI 전체가 DEM 안에 들어옵니다."
         )
     if counts["missing_all_metrics"]:
         warnings.append(
@@ -434,6 +454,14 @@ def run_search(
             file=img_source.filename,
             sha256=_hashes(data_dir / "dem", [img_source.filename])[img_source.filename],
             resolution_m=dem.label.map_scale_m,
+        ),
+        dem_fallback=None
+        if fallback_source is None
+        else DemSource(
+            name=str(config.fallback_dem),
+            file=fallback_source.filename,
+            sha256=_hashes(data_dir / "dem", [fallback_source.filename])[fallback_source.filename],
+            resolution_m=_fallback_resolution(dem),
         ),
         spice_kernels=[
             KernelSource(

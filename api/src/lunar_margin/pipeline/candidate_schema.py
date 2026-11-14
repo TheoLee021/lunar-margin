@@ -85,6 +85,7 @@ class WindowSource(_Model):
 
 class Source(_Model):
     dem: DemSource
+    dem_fallback: DemSource | None = None  # 주 DEM 밖을 메운 보충 DEM (쓰지 않았으면 null)
     spice_kernels: list[KernelSource]
     window: WindowSource
     projection: str

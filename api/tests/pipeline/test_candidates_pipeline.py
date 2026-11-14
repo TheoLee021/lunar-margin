@@ -402,3 +402,47 @@ def test_failed_mission_also_records_completion_time(tmp_path: Path) -> None:
     assert status is not None and status.state == "failed"
     assert status.completed_at is not None and status.elapsed_seconds is not None
     assert status.elapsed_seconds > 0
+
+
+def test_the_fallback_dem_removes_every_incomplete_horizon(data_dir: Path, tmp_path: Path) -> None:
+    from lunar_margin.pipeline.fetch import fetch_all
+
+    fetch_all(data_dir, "75s_120m")  # 보충 DEM (이미 있으면 검증만 한다)
+    # ROI 바깥 경계(남위 85°) 근처의 가는 띠: 80°S DEM만으로는 일부 방향의 탐색이 DEM 밖으로 나간다
+    ring = SMALL.model_copy(
+        update={
+            "roi": Roi(min_lat_deg=-85.03, max_lat_deg=-85.0),
+            "grid_spacing_m": 2000.0,
+            "coarse_spacing_m": None,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 3, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+
+    without = run_search(
+        ring.model_copy(update={"fallback_dem": None}), data_dir, log=lambda _: None
+    )
+    with_fallback = run_search(ring, data_dir, log=lambda _: None)
+
+    assert without.summary.counts["horizon_incomplete"] > 0
+    assert with_fallback.summary.counts["horizon_incomplete"] == 0
+    assert with_fallback.source.dem_fallback is not None
+    assert with_fallback.source.dem_fallback.file == "ldem_75s_120m_float.img"
+    assert without.source.dem_fallback is None
+
+
+def test_a_missing_fallback_dem_only_warns(data_dir: Path, tmp_path: Path) -> None:
+    import shutil
+
+    shutil.copytree(data_dir / "spice", tmp_path / "spice")
+    (tmp_path / "dem").mkdir()
+    for name in ("ldem_80s_80m_float.img", "ldem_80s_80m_float.lbl"):
+        (tmp_path / "dem" / name).symlink_to((data_dir / "dem" / name).resolve())
+
+    outcome = run_search(SMALL, tmp_path, log=lambda _: None)  # 기본값: 75s_120m 보충, 파일은 없다
+
+    assert outcome.source.dem_fallback is None
+    assert any("보충 DEM" in w and "pipeline.fetch" in w for w in outcome.summary.warnings)
