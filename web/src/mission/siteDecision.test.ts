@@ -18,6 +18,17 @@ const site: SiteAssessment = {
     longest_dark_hours: 48,
     windows_per_24h: 0.5,
   },
+  region: {
+    radius_m: 250,
+    sample_step_m: 80,
+    total_samples: 29,
+    valid_samples: 29,
+    coverage_fraction: 1,
+    slope_p95_deg: 3.5,
+    slope_max_deg: 5,
+    roughness_p95_m: 2,
+    landing_safety_status: 'UNVERIFIED',
+  },
   terrain: {
     elevation_m: 450,
     slope_deg: 3.5,
@@ -40,7 +51,7 @@ it('passes when every hard constraint is met', () => {
     50,
   )
   expect(result.pass).toBe(true)
-  expect(result.checks).toHaveLength(3)
+  expect(result.checks).toHaveLength(4)
   expect(result.score).toBeCloseTo(75)
 })
 
@@ -49,7 +60,7 @@ it('reports which requirement failed without masking it with high Sun fraction',
     {
       ...site,
       earth: { ...site.earth, visible_fraction: 0.3 },
-      terrain: { ...site.terrain, slope_deg: 15 },
+      region: { ...site.region, slope_p95_deg: 15 },
     },
     {
       minEarthPercent: 60,
@@ -76,4 +87,31 @@ it('uses inclusive bounds at exact constraints', () => {
   )
   expect(result.pass).toBe(true)
   expect(result.score).toBeCloseTo(70)
+})
+
+it('fails closed on incomplete DEM coverage even with favorable LOS', () => {
+  const result = assessCandidate(
+    {
+      ...site,
+      region: { ...site.region, coverage_fraction: 0.8, valid_samples: 23 },
+    },
+    { minEarthPercent: 60, maxDarkHours: 48, maxSlopeDeg: 10 },
+    50,
+  )
+  expect(result.pass).toBe(false)
+  expect(result.checks.find((check) => check.id === 'terrain_coverage')?.pass).toBe(false)
+})
+
+it('does not confuse center slope with regional slope', () => {
+  const result = assessCandidate(
+    {
+      ...site,
+      terrain: { ...site.terrain, slope_deg: 1 },
+      region: { ...site.region, slope_p95_deg: 12 },
+    },
+    { minEarthPercent: 60, maxDarkHours: 48, maxSlopeDeg: 10 },
+    50,
+  )
+  expect(result.pass).toBe(false)
+  expect(result.checks.find((check) => check.id === 'slope')?.pass).toBe(false)
 })
