@@ -10,10 +10,6 @@ export type CandidateSite = {
   name: string
   latitude: number
   longitude: number
-  sun: number
-  earth: number
-  longestDarkness: number
-  slope: number
 }
 
 export type Schedule = Pick<

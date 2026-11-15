@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   AnalysisSchema,
+  SiteAssessmentSchema,
   buildAnalysisPath,
   fetchAnalysis,
+  fetchSiteAssessment,
   type AnalysisParams,
 } from './analysis'
 
@@ -98,5 +100,61 @@ describe('fetchAnalysis', () => {
       status: 422,
       message: expect.stringContaining('end must be after start'),
     })
+  })
+})
+
+// docs/api.md 의 GET /analysis/site-assessment 예시와 같은 형태
+function assessment() {
+  return {
+    ...params,
+    sun: {
+      visible_fraction: 0.42,
+      longest_dark_hours: 96.5,
+      windows_per_24h: 0.9,
+      mean_elevation_deg: 0.8,
+    },
+    earth: {
+      visible_fraction: 0.88,
+      longest_dark_hours: 40,
+      windows_per_24h: 0.07,
+      mean_elevation_deg: null,
+    },
+    terrain: {
+      slope_p95_deg: 6.1,
+      coverage_fraction: 1,
+      assessment_radius_m: 250,
+      slope_baseline_m: 160,
+      roughness_window_m: 400,
+      dem_pixel_m: 80,
+      landing_safety_status: 'UNVERIFIED',
+    },
+  }
+}
+
+describe('SiteAssessmentSchema', () => {
+  it('accepts the documented response', () => {
+    expect(SiteAssessmentSchema.safeParse(assessment()).success).toBe(true)
+  })
+
+  it('rejects a terrain coverage above 1', () => {
+    const body = assessment()
+    body.terrain.coverage_fraction = 1.5
+    expect(SiteAssessmentSchema.safeParse(body).success).toBe(false)
+  })
+})
+
+describe('fetchSiteAssessment', () => {
+  it('requests the site assessment path and parses the body', async () => {
+    const urls: string[] = []
+    const fetchFn = (input: RequestInfo | URL) => {
+      urls.push(String(input))
+      return Promise.resolve(new Response(JSON.stringify(assessment())))
+    }
+    const result = await fetchSiteAssessment(params, undefined, {
+      baseUrl: '/api',
+      fetchFn,
+    })
+    expect(urls[0]).toMatch(/^\/api\/analysis\/site-assessment\?lat=-89.7&/)
+    expect(result.terrain.slope_p95_deg).toBe(6.1)
   })
 })

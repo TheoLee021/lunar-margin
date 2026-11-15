@@ -77,6 +77,19 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(metric('최장 지구 차폐')).toHaveText(
     `${earth.metrics.longest_dark_hours.toFixed(1)} 시간`,
   )
+  const assessmentResponse = await request.get(
+    `/api/analysis/site-assessment?${query}`,
+  )
+  expect(assessmentResponse.ok()).toBe(true)
+  const assessment: { terrain: { slope_p95_deg: number } } =
+    await assessmentResponse.json()
+  await expect(
+    metrics
+      .getByRole('region', { name: '미션 조건 판정' })
+      .getByText(
+        `250 m 지역 경사 P95 ${assessment.terrain.slope_p95_deg.toFixed(1)}°`,
+      ),
+  ).toBeVisible()
   const timeline = metrics.getByRole('region', { name: '미션 기간 타임라인' })
   await expect(
     timeline.getByRole('img', {
@@ -104,7 +117,9 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const slope = page.getByRole('slider', { name: /경사 ≤/ })
   await slope.fill('0')
   await expect(
-    rail.getByText('조건을 만족하는 예시 후보가 없습니다. 필터를 완화하세요.'),
+    rail.getByText(
+      '모든 조건을 만족하는 후보가 없습니다. FAIL 이유를 확인하거나 조건을 완화하세요.',
+    ),
   ).toBeVisible()
   await slope.fill('12')
   await expect(rail.getByRole('button', { name: /후보 2/ })).toBeVisible()

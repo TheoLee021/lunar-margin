@@ -5,7 +5,28 @@ import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import { MissionMoonViewer } from './MissionMoonViewer'
 import { DEMO_SITES } from './demoSites'
-import type { MissionSelection } from './types'
+import { judgeSite, type SiteVerdict } from './siteDecision'
+import type { CandidateSite, MissionSelection } from './types'
+import {
+  useSiteAssessments,
+  type SiteAssessmentState,
+} from './useSiteAssessments'
+
+type SiteRow = {
+  site: CandidateSite
+  state: SiteAssessmentState
+  verdict: SiteVerdict | null
+}
+
+/** 판정된 후보가 먼저, 그중 PASS가 먼저, 다음은 점수 순. 계산 중·실패 후보는 원래 순서로 뒤에. */
+function compareRows(a: SiteRow, b: SiteRow): number {
+  if (!a.verdict || !b.verdict)
+    return Number(Boolean(b.verdict)) - Number(Boolean(a.verdict))
+  return (
+    Number(b.verdict.pass) - Number(a.verdict.pass) ||
+    b.verdict.score - a.verdict.score
+  )
+}
 
 export function MissionWorkspace({
   selection,
@@ -27,16 +48,27 @@ export function MissionWorkspace({
     [darkness, setDarkness] = useState(252),
     [slope, setSlope] = useState(12),
     [weight, setWeight] = useState(50)
-  const score = (site: (typeof DEMO_SITES)[number]) =>
-    (site.earth * weight + site.sun * (100 - weight)) / 100
-  const candidates = DEMO_SITES.filter(
-    (site) =>
-      site.earth >= earth &&
-      site.longestDarkness <= darkness &&
-      site.slope <= slope,
-  ).toSorted((a, b) => score(b) - score(a))
+  const { stateOf, retry } = useSiteAssessments(DEMO_SITES, selection)
+  const limits = {
+    minEarthPercent: earth,
+    maxDarkHours: darkness,
+    maxSlopeDeg: slope,
+  }
+  const rows: SiteRow[] = DEMO_SITES.map((site) => {
+    const state = stateOf(site.id)
+    return {
+      site,
+      state,
+      verdict:
+        state.kind === 'ready' ? judgeSite(state.data, limits, weight) : null,
+    }
+  })
+  const ranked = rows.toSorted(compareRows)
+  const judged = rows.filter((row) => row.verdict).length
+  const failedCount = rows.filter((row) => row.state.kind === 'error').length
   const selected =
     DEMO_SITES.find((site) => site.id === selection.siteId) ?? DEMO_SITES[0]!
+  const selectedRow = rows.find((row) => row.site.id === selected.id)
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -49,7 +81,7 @@ export function MissionWorkspace({
           Lunar Margin
         </h1>
         <span className="border border-amber-400/60 bg-black/50 px-2 py-0.5 font-mono text-[10px] text-amber-300">
-          선택 지점: NASA 분석 · 후보 순위: 예시
+          선택 지점 · 후보 판정: NASA 분석
         </span>
       </header>
       <button
@@ -71,7 +103,7 @@ export function MissionWorkspace({
               {summary}
             </section>
             <section className="hud-section">
-              <h2>조건 필터 · 예시 데이터</h2>
+              <h2>조건 필터</h2>
               {(
                 [
                   ['지구 가시 시간 ≥', earth, setEarth, 0, 100, 5, '%'],
@@ -128,9 +160,26 @@ export function MissionWorkspace({
               </div>
             </section>
             <section className="hud-section">
-              <h2>TOP 5 후보 · 예시 순위</h2>
+              <h2>후보 판정 · NASA 분석</h2>
+              {judged + failedCount < DEMO_SITES.length ? (
+                <p role="status" className="mb-1 text-xs text-sky-300">
+                  후보 분석 중… ({judged}/{DEMO_SITES.length})
+                </p>
+              ) : null}
+              {failedCount > 0 ? (
+                <p role="alert" className="mb-1 text-xs text-red-300">
+                  {failedCount}곳 분석 실패
+                  <button
+                    type="button"
+                    className="ml-2 underline"
+                    onClick={retry}
+                  >
+                    재시도
+                  </button>
+                </p>
+              ) : null}
               <ol className="space-y-1">
-                {candidates.map((site, index) => (
+                {ranked.map(({ site, state, verdict }, index) => (
                   <li key={site.id}>
                     <button
                       type="button"
@@ -139,21 +188,44 @@ export function MissionWorkspace({
                       className="flex w-full items-center gap-2 rounded border border-transparent p-2 text-left text-xs hover:bg-white/5 aria-[current=true]:border-white/20 aria-[current=true]:bg-white/5"
                     >
                       <span className="grid size-5 shrink-0 place-items-center rounded-full bg-neutral-100 font-mono text-neutral-950">
-                        {index + 1}
+                        {verdict ? index + 1 : '–'}
                       </span>
                       <span>
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
                       </span>
-                      <span className="ml-auto font-mono">
-                        {score(site).toFixed(0)}
+                      <span
+                        className={`ml-auto font-mono ${
+                          verdict
+                            ? verdict.pass
+                              ? 'text-emerald-300'
+                              : 'text-red-300'
+                            : 'text-neutral-400'
+                        }`}
+                      >
+                        {verdict
+                          ? `${verdict.pass ? 'PASS' : 'FAIL'} · ${verdict.score.toFixed(0)}`
+                          : state.kind === 'error'
+                            ? '분석 실패'
+                            : '계산 중'}
                       </span>
                     </button>
+                    {verdict && !verdict.pass ? (
+                      <p className="px-2 pb-1 text-[10px] text-red-300">
+                        {verdict.checks
+                          .filter((check) => !check.pass)
+                          .map((check) => check.label)
+                          .join(' · ')}{' '}
+                        미충족
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ol>
-              {candidates.length === 0 ? (
+              {judged === DEMO_SITES.length &&
+              rows.every((row) => !row.verdict?.pass) ? (
                 <p className="text-xs text-neutral-400">
-                  조건을 만족하는 예시 후보가 없습니다. 필터를 완화하세요.
+                  모든 조건을 만족하는 후보가 없습니다. FAIL 이유를 확인하거나
+                  조건을 완화하세요.
                 </p>
               ) : null}
             </section>
@@ -168,6 +240,44 @@ export function MissionWorkspace({
               {Math.abs(selected.longitude).toFixed(1)}°W
             </p>
             <MissionMetrics result={analysis} />
+            <section
+              aria-label="미션 조건 판정"
+              className="mt-4 border-t border-white/10 pt-4 text-xs"
+            >
+              <h3 className="mb-2 font-semibold text-neutral-300">
+                미션 조건 판정
+                {selectedRow?.verdict
+                  ? ` · ${selectedRow.verdict.pass ? 'PASS' : 'FAIL'}`
+                  : ''}
+              </h3>
+              {selectedRow?.verdict && selectedRow.state.kind === 'ready' ? (
+                <>
+                  <ul className="space-y-1">
+                    {selectedRow.verdict.checks.map((check) => (
+                      <li
+                        key={check.id}
+                        className={
+                          check.pass ? 'text-emerald-300' : 'text-red-300'
+                        }
+                      >
+                        {check.pass ? '✓' : '✗'} {check.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[10px] text-neutral-400">
+                    경사는 {selectedRow.state.data.terrain.dem_pixel_m} m DEM
+                    규모의 선별입니다. 착륙 안전성은 검증하지 않았습니다
+                    (UNVERIFIED).
+                  </p>
+                </>
+              ) : (
+                <p className="text-neutral-400">
+                  {selectedRow?.state.kind === 'error'
+                    ? '이 후보의 판정을 불러오지 못했습니다. 왼쪽 목록에서 재시도하세요.'
+                    : '조건 판정 계산 중…'}
+                </p>
+              )}
+            </section>
             {analysis.kind === 'ready' ? (
               <section
                 className="mission-timeline-panel mt-4 border-t border-white/10 pt-4"
