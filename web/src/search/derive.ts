@@ -145,7 +145,8 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   sun_fraction_below_min: '일조율이 최소 기준보다 낮음',
   sun_dark_hours_above_max: '최장 암흑이 허용 시간보다 김',
   earth_fraction_below_min: '지구 가시율이 최소 기준보다 낮음',
-  earth_blackout_hours_above_max: '최장 지구 LOS 차폐가 허용 시간보다 김',
+  earth_blackout_hours_above_max:
+    '지구 LOS 차폐에 따른 통신 두절이 허용 시간보다 김',
   horizon_incomplete: '수평선이 높이 지도 밖으로 나가 제외',
   terrain_slope_above_max: '250 m 지역 경사 P95가 허용 경사보다 큼',
   terrain_incomplete: '지역 지형 자료가 불완전하여 판정 불가',
