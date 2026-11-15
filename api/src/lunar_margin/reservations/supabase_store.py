@@ -23,7 +23,6 @@ class _RpcError(BaseModel):
 
 
 _bookings = TypeAdapter(list[Booking])
-_authorized = TypeAdapter(bool | None)
 
 
 class SupabaseStore:
@@ -71,14 +70,6 @@ class SupabaseStore:
         )
         try:
             return _bookings.validate_json(raw)
-        except ValidationError:
-            raise ReservationUnavailable from None
-
-    def authorize(self, token: str) -> bool | None:
-        try:
-            return _authorized.validate_json(
-                self._rpc("reservation_operator_authorized", {"p_token": token}), strict=True
-            )
         except ValidationError:
             raise ReservationUnavailable from None
 

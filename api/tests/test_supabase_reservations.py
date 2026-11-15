@@ -33,7 +33,6 @@ RECORD = {
     "status": "confirmed",
     "cancelled_at": None,
 }
-HEADERS = {"Authorization": "Bearer private-operator"}
 
 
 class RpcBoundary:
@@ -75,7 +74,6 @@ def supabase_client(served: Path, url: str = "https://project.supabase.co/rest/v
         Settings(
             data_dir=served,
             reservation_database_url=None,
-            reservation_admin_token=None,
             supabase_url=url,
             supabase_service_role_key="server-only-key",
         )
@@ -101,46 +99,38 @@ def test_availability_uses_existing_supabase_settings_without_a_database_dsn(
     assert "server-only-key" not in response.text
 
 
-def test_operator_is_checked_by_supabase_when_no_railway_token_is_configured(
+def test_public_history_uses_supabase_without_operator_verification(
     served: Path, rpc: RpcBoundary
 ) -> None:
     client = supabase_client(served)
-    assert client.get("/reservations").status_code == 401
-    rpc.respond(False)
-    assert client.get("/reservations", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    rpc.respond(True)
     rpc.respond([])
-    response = client.get("/reservations", headers={"Authorization": "Bearer private-operator"})
+    response = client.get("/reservations")
     assert response.status_code == 200
     assert response.json() == {"reservations": []}
-    assert "private-operator" not in response.text
+    assert rpc.calls[0][0].endswith("/reservation_list")
+    assert "server-only-key" not in response.text
 
 
 def test_confirm_conflict_cancel_and_history_preserve_the_http_contract(
     served: Path, rpc: RpcBoundary
 ) -> None:
     client = supabase_client(served)
-    rpc.respond(True)
     rpc.respond([RECORD])
-    created = client.post("/reservations", json=BOOKING, headers=HEADERS)
+    created = client.post("/reservations", json=BOOKING)
     assert created.status_code == 201
     assert created.json() == RECORD
-    rpc.respond(True)
     rpc.respond({"code": "23P01", "message": "private SQL and server-only-key"}, 409)
-    conflict = client.post("/reservations", json=BOOKING, headers=HEADERS)
+    conflict = client.post("/reservations", json=BOOKING)
     assert conflict.status_code == 409
     assert "server-only-key" not in conflict.text
     cancelled = {**RECORD, "status": "cancelled", "cancelled_at": "2026-11-16T00:00:00Z"}
-    rpc.respond(True)
     rpc.respond([cancelled])
-    response = client.post(f"/reservations/{RECORD['id']}/cancel", headers=HEADERS)
+    response = client.post(f"/reservations/{RECORD['id']}/cancel")
     assert response.status_code == 200 and response.json() == cancelled
-    rpc.respond(True)
     rpc.respond([cancelled])
-    assert client.get("/reservations", headers=HEADERS).json() == {"reservations": [cancelled]}
-    rpc.respond(True)
+    assert client.get("/reservations").json() == {"reservations": [cancelled]}
     rpc.respond([])
-    assert client.post(f"/reservations/{RECORD['id']}/cancel", headers=HEADERS).status_code == 404
+    assert client.post(f"/reservations/{RECORD['id']}/cancel").status_code == 404
 
 
 @pytest.mark.parametrize("payload", [None, {}, [{"id": "invalid"}]])
@@ -154,11 +144,11 @@ def test_malformed_upstream_availability_fails_closed(
 
 
 @pytest.mark.parametrize("payload", [None, "true", {"authorized": True}])
-def test_missing_or_malformed_operator_verification_never_authorizes(
+def test_public_history_rejects_malformed_storage_payloads(
     served: Path, rpc: RpcBoundary, payload: object
 ) -> None:
     rpc.respond(payload)
-    assert supabase_client(served).get("/reservations", headers=HEADERS).status_code == 503
+    assert supabase_client(served).get("/reservations").status_code == 503
 
 
 def test_upstream_failure_is_sanitized(served: Path, rpc: RpcBoundary) -> None:

@@ -56,9 +56,8 @@ export function fetchAvailability(runId: string, options?: RequestOptions) {
   )
 }
 
-async function operatorRequest<T>(
+async function reservationRequest<T>(
   path: string,
-  token: string,
   schema: z.ZodType<T>,
   body: Registration | null,
   { baseUrl = DEFAULT_BASE_URL, fetchFn = fetch, signal }: RequestOptions = {},
@@ -69,7 +68,6 @@ async function operatorRequest<T>(
     signal,
     cache: 'no-store',
     headers: {
-      Authorization: `Bearer ${token}`,
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -97,38 +95,26 @@ async function operatorRequest<T>(
 
 export function confirmReservation(
   body: Registration,
-  token: string,
   options?: RequestOptions,
 ) {
-  return operatorRequest(
+  return reservationRequest(
     '/reservations',
-    token,
     BookingSchema,
     RegistrationSchema.parse(body),
     options,
   )
 }
-export function cancelReservation(
-  id: string,
-  token: string,
-  options?: RequestOptions,
-) {
-  return operatorRequest(
+export function cancelReservation(id: string, options?: RequestOptions) {
+  return reservationRequest(
     `/reservations/${encodeURIComponent(id)}/cancel`,
-    token,
     BookingSchema,
     null,
     options,
   )
 }
-export function fetchReservations(
-  token: string,
-  offset = 0,
-  options?: RequestOptions,
-) {
-  return operatorRequest(
+export function fetchReservations(offset = 0, options?: RequestOptions) {
+  return reservationRequest(
     `/reservations?limit=100&offset=${offset}`,
-    token,
     z.object({ reservations: z.array(BookingSchema) }),
     null,
     options,
