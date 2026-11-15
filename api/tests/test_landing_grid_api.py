@@ -23,24 +23,42 @@ def client() -> Iterator[TestClient]:
             raise ValueError("outside the DEM")
         return LandingGridResponse.model_validate(
             {
-                "lat": query.lat, "lon": query.lon,
+                "lat": query.lat,
+                "lon": query.lon,
                 "assessment_radius_m": query.assessment_radius_m,
                 "target_radius_m": query.target_radius_m,
-                "sample_step_m": 80.0, "slope_baseline_m": 160.0,
-                "roughness_window_m": 400.0, "max_slope_deg": query.max_slope_deg,
+                "sample_step_m": 80.0,
+                "slope_baseline_m": 160.0,
+                "roughness_window_m": 400.0,
+                "max_slope_deg": query.max_slope_deg,
                 "max_roughness_m": query.max_roughness_m,
-                "total_target_centers": 1, "passing_target_centers": 0,
+                "total_target_centers": 1,
+                "passing_target_centers": 0,
                 "cells": [
-                    {"dx_m": 0, "dy_m": 0, "slope_deg": None,
-                     "roughness_rms_m": None, "valid": False,
-                     "in_assessment_circle": True}
+                    {
+                        "dx_m": 0,
+                        "dy_m": 0,
+                        "slope_deg": None,
+                        "roughness_rms_m": None,
+                        "valid": False,
+                        "in_assessment_circle": True,
+                    }
                 ],
                 "targets": [
-                    {"dx_m": 0, "dy_m": 0, "lat_deg": query.lat, "lon_deg": query.lon,
-                     "cells_intersecting": 1, "valid_cells": 0,
-                     "coverage_fraction": 0, "slope_p95_deg": None,
-                     "slope_max_deg": None, "roughness_max_m": None,
-                     "terrain_screen_pass": False, "reasons": ["terrain_incomplete"]}
+                    {
+                        "dx_m": 0,
+                        "dy_m": 0,
+                        "lat_deg": query.lat,
+                        "lon_deg": query.lon,
+                        "cells_intersecting": 1,
+                        "valid_cells": 0,
+                        "coverage_fraction": 0,
+                        "slope_p95_deg": None,
+                        "slope_max_deg": None,
+                        "roughness_max_m": None,
+                        "terrain_screen_pass": False,
+                        "reasons": ["terrain_incomplete"],
+                    }
                 ],
                 "best_target": None,
                 "landing_safety_status": "UNVERIFIED",
@@ -68,17 +86,20 @@ def test_landing_grid_exposes_missing_data_without_false_pass(client: TestClient
 @pytest.mark.parametrize(
     "parameters",
     [
-        {"lat": -79}, {"lon": 400}, {"assessment_radius_m": 100},
-        {"target_radius_m": 0}, {"target_radius_m": 100, "assessment_radius_m": 100},
-        {"max_slope_deg": 100}, {"max_roughness_m": -1}, {"extra": "unexpected"},
+        {"lat": -79},
+        {"lon": 400},
+        {"assessment_radius_m": 100},
+        {"target_radius_m": 0},
+        {"target_radius_m": 100, "assessment_radius_m": 100},
+        {"max_slope_deg": 100},
+        {"max_roughness_m": -1},
+        {"extra": "unexpected"},
     ],
 )
 def test_invalid_landing_grid_queries_are_rejected(
     client: TestClient, parameters: dict[str, int | float | str]
 ) -> None:
-    response = client.get(
-        "/analysis/landing-grid", params={"lat": -89.5, "lon": 222, **parameters}
-    )
+    response = client.get("/analysis/landing-grid", params={"lat": -89.5, "lon": 222, **parameters})
     assert response.status_code == 422
 
 
