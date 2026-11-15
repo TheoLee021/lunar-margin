@@ -16,6 +16,20 @@ from lunar_margin.pipeline.table_storage import (
     upload_table,
 )
 
+
+@pytest.fixture(autouse=True)
+def _isolated_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """개발자의 실제 .env나 셸 환경변수를 읽지 않는다 (읽으면 테스트가 흔들린다)."""
+    monkeypatch.chdir(tmp_path)  # Settings는 현재 폴더의 .env를 읽는다
+    for name in (
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_BUCKET",
+        "HORIZON_TABLE_DOWNLOAD_ON_START",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 TABLE_ID = "0123456789ab"
 KEY = "service-role-secret"
 
@@ -42,11 +56,13 @@ def supabase() -> Iterator[FakeSupabase]:
         def do_POST(self) -> None:
             prefix = "/storage/v1/object/tables/"
             fake.requests.append(("POST", self.path, dict(self.headers)))
+            # 인증이 틀려도 요청 본문을 먼저 끝까지 읽는다. 안 읽고 응답하면 클라이언트가 전송 중에
+            # 연결이 끊겨 StorageError 대신 연결 오류가 나서 테스트가 가끔 실패한다
+            body = self.rfile.read(int(self.headers["Content-Length"]))
             if not self._auth_ok() or not self.path.startswith(prefix):
                 self.send_response(401)
                 self.end_headers()
                 return
-            body = self.rfile.read(int(self.headers["Content-Length"]))
             fake.objects[self.path.removeprefix(prefix)] = body
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

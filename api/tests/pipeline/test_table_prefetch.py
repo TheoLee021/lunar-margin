@@ -11,6 +11,19 @@ from lunar_margin.app.settings import Settings
 from lunar_margin.pipeline.table_storage import StorageConfig
 
 
+@pytest.fixture(autouse=True)
+def _isolated_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """개발자의 실제 .env나 셸 환경변수를 읽지 않는다 (읽으면 테스트가 흔들린다)."""
+    monkeypatch.chdir(tmp_path)  # Settings는 현재 폴더의 .env를 읽는다
+    for name in (
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_BUCKET",
+        "HORIZON_TABLE_DOWNLOAD_ON_START",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 def settings(**overrides: object) -> Settings:
     base: dict[str, object] = {
         "supabase_url": "https://x.supabase.co",
