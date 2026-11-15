@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
+import { gridCellCorners } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
 import type { CandidateSite, MissionSelection } from './types'
 
@@ -20,6 +21,7 @@ export function MissionMoonViewer({
         id: site.id,
         label: String(index + 1),
         location: { lat: site.latitude, lon: site.longitude },
+        footprint: site.grid ? gridCellCorners(site.grid) : undefined,
       })),
     [sites],
   )
@@ -48,10 +50,10 @@ export function MissionMoonViewer({
           disabled={!selected}
           onClick={() => {
             if (selected)
-              viewer.current?.flyTo({
-                lat: selected.latitude,
-                lon: selected.longitude,
-              })
+              viewer.current?.flyTo(
+                { lat: selected.latitude, lon: selected.longitude },
+                selected.grid ? selected.grid.spacing_m * 20 : undefined,
+              )
           }}
         >
           선택 지점 3D로 보기

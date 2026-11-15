@@ -104,6 +104,10 @@ export function MissionWorkspace({
             <section className="hud-section">
               <h2>TOP 5 후보</h2>
               <p className="text-xs text-neutral-400">
+                사각형은 후보의 500m × 500m 격자입니다. 선택 후 ‘선택 지점 3D로
+                보기’로 확대하세요.
+              </p>
+              <p className="text-xs text-neutral-400">
                 {selection.landing} · {selection.duration}일
                 {run
                   ? ` · 선정 ${run.candidates.length}개 중 상위 ${sites.length}개`
@@ -170,7 +174,7 @@ export function MissionWorkspace({
           {selected ? (
             <aside
               aria-label="선택한 지점"
-              className="hud-panel absolute right-4 top-24 z-20 max-h-[calc(100dvh-176px)] w-[420px] max-w-[calc(100vw-32px)] overflow-y-auto p-3"
+              className="hud-panel absolute right-4 top-24 z-20 max-h-[calc(100dvh-176px)] w-[420px] max-w-[calc(100vw-32px)] overflow-y-auto p-3 max-sm:top-80 max-sm:max-h-[calc(100dvh-400px)]"
             >
               <div className="mb-1 flex items-center justify-between gap-3">
                 <h2 className="font-semibold">{selected.name}</h2>

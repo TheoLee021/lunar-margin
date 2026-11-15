@@ -1,3 +1,5 @@
+import type { PolarGridCell } from '../moon/location'
+
 /** The single selection shared by the map and mission panels. All dates are UTC. */
 export type MissionSelection = {
   departure: string
@@ -14,6 +16,7 @@ export type CandidateSite = {
   earth: number | null
   longestDarkness: number | null
   slope: number | null
+  grid?: PolarGridCell
   score?: number | null
 }
 

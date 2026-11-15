@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
 import { MissionSummary } from './mission/MissionSummary'
@@ -247,29 +247,40 @@ function MissionApp({
   }, [])
   const candidates = useDashboardRun(selection)
   const run = candidates.result.kind === 'ready' ? candidates.result.run : null
-  const sites = run
-    ? [...run.candidates]
-        .sort((a, b) => a.rank - b.rank)
-        .slice(0, 5)
-        .map((candidate) => ({
-          id: candidate.id,
-          name: `후보 ${candidate.rank}`,
-          latitude: candidate.lat_deg,
-          longitude: candidate.lon_deg,
-          sun:
-            candidate.sun.fraction === null
-              ? null
-              : candidate.sun.fraction * 100,
-          earth:
-            candidate.earth.fraction === null
-              ? null
-              : candidate.earth.fraction * 100,
-          longestDarkness: candidate.sun.longest_dark_hours,
-          slope: candidate.terrain?.slope_p95_deg ?? null,
-          score:
-            candidate.score.total === null ? null : candidate.score.total * 100,
-        }))
-    : []
+  const sites = useMemo(
+    () =>
+      run
+        ? [...run.candidates]
+            .sort((a, b) => a.rank - b.rank)
+            .slice(0, 5)
+            .map((candidate) => ({
+              id: candidate.id,
+              name: `후보 ${candidate.rank}`,
+              latitude: candidate.lat_deg,
+              longitude: candidate.lon_deg,
+              grid: {
+                x_m: candidate.x_m,
+                y_m: candidate.y_m,
+                spacing_m: candidate.grid_spacing_m,
+              },
+              sun:
+                candidate.sun.fraction === null
+                  ? null
+                  : candidate.sun.fraction * 100,
+              earth:
+                candidate.earth.fraction === null
+                  ? null
+                  : candidate.earth.fraction * 100,
+              longestDarkness: candidate.sun.longest_dark_hours,
+              slope: candidate.terrain?.slope_p95_deg ?? null,
+              score:
+                candidate.score.total === null
+                  ? null
+                  : candidate.score.total * 100,
+            }))
+        : [],
+    [run],
+  )
   const site = sites.find((candidate) => candidate.id === selection.siteId)
   const live = useMissionAnalysis(
     site && run

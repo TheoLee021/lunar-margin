@@ -70,7 +70,7 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
-  flyTo(location: LunarLocation): void
+  flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
@@ -196,18 +196,25 @@ export async function createMoonScene(
     orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 },
   }
   camera.setView(overview)
+  let flight = 0
 
   return {
-    flyTo(location) {
-      flyAround(
-        Cartesian3.fromDegrees(location.lon, location.lat),
-        0,
-        OBLIQUE_PITCH,
-        SITE_RANGE_M,
-        2,
-      )
+    flyTo(location, rangeM = SITE_RANGE_M) {
+      const request = ++flight
+      const position = Cartesian3.fromDegrees(location.lon, location.lat)
+      const arrive = (surface: Cartesian3) => {
+        if (viewer.isDestroyed() || request !== flight) return
+        flyAround(surface, 0, OBLIQUE_PITCH, rangeM, 2)
+      }
+      if (scene.clampToHeightSupported) {
+        void scene
+          .clampToHeightMostDetailed([position])
+          .then(([surface]) => arrive(surface ?? position))
+          .catch(() => arrive(position))
+      } else arrive(position)
     },
     flyToOverview() {
+      flight++
       camera.flyTo({ ...overview, duration: 1.2 })
     },
     setMarkers(next) {
