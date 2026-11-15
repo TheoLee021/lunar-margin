@@ -42,3 +42,20 @@ def test_grid_target_behind_ridge_has_first_hit_and_near_target_is_visible() -> 
     assert hit is not None
     x, _ = dem.lonlat_to_xy(hit[1], hit[0])
     assert 1120 < x < 1130
+
+
+def test_narrow_crest_between_regular_probes_blocks_distant_target() -> None:
+    terrain = np.zeros((131, 131), dtype=np.float32)
+    terrain[:, 70] = 0.100  # 100 m high, 400 m east
+    terrain[:, 125] = 1.178  # target 4800 m east, almost tangent to crest
+    label = PolarGridLabel(131, 131, 80, 65, 65, 1737.4, 0, -90)
+    dem = PolarDem(terrain, label)
+    assert local_viewshed(dem, -90, 0)[62, 122] == 1
+    targets = grid_sightlines(dem, -90, 0)
+    for (lon, lat, _), hit in targets:
+        x, y = dem.lonlat_to_xy(lat, lon)
+        if abs(x - 4800) < 0.01 and abs(y) < 0.01:
+            assert hit is not None
+            assert 398 < dem.lonlat_to_xy(hit[1], hit[0])[0] < 400
+            return
+    raise AssertionError("Missing eastern grid target")

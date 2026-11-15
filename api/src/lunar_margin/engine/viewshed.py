@@ -1,5 +1,7 @@
 """Local terrain visibility from 2 m above the selected point on the 80 m LOLA DEM."""
 
+import math
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -10,6 +12,67 @@ CELL_M = 80
 HALF_CELLS = RADIUS_M // CELL_M
 
 
+def _trace_cells(
+    dem: PolarDem,
+    cx: float,
+    cy: float,
+    eye: float,
+    dx: NDArray[np.float64],
+    dy: NDArray[np.float64],
+) -> tuple[NDArray[np.bool_], NDArray[np.float64], NDArray[np.float64]]:
+    """Known paths, first crossing fraction (NaN when clear), and target ground height."""
+    scale = dem.label.map_scale_m
+    target = dem.sample_height_m(cx + dx, cy + dy)
+    curvature = (dx**2 + dy**2) / (2 * dem.radius_m)
+
+    def cuts(pixel: float, delta: NDArray[np.float64]) -> NDArray[np.float64]:
+        # Crossings of integer pixel coordinates delimit bilinear interpolation patches.
+        count = int(np.ceil(np.max(np.abs(delta)))) + 1
+        first = np.where(delta > 0, math.floor(pixel) + 1, math.ceil(pixel) - 1)
+        edges = first[:, None] + np.sign(delta[:, None]) * np.arange(count)
+        return np.clip((edges - pixel) / np.where(delta == 0, 1, delta)[:, None], 0, 1)
+
+    shape = (len(dx), 1)
+    boundaries = np.sort(
+        np.concatenate(
+            (
+                np.zeros(shape),
+                cuts(dem.label.sample_offset + cx / scale, dx / scale),
+                cuts(dem.label.line_offset - cy / scale, -dy / scale),
+                np.ones(shape),
+            ),
+            axis=1,
+        ),
+        axis=1,
+    )
+
+    def clearance(t: NDArray[np.float64]) -> NDArray[np.float64]:
+        ground = dem.sample_height_m(cx + dx[:, None] * t, cy + dy[:, None] * t)
+        return eye + t * (target - curvature - eye)[:, None] + t * t * curvature[:, None] - ground
+
+    lo, hi = boundaries[:, :-1], boundaries[:, 1:]
+    edge = clearance(boundaries)
+    left, right = edge[:, :-1], edge[:, 1:]
+    mid = clearance((lo + hi) / 2)
+    known = np.isfinite(edge).all(axis=1) & np.isfinite(mid).all(axis=1)
+    # Clearance on each patch is exactly quadratic in the local fraction u.
+    a = 2 * (left + right - 2 * mid)
+    b = right - left - a
+    u = np.where(a > 0, np.clip(-b / np.where(a > 0, 2 * a, 1), 0, 1), np.where(left < right, 0, 1))
+    blocked = ((a * u + b) * u + left < -1e-7) & (hi > lo)
+    rows = np.arange(len(dx))
+    j = np.argmax(blocked, axis=1)
+    lower = np.zeros(len(dx))
+    upper = u[rows, j].copy()
+    for _ in range(28):
+        probe = (lower + upper) / 2
+        below = (a[rows, j] * probe + b[rows, j]) * probe + left[rows, j] <= 0
+        upper = np.where(below, probe, upper)
+        lower = np.where(below, lower, probe)
+    hit = np.where(known & blocked.any(axis=1), lo[rows, j] + upper * (hi - lo)[rows, j], np.nan)
+    return known, hit, target
+
+
 def local_viewshed(dem: PolarDem, lat: float, lon: float) -> NDArray[np.uint8]:
     cx, cy = dem.lonlat_to_xy(lat, lon)
     eye = dem.height_at(lat, lon) + 2
@@ -18,19 +81,13 @@ def local_viewshed(dem: PolarDem, lat: float, lon: float) -> NDArray[np.uint8]:
     distance = np.hypot(x, y)
     inside = distance <= RADIUS_M
     dx, dy = x[inside], y[inside]
-    curvature = distance[inside] ** 2 / (2 * dem.radius_m)
-    target = dem.sample_height_m(cx + dx, cy + dy) - curvature
-    known = np.isfinite(target)
-    visible = known.copy()
-    # At most 20 m between probes along each sightline; compare in the observer's tangent plane.
-    steps = RADIUS_M // 20
-    for i in range(1, steps):
-        f = i / steps
-        terrain = dem.sample_height_m(cx + dx * f, cy + dy * f) - curvature * f**2
-        known &= np.isfinite(terrain)
-        visible &= terrain <= eye + f * (target - eye)
+    codes = np.zeros(len(dx), dtype=np.uint8)
+    for start in range(0, len(dx), 256):
+        chunk = slice(start, start + 256)
+        known, hit, _ = _trace_cells(dem, cx, cy, eye, dx[chunk], dy[chunk])
+        codes[chunk] = np.where(known, np.where(np.isfinite(hit), 1, 2), 0)
     mask = np.zeros(x.shape, dtype=np.uint8)
-    mask[inside] = np.where(known, np.where(visible, 2, 1), 0)
+    mask[inside] = codes
     return mask
 
 
@@ -82,10 +139,7 @@ def grid_sightlines(
     inside = (distance > 0) & (distance <= RADIUS_M)
     dx, dy = xx[inside], yy[inside]
     curvature = distance[inside] ** 2 / (2 * dem.radius_m)
-    f = np.linspace(0, 1, RADIUS_M // 20 + 1)[:, None]
-    terrain = dem.sample_height_m(cx + f * dx, cy + f * dy)
-    sight = eye + f * (terrain[-1] - curvature - eye)
-    clearance = sight - (terrain - curvature * f**2)
+    known, hits, heights = _trace_cells(dem, cx, cy, eye, dx, dy)
 
     def location(x: float, y: float, height: float) -> tuple[float, float, float]:
         return (
@@ -95,15 +149,12 @@ def grid_sightlines(
         )
 
     result: list[tuple[tuple[float, float, float], tuple[float, float, float] | None]] = []
-    for col in np.flatnonzero(np.all(np.isfinite(clearance), axis=0)):
-        end = location(cx + dx[col], cy + dy[col], terrain[-1, col])
-        blocked = np.flatnonzero(clearance[1:-1, col] < 0)
+    for col in np.flatnonzero(known):
+        end = location(cx + dx[col], cy + dy[col], heights[col])
+        t = hits[col]
         hit = None
-        if blocked.size:
-            a = int(blocked[0])
-            u = clearance[a, col] / (clearance[a, col] - clearance[a + 1, col])
-            t = (a + u) / (len(f) - 1)
-            height = eye + t * (terrain[-1, col] - curvature[col] - eye) + t * t * curvature[col]
+        if np.isfinite(t):
+            height = eye + t * (heights[col] - curvature[col] - eye) + t * t * curvature[col]
             hit = location(cx + t * dx[col], cy + t * dy[col], height)
         result.append((end, hit))
     return result
