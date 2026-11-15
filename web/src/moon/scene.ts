@@ -1,6 +1,11 @@
 import type { Viewshed } from '../api/viewshed'
 // Imperative Cesium scene for the Moon. Loaded lazily by MoonViewer; React never holds Cesium state.
 import {
+  ArcType,
+  Color,
+  Entity,
+  Matrix4,
+  Transforms,
   BoundingSphere,
   Cartesian2,
   Cartesian3,
@@ -542,22 +547,7 @@ ${sunWindowSlots
       int code = int(round(texelFetch(u_viewshed, cell, 0).r * 255.0));
       if (code == 0) return;
       vec3 tint = code == 2 ? vec3(0.10, 0.78, 0.40) : vec3(0.88, 0.25, 0.20);
-      // Radial transects lie on the terrain. Each segment uses the visibility of its own cell.
-      const float bearingStep = 0.261799388; // 24 transects, every 15 degrees
-      float radius = length(offset);
-      float bearing = atan(offset.y, offset.x);
-      float angle = mod(bearing + 0.5 * bearingStep, bearingStep) - 0.5 * bearingStep;
-      float crossTrack = radius * sin(angle);
-      float alongTrack = radius * cos(angle);
-      float line = 1.0 - smoothstep(0.25, 1.1, abs(crossTrack) / pixelM);
-      float station = clamp(floor(alongTrack / 1000.0 + 0.5), 1.0, 5.0);
-      float dotDistance = length(vec2(crossTrack, alongTrack - station * 1000.0)) / pixelM;
-      float dotInk = 1.0 - smoothstep(1.8, 2.8, dotDistance);
-      float rim = 1.0 - smoothstep(0.3, 1.4, (5000.0 - radius) / pixelM);
-      vec3 base = mix(material.diffuse, tint, code == 2 ? 0.055 : 0.14);
-      vec3 ink = code == 2 ? vec3(0.04, 0.98, 0.52) : vec3(0.96, 0.14, 0.12);
-      material.diffuse = mix(base, ink, max(0.85 * line, 0.55 * rim));
-      material.diffuse = mix(material.diffuse, mix(ink, vec3(1.0), 0.25), dotInk);
+      material.diffuse = mix(material.diffuse, tint, code == 2 ? 0.055 : 0.14);
     }
   `,
   })
@@ -957,8 +947,85 @@ export async function createMoonScene(
   }
   camera.setView(overview)
 
+  let rayGeneration = 0
+  const rayEntities: Entity[] = []
   return {
     setViewshed(map) {
+      const generation = ++rayGeneration
+      for (const entity of rayEntities) viewer.entities.remove(entity)
+      rayEntities.length = 0
+      if (map) {
+        const origin = Cartesian3.fromDegrees(
+          map.lon,
+          map.lat,
+          map.eye_height_m,
+          Ellipsoid.MOON,
+        )
+        const frame = Transforms.eastNorthUpToFixedFrame(origin, Ellipsoid.MOON)
+        const ends = map.rays.map(([range], i) => {
+          const angle = (i * Math.PI) / 12
+          return Matrix4.multiplyByPoint(
+            frame,
+            new Cartesian3(range * Math.sin(angle), range * Math.cos(angle), 0),
+            new Cartesian3(),
+          )
+        })
+        const ground = [origin, ...ends].map((position) =>
+          Cartographic.fromCartesian(position, Ellipsoid.MOON),
+        )
+        const draw = (samples: (Cartographic | undefined)[]) => {
+          if (generation !== rayGeneration || viewer.isDestroyed()) return
+          const startHeight = samples[0]?.height
+          const shift = Number.isFinite(startHeight)
+            ? startHeight! + 2 - map.eye_height_m
+            : 0
+          const start = Cartesian3.fromDegrees(
+            map.lon,
+            map.lat,
+            map.eye_height_m + shift,
+            Ellipsoid.MOON,
+          )
+          for (const [i, [range, hit]] of map.rays.entries()) {
+            if (!range) continue
+            const target = Cartographic.fromCartesian(ends[i]!, Ellipsoid.MOON)
+            const surfaceHeight = samples[i + 1]?.height
+            target.height =
+              hit && Number.isFinite(surfaceHeight)
+                ? surfaceHeight!
+                : target.height + shift
+            const end = Cartographic.toCartesian(target, Ellipsoid.MOON)
+            rayEntities.push(
+              viewer.entities.add({
+                polyline: {
+                  positions: [start, end],
+                  arcType: ArcType.NONE,
+                  width: 1.5,
+                  material: Color.AQUAMARINE,
+                  depthFailMaterial: Color.AQUAMARINE.withAlpha(0.45),
+                },
+                ...(hit
+                  ? {
+                      position: end,
+                      point: {
+                        pixelSize: 7,
+                        color: Color.ORANGERED,
+                        outlineWidth: 1,
+                        outlineColor: Color.WHITE,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                      },
+                    }
+                  : {}),
+              }),
+            )
+          }
+        }
+        if (scene.sampleHeightSupported)
+          void scene
+            .sampleHeightMostDetailed(ground)
+            .then(draw)
+            .catch(() => draw([]))
+        else draw([])
+      }
       if (!map) {
         moonShader.setUniform('u_viewshedGrid', new Cartesian3())
         return

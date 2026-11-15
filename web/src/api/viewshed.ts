@@ -6,6 +6,8 @@ const schema = z.object({
   lon: z.number(),
   center_x_m: z.number(),
   center_y_m: z.number(),
+  eye_height_m: z.number(),
+  rays: z.array(z.tuple([z.number().min(0).max(5000), z.boolean()])).length(24),
   cells: z
     .string()
     .length(125 * 125)

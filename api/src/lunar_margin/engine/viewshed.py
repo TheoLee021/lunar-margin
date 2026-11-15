@@ -32,3 +32,38 @@ def local_viewshed(dem: PolarDem, lat: float, lon: float) -> NDArray[np.uint8]:
     mask = np.zeros(x.shape, dtype=np.uint8)
     mask[inside] = np.where(known, np.where(visible, 2, 1), 0)
     return mask
+
+
+def horizontal_rays(
+    dem: PolarDem, lat: float, lon: float
+) -> tuple[float, list[tuple[float, bool]]]:
+    """Tangent rays, starting at north and turning clockwise in 15 degree steps."""
+    eye = dem.height_at(lat, lon) + 2
+    phi, lam = np.radians([lat, lon])
+    up = np.array([np.cos(phi) * np.cos(lam), np.cos(phi) * np.sin(lam), np.sin(phi)])
+    east = np.array([-np.sin(lam), np.cos(lam), 0.0])
+    north = np.cross(up, east)
+    start = (dem.radius_m + eye) * up
+    distances = np.arange(0, RADIUS_M + 1, 5, dtype=np.float64)
+    rays: list[tuple[float, bool]] = []
+    for bearing in np.radians(np.arange(0, 360, 15)):
+        direction = north * np.cos(bearing) + east * np.sin(bearing)
+        positions = start + distances[:, None] * direction
+        x, y, z = positions.T
+        radius = np.hypot(np.hypot(x, y), z)
+        heights = dem.sample_height_lonlat_m(
+            np.degrees(np.arctan2(z, np.hypot(x, y))), np.degrees(np.arctan2(y, x))
+        )
+        clearance = radius - dem.radius_m - heights
+        stops = np.flatnonzero(~np.isfinite(clearance) | (clearance <= 0))
+        if not stops.size:
+            rays.append((float(RADIUS_M), False))
+            continue
+        i = int(stops[0])
+        previous = max(0, i - 1)
+        if not np.isfinite(clearance[i]) or i == 0:
+            rays.append((float(distances[previous]), False))
+            continue
+        fraction = clearance[previous] / (clearance[previous] - clearance[i])
+        rays.append((float(distances[previous] + fraction * 5), True))
+    return eye, rays
