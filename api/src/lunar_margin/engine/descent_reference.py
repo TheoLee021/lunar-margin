@@ -236,20 +236,38 @@ def evaluate_reference(
     dense_radius, dense_phi, dense_lam = _moon_lat_lon(dense_r)
     dense_agl = dense_radius - R_M - dem.sample_height_lonlat_m(dense_phi, dense_lam)
 
+    # The 5-s output grid is too sparse for thrust-limit decisions: a
+    # local peak between output samples can incorrectly pass a marginal
+    # engine limit. Use a separate <=0.5-s propulsion quadrature grid.
+    # Passing remains a sampled-profile result, not a continuous-time proof.
+    propulsion_t = np.linspace(0, duration_s, math.ceil(duration_s / 0.5) + 1)
+    propulsion_r, propulsion_v, propulsion_a = _trajectory_at_times(
+        pdi, target, duration_s, loft_m, propulsion_t
+    )
+    propulsion_radius = np.linalg.norm(propulsion_r, axis=1)
+
     # Rotating frame: r'' = gravity + thrust/m - 2 omega x v
     #                                   - omega x (omega x r).
     omega = np.array([0.0, 0.0, OMEGA])
-    gravity = -MU_M * r / radius[:, None] ** 3
-    thrust_acc = a - gravity + 2 * np.cross(omega, v) + np.cross(omega, np.cross(omega, r))
+    gravity = -MU_M * propulsion_r / propulsion_radius[:, None] ** 3
+    thrust_acc = (
+        propulsion_a
+        - gravity
+        + 2 * np.cross(omega, propulsion_v)
+        + np.cross(omega, np.cross(omega, propulsion_r))
+    )
     acceleration_mag = np.linalg.norm(thrust_acc, axis=1)
-    dt = np.diff(t)
+    dt = np.diff(propulsion_t)
     integrated_acc = np.r_[
         0.0,
         np.cumsum((acceleration_mag[1:] + acceleration_mag[:-1]) * dt / 2),
     ]
-    # Exact mass relation for specified acceleration history and constant Isp.
+    # Exact mass relation for specified acceleration history and constant Isp;
+    # quadrature of the acceleration norm remains a numerical approximation.
     mass = lander.wet_mass_kg * np.exp(-integrated_acc / (lander.isp_s * G0))
     thrust = mass * acceleration_mag
+    sample_mass = np.interp(t, propulsion_t, mass)
+    sample_thrust = np.interp(t, propulsion_t, thrust)
     propellant = float(lander.wet_mass_kg - mass[-1])
     min_agl = (
         float(np.min(dense_agl[np.isfinite(dense_agl)])) if np.isfinite(dense_agl).any() else None
@@ -282,8 +300,8 @@ def evaluate_reference(
             if math.isfinite(float(altitude[i]))
             else None,
             speed_mps=round(math.hypot(float(v[i, 0]), float(v[i, 1]), float(v[i, 2])), 2),
-            thrust_n=round(float(thrust[i]), 2),
-            mass_kg=round(float(mass[i]), 3),
+            thrust_n=round(float(sample_thrust[i]), 2),
+            mass_kg=round(float(sample_mass[i]), 3),
             moon_me_xyz_m=[round(float(r[i, j]), 2) for j in range(3)],
         )
         for i in indices
