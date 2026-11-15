@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from lunar_margin.engine.candidates.config import Roi, SearchConfig
-from lunar_margin.pipeline.candidates import run_search
+from lunar_margin.pipeline.candidates import SearchOutcome, run_search
 from lunar_margin.pipeline.horizons import build_for_config, table_spec_for
 
 TINY = SearchConfig(
@@ -18,16 +18,35 @@ TINY = SearchConfig(
 )
 
 
-@pytest.fixture
-def data_copy(data_dir: Path, tmp_path: Path) -> Path:
+def _link_data(data_dir: Path, root: Path) -> Path:
     """실제 데이터를 가리키는 임시 DATA_DIR (테이블은 여기에만 쓴다)."""
-    root = tmp_path / "data"
     root.mkdir()
     for sub in ("dem", "spice"):
         (root / sub).mkdir()
         for item in (data_dir / sub).iterdir():
             (root / sub / item.name).symlink_to(item.resolve())
     return root
+
+
+@pytest.fixture
+def data_copy(data_dir: Path, tmp_path: Path) -> Path:
+    return _link_data(data_dir, tmp_path / "data")
+
+
+# 탐색과 테이블 빌드는 느려서 같은 입력이면 모듈에서 한 번만 계산해 나눠 쓴다.
+@pytest.fixture(scope="module")
+def without_table(data_dir: Path, tmp_path_factory: pytest.TempPathFactory) -> SearchOutcome:
+    root = _link_data(data_dir, tmp_path_factory.mktemp("no-table") / "data")
+    return run_search(TINY, root, log=lambda _: None)
+
+
+@pytest.fixture(scope="module")
+def built(data_dir: Path, tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path, list[str]]:
+    """TINY용 테이블을 한 번 만든 DATA_DIR, 테이블 경로, 빌드 로그."""
+    root = _link_data(data_dir, tmp_path_factory.mktemp("built") / "data")
+    lines: list[str] = []
+    path = build_for_config(TINY, root, workers=1, log=lines.append)
+    return root, path, lines
 
 
 def test_the_table_spec_follows_the_config_and_the_dem_files(data_copy: Path) -> None:
@@ -41,20 +60,22 @@ def test_the_table_spec_follows_the_config_and_the_dem_files(data_copy: Path) ->
     assert other.table_id() != spec.table_id()
 
 
-def test_a_search_without_a_table_warns_and_still_works(data_copy: Path) -> None:
-    outcome = run_search(TINY, data_copy, log=lambda _: None)
+def test_a_search_without_a_table_warns_and_still_works(without_table: SearchOutcome) -> None:
+    outcome = without_table
 
     assert outcome.source.horizon_table is None
     assert any("수평선 테이블" in w and "pipeline.horizons" in w for w in outcome.summary.warnings)
 
 
-def test_a_built_table_is_found_and_gives_the_same_candidates(data_copy: Path) -> None:
-    before = run_search(TINY, data_copy, log=lambda _: None)
+def test_a_built_table_is_found_and_gives_the_same_candidates(
+    without_table: SearchOutcome, built: tuple[Path, Path, list[str]]
+) -> None:
+    before = without_table
+    root, path, _ = built
 
-    path = build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
-    after = run_search(TINY, data_copy, log=lambda _: None)
+    after = run_search(TINY, root, log=lambda _: None)
 
-    assert path.parent == data_copy / "horizons"
+    assert path.parent == root / "horizons"
     assert after.source.horizon_table == path.name
     assert not any("수평선 테이블" in w for w in after.summary.warnings)
     # 후보 지점(id)과 순위는 같고, 수평선을 0.01° 단위로 저장하므로 지표는 거의 같다
@@ -67,25 +88,24 @@ def test_a_built_table_is_found_and_gives_the_same_candidates(data_copy: Path) -
     )
 
 
-def test_a_table_for_other_parameters_is_not_used(data_copy: Path) -> None:
-    build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
+def test_a_table_for_other_parameters_is_not_used(built: tuple[Path, Path, list[str]]) -> None:
+    root, _, _ = built
 
-    other = run_search(
-        TINY.model_copy(update={"observer_height_m": 2.0}), data_copy, log=lambda _: None
-    )
+    other = run_search(TINY.model_copy(update={"observer_height_m": 2.0}), root, log=lambda _: None)
 
     assert other.source.horizon_table is None
 
 
 def test_building_reports_progress_and_replaces_nothing_when_it_already_exists(
-    data_copy: Path,
+    built: tuple[Path, Path, list[str]],
 ) -> None:
-    lines: list[str] = []
-    first = build_for_config(TINY, data_copy, workers=1, log=lines.append)
+    root, first, first_lines = built
     mtime = (first / "meta.json").stat().st_mtime_ns
+    lines: list[str] = []
 
-    again = build_for_config(TINY, data_copy, workers=1, log=lines.append)
+    again = build_for_config(TINY, root, workers=1, log=lines.append)
 
+    assert first_lines
     assert again == first and (again / "meta.json").stat().st_mtime_ns == mtime
     assert any("이미 있" in line for line in lines)
 
@@ -99,12 +119,12 @@ def test_build_requires_the_dem_files(tmp_path: Path) -> None:
 
 
 def test_upload_uses_the_table_id_of_the_current_config(
-    data_copy: Path, monkeypatch: pytest.MonkeyPatch
+    built: tuple[Path, Path, list[str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import lunar_margin.pipeline.horizons as horizons
     from lunar_margin.pipeline.table_storage import StorageConfig
 
-    built = build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
+    root, table, _ = built
     seen: list[Path] = []
 
     def fake_upload(directory: Path, cfg: StorageConfig, **kw: object) -> str:
@@ -114,10 +134,10 @@ def test_upload_uses_the_table_id_of_the_current_config(
     monkeypatch.setattr(horizons, "upload_table", fake_upload)
 
     result = horizons.upload_for_config(
-        TINY, data_copy, StorageConfig("http://x", "k", "b"), log=lambda _: None
+        TINY, root, StorageConfig("http://x", "k", "b"), log=lambda _: None
     )
 
-    assert seen == [built] and result == built.name
+    assert seen == [table] and result == table.name
 
 
 def test_upload_without_a_local_table_says_to_build_it_first(data_copy: Path) -> None:
@@ -151,8 +171,8 @@ def test_download_asks_for_the_table_id_of_the_current_config(
     assert calls == [(table_spec_for(TINY, data_copy).table_id(), data_copy / "horizons")]
 
 
-def test_a_search_without_a_table_points_to_both_ways_of_getting_one(data_copy: Path) -> None:
-    outcome = run_search(TINY, data_copy, log=lambda _: None)
-
-    warning = next(w for w in outcome.summary.warnings if "수평선 테이블" in w)
+def test_a_search_without_a_table_points_to_both_ways_of_getting_one(
+    without_table: SearchOutcome,
+) -> None:
+    warning = next(w for w in without_table.summary.warnings if "수평선 테이블" in w)
     assert "pipeline.horizons --download" in warning and "pipeline.horizons`" in warning
