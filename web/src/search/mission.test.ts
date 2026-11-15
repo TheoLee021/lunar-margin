@@ -292,3 +292,16 @@ describe('missionSummaryItems', () => {
     )
   })
 })
+
+it('labels a slope limit as applied only when the saved run enforced it', () => {
+  const items = missionSummaryItems(EXAMPLE, {
+    min_sun_fraction: null,
+    max_sun_dark_hours: 24,
+    min_earth_fraction: null,
+    max_earth_blackout_hours: 6,
+    max_terrain_slope_degrees: 10,
+  })
+  expect(items.find((item) => item.label === '최대 지형 경사')?.value).toBe(
+    '10° 이하 (250 m 지역 P95)',
+  )
+})

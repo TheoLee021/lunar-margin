@@ -46,7 +46,7 @@ test('mission input submits the requested JSON, shows progress, then opens the p
   await page.goto('/')
   await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
   await expect(
-    page.getByText('현재 경사 조건은 저장만 하며 필터에 적용되지 않습니다.'),
+    page.getByText(/250 m 반경의 DEM 경사 P95에 적용합니다/),
   ).toBeVisible()
   await page.getByRole('button', { name: '후보지 탐색 실행' }).click()
   await expect(page.getByText('현재 단계 50 / 100 (50%)')).toBeVisible()

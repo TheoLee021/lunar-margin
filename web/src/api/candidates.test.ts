@@ -217,3 +217,31 @@ describe('fetch helpers', () => {
     ).rejects.toThrow(/404.*run not found/)
   })
 })
+
+it('preserves regional terrain measurements and the applied slope threshold', () => {
+  const terrain = {
+    slope_p95_deg: 7.5,
+    coverage_fraction: 1,
+    assessment_radius_m: 250,
+    slope_baseline_m: 160,
+    roughness_window_m: 400,
+    dem_pixel_m: 80,
+    landing_safety_status: 'UNVERIFIED',
+  }
+  const parsed = RunDetailSchema.parse({
+    ...detail,
+    config: {
+      ...detail.config,
+      thresholds: {
+        ...detail.config.thresholds,
+        max_terrain_slope_degrees: 10,
+      },
+    },
+    candidates: [{ ...candidate, terrain }],
+  })
+  expect(parsed.candidates[0]).toHaveProperty('terrain', terrain)
+  expect(parsed.config.thresholds).toHaveProperty(
+    'max_terrain_slope_degrees',
+    10,
+  )
+})
