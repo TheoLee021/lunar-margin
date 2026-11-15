@@ -134,7 +134,11 @@ export function CandidateDetail({
         </p>
       )}
 
-      <LandingGridPanel lat={Number(lat.toFixed(6))} lon={Number(lon.toFixed(6))} disabled={!analyzable} />
+      <LandingGridPanel
+        lat={Number(lat.toFixed(6))}
+        lon={Number(lon.toFixed(6))}
+        disabled={!analyzable}
+      />
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center gap-3">
