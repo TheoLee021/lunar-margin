@@ -29,7 +29,8 @@ type HealthState =
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
-  if (window.location.pathname.replace(/\/+$/, '') === '/research') return 'research'
+  if (window.location.pathname.replace(/\/+$/, '') === '/research')
+    return 'research'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
@@ -39,6 +40,7 @@ function currentView(): View {
 function initialSelection(): MissionSelection {
   const params = new URLSearchParams(window.location.search)
   const schedule = ScheduleSchema.safeParse({
+    launchId: params.get('launch_id'),
     departure: params.get('departure'),
     landing: params.get('arrival'),
     duration: Number(params.get('duration') ?? INITIAL_SELECTION.duration),
@@ -57,13 +59,16 @@ function locationFor(
   planner: boolean,
 ): string {
   const url = new URL(window.location.href)
-  url.pathname = view === 'orbit' ? '/orbit' : view === 'research' ? '/research' : '/'
+  url.pathname =
+    view === 'orbit' ? '/orbit' : view === 'research' ? '/research' : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
   url.searchParams.set('departure', selection.departure)
   url.searchParams.set('arrival', selection.landing)
   url.searchParams.set('duration', String(selection.duration))
+  if (selection.launchId) url.searchParams.set('launch_id', selection.launchId)
+  else url.searchParams.delete('launch_id')
   if (selection.siteId) url.searchParams.set('site', selection.siteId)
   else url.searchParams.delete('site')
   if (view === 'mission' && planner) url.searchParams.set('planner', '1')
@@ -214,11 +219,9 @@ export default function App() {
           >
             후보지 탐색
           </button>
-          <a className="hud-button" href="/research" onClick={(event) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-            event.preventDefault()
-            navigate('research')
-          }}>Research &amp; Evidence</a>
+          <a className="hud-button" href="/research">
+            Research &amp; Evidence
+          </a>
         </div>
       ) : null}
     </>
