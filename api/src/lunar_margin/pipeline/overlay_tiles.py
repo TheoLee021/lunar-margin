@@ -12,7 +12,6 @@ import json
 import math
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
@@ -22,7 +21,7 @@ from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.field import open_dem
 from lunar_margin.engine.candidates.grid import polar_grid
 from lunar_margin.engine.candidates.horizon_table import HorizonTable, find_table
-from lunar_margin.engine.dem import Dem, RasterDem
+from lunar_margin.engine.dem import Dem, HeightField, RasterDem
 from lunar_margin.pipeline.geotiff import read_float_geotiff
 from lunar_margin.pipeline.horizons import TABLES_DIR, resolve_dems, table_spec_for
 from lunar_margin.pipeline.png import encode_png
@@ -43,13 +42,20 @@ DETAIL_PIXEL_SIZES_M = (20.0, 5.0)
 SFS_DIR = "sfs"
 
 
-class _HeightField(Protocol):
-    @property
-    def radius_m(self) -> float: ...
+def detail_dem_paths(data_dir: Path) -> list[Path]:
+    """받아 둔 5 m 지역 DEM 파일들 (없으면 빈 목록. `pipeline.fetch --sfs`로 받는다)."""
+    return sorted((data_dir / "dem" / SFS_DIR).glob("*_GLDELEV_005.tif"))
 
-    def sample_height_m(
-        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
-    ) -> NDArray[np.float64]: ...
+
+def open_detail_dem(path: Path, radius_m: float) -> RasterDem:
+    raster = read_float_geotiff(path)
+    return RasterDem(
+        raster.heights,
+        left_m=raster.left_m,
+        top_m=raster.top_m,
+        pixel_size_m=raster.pixel_size_m,
+        radius_m=radius_m,
+    )
 
 
 def _write_png(path: Path, rgba: NDArray[np.uint8]) -> None:
@@ -63,7 +69,7 @@ def _write_meta(directory: Path, meta: dict[str, object]) -> None:
 
 
 def _slopes(
-    dem: _HeightField, x: NDArray[np.float64], y: NDArray[np.float64], step: float
+    dem: HeightField, x: NDArray[np.float64], y: NDArray[np.float64], step: float
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """투영 평면 (x, y)에서의 지역 동쪽·북쪽 경사(tan). DEM 밖은 NaN.
 
@@ -318,18 +324,7 @@ def main() -> None:
             "먼저 `uv run python -m lunar_margin.pipeline.horizons`를 실행하세요"
         )
     dem = open_dem(resolve_dems(config, data_dir).pairs)
-    detail: list[RasterDem] = []
-    for path in sorted((data_dir / "dem" / SFS_DIR).glob("*_GLDELEV_005.tif")):
-        raster = read_float_geotiff(path)
-        detail.append(
-            RasterDem(
-                raster.heights,
-                left_m=raster.left_m,
-                top_m=raster.top_m,
-                pixel_size_m=raster.pixel_size_m,
-                radius_m=dem.radius_m,
-            )
-        )
+    detail = [open_detail_dem(path, dem.radius_m) for path in detail_dem_paths(data_dir)]
     print(f"5 m 지역 DEM {len(detail)}개 (없으면 `pipeline.fetch --sfs`로 받는다)")
     build_overlay_tiles(table, dem, data_dir / "tiles", detail=detail)
     print(f"완료: {data_dir / 'tiles'} (테이블 {table.directory.name})")

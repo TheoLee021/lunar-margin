@@ -7,7 +7,7 @@ import pytest
 from numpy.typing import NDArray
 
 from lunar_margin.engine.dem import PolarDem
-from lunar_margin.engine.sunlight import SunlightGrid, sunlit_fraction
+from lunar_margin.engine.sunlight import GridWindow, SunlightGrid, sunlit_fraction
 from lunar_margin.pipeline.pds_label import PolarGridLabel
 
 N, C = 401, 200  # 100 m 격자, 극에서 +-20 km
@@ -91,3 +91,58 @@ def test_a_sun_straight_overhead_is_rejected() -> None:
     # 수평 성분이 없으면 햇빛이 오는 방위가 정해지지 않는다 (극에서는 일어나지 않는 경우)
     with pytest.raises(ValueError, match="horizontal"):
         sunlit_fraction(make_dem(), (0.0, 0.0, -1.0), GRID)
+
+
+# 극에서 벗어난 창: 25 m 격자(극에서 +-20 km)에서 (6 km, 4 km)를 중심으로 한 가로 6 km, 세로 5 km
+FINE = SunlightGrid(pixel_size_m=25.0, center_px=800)
+WINDOW = GridWindow(col=800 + 120, row=800 - 260, width_px=240, height_px=200)
+WINDOW_CENTRE_M = (6_000.0, 4_000.0)
+
+
+def in_window(image: NDArray[np.float32], x_m: float, y_m: float) -> float:
+    col = FINE.center_px + round(x_m / FINE.pixel_size_m) - WINDOW.col
+    row = FINE.center_px - round(y_m / FINE.pixel_size_m) - WINDOW.row
+    return float(image[row, col])
+
+
+@pytest.mark.parametrize("azimuth_deg", [0.0, 90.0, 217.0])
+def test_a_window_away_from_the_pole_shows_the_shadows_that_fall_inside_it(
+    azimuth_deg: float,
+) -> None:
+    # 창 중심에서 태양 쪽으로 850~1150 m 떨어진 곳에, 태양 방향에 수직인 높이 100 m 둑.
+    # 고도 5°이면 그림자는 둑 뒤쪽 끝에서 100 / tan 5° = 1143 m 이어진다
+    # (창이 극에서 7 km 떨어져 있어 그곳의 태양 고도는 5°에서 0.24°까지 다르다: 그림자 길이 +-60 m)
+    rows, cols = np.mgrid[0:N, 0:N]
+    x_m, y_m = (cols - C) * 100.0, (C - rows) * 100.0
+    az = math.radians(azimuth_deg)
+    centre_x, centre_y = WINDOW_CENTRE_M
+    towards_sun = (x_m - centre_x) * math.sin(az) + (y_m - centre_y) * math.cos(az)
+    heights = np.where(np.abs(towards_sun - 1_000.0) < 150.0, 0.1, 0.0).astype(np.float32)
+
+    image = sunlit_fraction(
+        make_dem(heights), sun_from(azimuth_deg, 5.0), FINE, window=WINDOW, reach_m=5_000.0
+    )
+
+    def along(distance_m: float) -> float:
+        return in_window(
+            image, centre_x + distance_m * math.sin(az), centre_y + distance_m * math.cos(az)
+        )
+
+    assert image.shape == (200, 240)
+    assert along(400.0) == pytest.approx(0.0, abs=0.01)  # 둑 뒤 450 m: 그림자 안
+    assert along(-700.0) == pytest.approx(1.0, abs=0.01)  # 둑 뒤 1550 m: 그림자 밖
+    assert along(1_700.0) == pytest.approx(1.0, abs=0.01)  # 둑 앞(태양 쪽)
+
+
+def test_terrain_outside_a_window_still_casts_its_shadow_into_it() -> None:
+    # 창(y 1.5~6.5 km) 밖, 태양 쪽 y = 12 km에 높이 1 km 벽: 고도 5°에서 그림자 길이 11.4 km
+    heights = np.zeros((N, N), dtype=np.float32)
+    heights[C - 120, :] = 1.0
+    sun = sun_from(0.0, 5.0)
+
+    lit = sunlit_fraction(make_dem(), sun, FINE, window=WINDOW, reach_m=12_000.0)
+    shadowed = sunlit_fraction(make_dem(heights), sun, FINE, window=WINDOW, reach_m=12_000.0)
+
+    assert in_window(lit, 6_000.0, 4_000.0) == pytest.approx(1.0, abs=0.01)
+    assert in_window(shadowed, 6_000.0, 4_000.0) == pytest.approx(0.0, abs=0.01)
+    assert in_window(shadowed, 8_500.0, 5_000.0) == pytest.approx(0.0, abs=0.01)

@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.ndimage import map_coordinates
 
-from lunar_margin.engine.dem import Dem
+from lunar_margin.engine.dem import HeightField
 
 SUN_RADIUS_DEG = 0.2665
 # 태양 원반을 고도 방향으로 나눈 띠의 수. 반그림자가 이 수 + 1 단계로 표현된다
@@ -39,6 +39,19 @@ class SunlightGrid:
         return 2 * self.center_px + 1
 
 
+@dataclass(frozen=True)
+class GridWindow:
+    """SunlightGrid의 픽셀 사각형: 열 [col, col + width_px), 행 [row, row + height_px).
+
+    격자가 극 주변 전체를 한 장으로 덮기에는 너무 촘촘할 때(5 m) 보는 곳만 계산하는 데 쓴다.
+    """
+
+    col: int
+    row: int
+    width_px: int
+    height_px: int
+
+
 def _mesh(
     columns: NDArray[np.float64], rows: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -47,7 +60,7 @@ def _mesh(
 
 
 def _sheet_coordinates(
-    dem: Dem,
+    dem: HeightField,
     along_m: NDArray[np.float64],
     across_m: NDArray[np.float64],
     towards_sun: tuple[float, float],
@@ -71,15 +84,17 @@ def _sheet_coordinates(
 
 
 def sunlit_fraction(
-    dem: Dem,
+    dem: HeightField,
     sun_me: tuple[float, float, float],
     grid: SunlightGrid,
     *,
+    window: GridWindow | None = None,
     reach_m: float = 200_000.0,
 ) -> NDArray[np.float32]:
     """grid의 각 픽셀에서 보이는 태양 원반의 비율 (0 = 완전한 그늘, 1 = 전부 보임).
 
-    sun_me는 달에서 태양을 향하는 MOON_ME 방향. grid 밖 지형도 태양 쪽으로 reach_m까지 살핀다.
+    sun_me는 달에서 태양을 향하는 MOON_ME 방향. window를 주면 grid의 그 부분만 계산한다.
+    계산하는 영역 밖의 지형도 태양 쪽으로 reach_m까지 살핀다.
     """
     norm = math.sqrt(sum(c * c for c in sun_me))
     horizontal = math.hypot(sun_me[0], sun_me[1])
@@ -89,33 +104,63 @@ def sunlit_fraction(
     elevation = math.atan2(-sun_me[2], horizontal)  # 남극의 위쪽은 -Z
 
     step = grid.pixel_size_m
-    half = grid.center_px * step
-    axis = (np.arange(grid.size_px, dtype=np.float64) - grid.center_px) * step
+    if window is None:
+        window = GridWindow(0, 0, grid.size_px, grid.size_px)
+    xs = (window.col + np.arange(window.width_px, dtype=np.float64) - grid.center_px) * step
+    ys = (grid.center_px - window.row - np.arange(window.height_px, dtype=np.float64)) * step
+
+    # 각 픽셀이 빛의 면 격자(열 = 태양 쪽 거리, 행 = 빛의 면, 간격은 step)의 어디에 놓이는지
+    shape = (window.height_px, window.width_px)
+    column = np.empty(shape, dtype=np.float32)
+    row = np.empty(shape, dtype=np.float32)
+    for start in range(0, window.height_px, _CHUNK_ROWS):
+        rows = slice(start, start + _CHUNK_ROWS)
+        x, y = _mesh(xs, ys[rows])
+        rho = np.hypot(x, y)
+        colatitude = 2.0 * np.arctan(rho / (2.0 * dem.radius_m))
+        radius = dem.radius_m + np.nan_to_num(dem.sample_height_m(x, y))
+        scale = np.divide(radius * np.sin(colatitude), rho, out=np.ones_like(rho), where=rho > 0)
+        world_x, world_y = y * scale, x * scale
+        column[rows] = (world_x * towards_sun[0] + world_y * towards_sun[1]) / step
+        row[rows] = (world_y * towards_sun[0] - world_x * towards_sun[1]) / step
+
+    # 빛의 면 격자는 그 픽셀들을 덮는 만큼만 잡는다. grid 전체가 덮는 영역은 극을 중심으로 한
+    # 원으로 보고 그 원의 바깥은 계산하지 않는다 (정사각형 모서리는 가장 가까운 값으로 채운다)
+    def covering(position: NDArray[np.float32]) -> NDArray[np.float64]:
+        low, high = np.clip(
+            [math.floor(position.min()), math.ceil(position.max())],
+            -grid.center_px,
+            grid.center_px,
+        )
+        return np.arange(low, high + 1, dtype=np.float64) * step
+
+    along_axis, across_axis = covering(column), covering(row)
     far_step = step * FAR_COARSENING
-    far_axis = half + far_step * np.arange(1, math.ceil(reach_m / far_step) + 1, dtype=np.float64)
-    far_across = np.arange(-half, half + far_step, far_step, dtype=np.float64)
+    far_axis = along_axis[-1] + far_step * np.arange(
+        1, math.ceil(reach_m / far_step) + 1, dtype=np.float64
+    )
+    far_across = np.arange(across_axis[0], across_axis[-1] + far_step, far_step, dtype=np.float64)
     far_along, far_height = _sheet_coordinates(dem, *_mesh(far_axis, far_across), towards_sun)
 
     offsets = (np.arange(DISC_STRIPS) + 0.5) * (2.0 / DISC_STRIPS) - 1.0
     slopes = np.tan(elevation + np.radians(offsets * SUN_RADIUS_DEG))
     weights = np.sqrt(1.0 - offsets**2)  # 원반에서 그 고도의 띠가 차지하는 넓이
     weights = (weights / weights.sum()).astype(np.float32)
-    # 격자 밖(태양 쪽) 지형이 각 빛의 면에 드리우는 문턱값, 띠마다
+    # 빛의 면 격자 밖(태양 쪽) 지형이 각 빛의 면에 드리우는 문턱값, 띠마다
     beyond = [
         np.interp(
-            axis,
+            across_axis,
             far_across,
             np.where(np.isnan(far_height), -np.inf, far_height - far_along * slope).max(axis=1),
         )
         for slope in slopes
     ]
 
-    # 빛의 면 격자: 열 = 태양 쪽 거리, 행 = 빛의 면.
     # 면끼리는 독립이라 행 묶음으로 나눠 메모리를 아낀다
-    lit = np.zeros((grid.size_px, grid.size_px), dtype=np.float32)
-    for start in range(0, grid.size_px, _CHUNK_ROWS):
+    lit = np.zeros((across_axis.size, along_axis.size), dtype=np.float32)
+    for start in range(0, across_axis.size, _CHUNK_ROWS):
         rows = slice(start, start + _CHUNK_ROWS)
-        along, height = _sheet_coordinates(dem, *_mesh(axis, axis[rows]), towards_sun)
+        along, height = _sheet_coordinates(dem, *_mesh(along_axis, across_axis[rows]), towards_sun)
         for slope, weight, threshold in zip(slopes, weights, beyond, strict=True):
             key = np.where(np.isnan(height), -np.inf, height - along * slope)
             # 각 점보다 태양 쪽에 있는 점들의 최댓값
@@ -125,16 +170,11 @@ def sunlit_fraction(
             lit[rows] += weight * (key > ahead - _TOLERANCE_M)
 
     # 빛의 면 격자에서 극 입체투영 격자로 옮긴다
-    image = np.empty_like(lit)
-    for start in range(0, grid.size_px, _CHUNK_ROWS):
+    image = np.empty(shape, dtype=np.float32)
+    first_row, first_column = across_axis[0] / step, along_axis[0] / step
+    for start in range(0, window.height_px, _CHUNK_ROWS):
         rows = slice(start, start + _CHUNK_ROWS)
-        x, y = _mesh(axis, -axis[rows])
-        rho = np.hypot(x, y)
-        colatitude = 2.0 * np.arctan(rho / (2.0 * dem.radius_m))
-        radius = dem.radius_m + np.nan_to_num(dem.sample_height_m(x, y))
-        scale = np.divide(radius * np.sin(colatitude), rho, out=np.ones_like(rho), where=rho > 0)
-        world_x, world_y = y * scale, x * scale
-        column = (world_x * towards_sun[0] + world_y * towards_sun[1]) / step + grid.center_px
-        row = (world_y * towards_sun[0] - world_x * towards_sun[1]) / step + grid.center_px
-        image[rows] = map_coordinates(lit, [row, column], order=1, mode="nearest")
+        image[rows] = map_coordinates(
+            lit, [row[rows] - first_row, column[rows] - first_column], order=1, mode="nearest"
+        )
     return image

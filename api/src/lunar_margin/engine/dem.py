@@ -6,6 +6,7 @@
 """
 
 import math
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, Self
 
@@ -129,6 +130,43 @@ class RasterDem:
         top = h[r0, c0] * (1 - fc) + h[r0, c0 + 1] * fc
         bottom = h[r0 + 1, c0] * (1 - fc) + h[r0 + 1, c0 + 1] * fc
         return np.where(inside, (top * (1 - fr) + bottom * fr).astype(np.float64), np.nan)
+
+
+class HeightField(Protocol):
+    """극 입체투영 좌표(m)로 높이를 읽을 수 있는 것. 이 모듈의 DEM이 모두 이를 만족한다."""
+
+    @property
+    def radius_m(self) -> float: ...
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]: ...
+
+
+class LayeredHeights:
+    """여러 DEM을 겹친 높이: 앞선 것의 값을 쓰고, 값이 없는(NaN) 곳만 다음 것으로 메운다.
+
+    좁고 세밀한 DEM(5 m 지역)을 넓은 DEM 위에 얹을 때 쓴다. 모두 같은 극 입체투영이어야 한다.
+    """
+
+    def __init__(self, layers: Sequence[HeightField]) -> None:
+        if not layers:
+            raise ValueError("at least one layer is needed")
+        if any(abs(layer.radius_m - layers[0].radius_m) > 1e-6 for layer in layers):
+            raise ValueError("all layers must use the same reference sphere")
+        self._layers = tuple(layers)
+        self.radius_m = layers[0].radius_m
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        values = self._layers[0].sample_height_m(x_m, y_m)
+        for layer in self._layers[1:]:
+            missing = np.isnan(values)
+            if not missing.any():
+                break
+            values = np.where(missing, layer.sample_height_m(x_m, y_m), values)
+        return values
 
 
 class Dem(Protocol):
