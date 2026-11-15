@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from lunar_margin.app.analysis import get_settings
 from lunar_margin.app.settings import Settings
 
-LAYERS = frozenset({"horizon", "normal"})
+LAYERS = frozenset({"horizon", "normal", "normal-wide"})
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 _CACHE = {"Cache-Control": "public, max-age=3600"}
 # meta는 어떤 레벨·타일이 있는지 알려 주므로 캐시된 사본을 그냥 쓰지 못하게 한다

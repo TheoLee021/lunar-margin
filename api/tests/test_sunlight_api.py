@@ -21,11 +21,14 @@ from lunar_margin.app.settings import Settings
 from lunar_margin.app.sunlight import (
     DetailLevel,
     DetailRegion,
+    NoWideMap,
+    WideMap,
     detail_levels,
     get_renderer,
     get_sun_finder,
     make_renderer,
     sunlight_grid,
+    wide_sunlight_grid,
 )
 from lunar_margin.engine.dem import PolarDem, RasterDem
 from lunar_margin.engine.sunlight import SunlightGrid
@@ -371,3 +374,123 @@ def test_the_sun_direction_without_spice_kernels_is_503_not_500(tmp_path: Path) 
     )
 
     assert response.status_code == 503
+
+
+# 넓은 지도: 200 m 격자(극에서 +-15 km). 좁은 지도(+-5 km)의 DEM에는 없는 둑이 y 10.0~10.2 km에 있다
+WIDE_GRID = SunlightGrid(pixel_size_m=200.0, center_px=75)
+
+
+def wide_dem() -> PolarDem:
+    label = PolarGridLabel(401, 401, 100.0, 200.0, 200.0, 1737.4, 1737.4, -90.0)
+    heights = np.zeros((401, 401), dtype=np.float32)
+    heights[98:101, :] = 0.1  # 행 r은 y = (200 - r) * 100 m. 높이는 km
+    return PolarDem(heights, label)
+
+
+@pytest.fixture(scope="module")
+def wide() -> TestClient:
+    label = PolarGridLabel(401, 401, 100.0, 200.0, 200.0, 1737.4, 1737.4, -90.0)
+    dem = PolarDem(np.zeros((401, 401), dtype=np.float32), label)
+    app = create_app(Settings())
+    renderer = make_renderer(
+        dem, GRID, reach_m=5_000.0, wide=lambda: WideMap(dem=wide_dem(), grid=WIDE_GRID)
+    )
+    app.dependency_overrides[get_renderer] = lambda: renderer
+    return TestClient(app)
+
+
+def test_the_wide_map_is_a_grey_png_of_its_own_grid_from_its_own_dem(wide: TestClient) -> None:
+    # 태양은 경도 0° 쪽(이미지 위쪽) 고도 5°: 둑의 그림자는 뒤쪽 끝(y = 10.0 km)에서 1143 m 이어진다
+    response = wide.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert "max-age" in response.headers["cache-control"]
+    width, height, image = decode_png(response.content)
+    assert (width, height) == (WIDE_GRID.size_px, WIDE_GRID.size_px)
+    assert np.array_equal(image[..., 0], image[..., 1])
+    assert np.array_equal(image[..., 0], image[..., 2])
+    assert np.all(image[..., 3] == 255)
+
+    def at(y_m: float) -> int:
+        return int(image[WIDE_GRID.center_px - round(y_m / WIDE_GRID.pixel_size_m), 75, 0])
+
+    assert at(9_600.0) == 0  # 둑 뒤 400 m: 그림자 안
+    assert at(8_000.0) == 255  # 둑 뒤 2 km: 그림자 밖
+    assert at(12_000.0) == 255  # 둑 앞(태양 쪽)
+
+
+def test_without_the_wide_data_only_the_wide_map_is_unavailable(client: TestClient) -> None:
+    # 240 m DEM이나 normal-wide 타일을 아직 받지 않은 서버: 85°S 지도는 그대로 돌려준다
+    sun = {"x": 1.0, "y": 0.0, "z": 0.0}
+
+    assert client.get("/sunlight/south-pole-wide.png", params=sun).status_code == 503
+    assert client.get("/sunlight/south-pole.png", params=sun).status_code == 200
+
+
+def test_the_wide_map_is_served_as_soon_as_its_data_appears() -> None:
+    label = PolarGridLabel(401, 401, 100.0, 200.0, 200.0, 1737.4, 1737.4, -90.0)
+    dem = PolarDem(np.zeros((401, 401), dtype=np.float32), label)
+    available: list[WideMap] = []
+
+    def load() -> WideMap:
+        if not available:
+            raise NoWideMap
+        return available[0]
+
+    app = create_app(Settings())
+    renderer = make_renderer(dem, GRID, reach_m=5_000.0, wide=load)
+    app.dependency_overrides[get_renderer] = lambda: renderer
+    client = TestClient(app)
+
+    assert client.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG).status_code == 503
+    available.append(WideMap(dem=dem, grid=WIDE_GRID))  # 서버가 떠 있는 동안 데이터를 받았다
+    assert client.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG).status_code == 200
+
+
+def test_the_wide_map_needs_a_usable_direction(wide: TestClient) -> None:
+    for params in ({"x": 0.0, "y": 0.0, "z": -1.0}, {"x": 1.0, "y": 0.0}):
+        assert wide.get("/sunlight/south-pole-wide.png", params=params).status_code == 422
+
+
+def test_the_wide_map_is_kept_apart_from_the_map_of_the_same_direction(wide: TestClient) -> None:
+    narrow = wide.get("/sunlight/south-pole.png", params=SUN_5_DEG)
+    again = wide.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG)
+
+    assert decode_png(narrow.content)[:2] == (GRID.size_px, GRID.size_px)
+    assert decode_png(again.content)[:2] == (WIDE_GRID.size_px, WIDE_GRID.size_px)
+
+
+def test_the_wide_map_waits_in_the_same_queue_as_the_whole_map() -> None:
+    dem = GatedDem()
+    app = create_app(Settings())
+    renderer = make_renderer(
+        dem, GRID, reach_m=5_000.0, max_waiting=0, wide=lambda: WideMap(dem=dem, grid=WIDE_GRID)
+    )
+    app.dependency_overrides[get_renderer] = lambda: renderer
+    client = TestClient(app)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        whole = pool.submit(get_map, client, 1.0, 0.0)
+        assert dem.started.wait(timeout=20)  # 85°S 지도를 계산 중이다
+
+        busy = client.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG)
+
+        assert busy.status_code == 429
+        assert int(busy.headers["retry-after"]) > 0
+        dem.gate.set()
+        assert whole.result(timeout=20) == 200
+    assert client.get("/sunlight/south-pole-wide.png", params=SUN_5_DEG).status_code == 200
+
+
+def test_the_wide_grid_is_the_one_the_wide_tiles_name() -> None:
+    meta = {"layer": "normal-wide", "sunlight": {"pixel_size_m": 640.0, "center_px": 1455}}
+
+    assert wide_sunlight_grid(meta) == SunlightGrid(pixel_size_m=640.0, center_px=1455)
+
+
+def test_a_wide_grid_too_large_for_one_request_is_refused() -> None:
+    # 60°S까지를 80 m로 덮으면 23277 x 23277 픽셀: 한 요청이 계산할 수 있는 크기가 아니다
+    meta = {"layer": "normal-wide", "sunlight": {"pixel_size_m": 80.0, "center_px": 11638}}
+
+    with pytest.raises(NoWideMap):
+        wide_sunlight_grid(meta)

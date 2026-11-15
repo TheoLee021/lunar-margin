@@ -15,7 +15,7 @@ from lunar_margin.engine.candidates.horizon_table import (
     build_horizon_table,
 )
 from lunar_margin.engine.dem import PolarDem
-from lunar_margin.pipeline.overlay_tiles import build_overlay_tiles
+from lunar_margin.pipeline.overlay_tiles import build_overlay_tiles, build_wide_normal_tiles
 from lunar_margin.pipeline.pds_label import PolarGridLabel
 
 
@@ -78,6 +78,24 @@ def test_the_normal_layer_serves_the_tiles_of_its_finer_levels(served: Path) -> 
         assert beyond.status_code == 404
     # 수평선 레이어에는 세밀 레벨이 없다
     assert client.get("/tiles/horizon/1/0/0.png").status_code == 404
+
+
+def test_the_wide_layer_is_served_once_it_has_been_built(served: Path, tmp_path: Path) -> None:
+    label = PolarGridLabel(101, 101, 100.0, 50.0, 50.0, 1737.4, 1737.4, -90.0)
+    dem = PolarDem(np.zeros((101, 101), dtype=np.float32), label)
+    build_wide_normal_tiles(dem, tmp_path / "tiles", radius_m=4_000.0, pixel_size_m=500.0)
+    client = client_for(tmp_path)
+
+    meta = client.get("/tiles/normal-wide/meta.json")
+    tile = client.get("/tiles/normal-wide/0/0/0.png")
+
+    assert meta.status_code == 200 and meta.json()["layer"] == "normal-wide"
+    assert meta.headers["cache-control"] == "no-cache"
+    assert tile.status_code == 200 and tile.headers["content-type"] == "image/png"
+    assert decode_png(tile.content)[:2] == (17, 17)
+    # 굽지 않은 곳(240 m DEM을 받지 않은 서버)에서는 다른 레이어는 그대로이고 이 레이어만 404다
+    assert client_for(served).get("/tiles/normal-wide/meta.json").status_code == 404
+    assert client_for(served).get("/tiles/normal/meta.json").status_code == 200
 
 
 def test_meta_is_revalidated_on_every_load_while_tiles_may_be_cached(served: Path) -> None:

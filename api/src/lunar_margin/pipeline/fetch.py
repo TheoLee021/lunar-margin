@@ -17,6 +17,7 @@ from lunar_margin.pipeline.sources import (
     DEM_SOURCES,
     SFS_SOURCES,
     SPICE_SOURCES,
+    WIDE_DEM,
     Source,
     ZipMemberSource,
 )
@@ -190,6 +191,13 @@ def fetch_sfs(data_dir: Path) -> None:
         ensure_zip_member(source, data_dir / "dem" / "sfs")
 
 
+def fetch_wide(data_dir: Path) -> None:
+    """60°S까지 덮는 240 m DEM을 DATA_DIR/dem에 받는다 (넓은 구역의 경사 타일과 햇빛 지도용)."""
+    for source in DEM_SOURCES[WIDE_DEM]:
+        print(f"[dem] {source.filename}", flush=True)
+        ensure_file(source, data_dir / "dem")
+
+
 def fetch_all(data_dir: Path, dem: str = "80s_80m", fallback_dem: str | None = "75s_120m") -> None:
     """주 DEM, 보충 DEM, SPICE 커널을 모두 내려받는다. 보충 DEM은 80 m DEM 바깥을 메운다."""
     for name in (dem, fallback_dem):
@@ -219,9 +227,16 @@ def main() -> None:
         action="store_true",
         help="후보 지역 13곳의 5 m DEM도 받는다 (약 400 MB, 근접 화면의 20 m·5 m 타일용)",
     )
+    parser.add_argument(
+        "--wide",
+        action="store_true",
+        help="60°S까지 덮는 240 m DEM도 받는다 (약 240 MB, 85°S 밖의 경사 타일과 햇빛 지도용)",
+    )
     args = parser.parse_args()
     fallback = None if args.fallback_dem == "none" else args.fallback_dem
     fetch_all(Settings().data_dir, args.dem, fallback)
+    if args.wide:
+        fetch_wide(Settings().data_dir)
     if args.sfs:
         fetch_sfs(Settings().data_dir)
     print("done")
