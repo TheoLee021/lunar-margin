@@ -1,10 +1,14 @@
 """GET /sunlight/south-pole.png: 태양 방향 하나의 햇빛 지도 (계약: docs/api.md)."""
 
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from numpy.typing import NDArray
 from png_decode import decode_png
 
 from lunar_margin.app.analysis import get_settings
@@ -100,3 +104,70 @@ def test_the_grid_never_grows_beyond_what_one_request_can_compute() -> None:
     ]
 
     assert sunlight_grid(levels) == SunlightGrid(pixel_size_m=80.0, center_px=1894)
+
+
+class GatedDem(PolarDem):
+    """높이를 처음 읽을 때 문이 열리기를 기다리는 DEM: 계산이 진행 중인 상태를 만든다."""
+
+    def __init__(self) -> None:
+        label = PolarGridLabel(401, 401, 100.0, 200.0, 200.0, 1737.4, 1737.4, -90.0)
+        super().__init__(np.zeros((401, 401), dtype=np.float32), label)
+        self.started = Event()
+        self.gate = Event()
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        self.started.set()
+        assert self.gate.wait(timeout=20), "the test never opened the gate"
+        return super().sample_height_m(x_m, y_m)
+
+
+@pytest.fixture
+def gated() -> Iterator[tuple[TestClient, GatedDem]]:
+    dem = GatedDem()
+    app = create_app(Settings())
+    renderer = make_renderer(dem, GRID, reach_m=5_000.0, max_waiting=0)
+    app.dependency_overrides[get_renderer] = lambda: renderer
+    yield TestClient(app), dem
+    dem.gate.set()
+
+
+def get_map(client: TestClient, x: float, y: float) -> int:
+    return client.get("/sunlight/south-pole.png", params={"x": x, "y": y, "z": 0.0}).status_code
+
+
+def test_when_too_many_maps_are_already_waiting_a_new_one_is_turned_away(
+    gated: tuple[TestClient, GatedDem],
+) -> None:
+    client, dem = gated
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(get_map, client, 1.0, 0.0)
+        assert dem.started.wait(timeout=20)  # 첫 요청이 계산 중이다
+
+        busy = client.get("/sunlight/south-pole.png", params={"x": 0.0, "y": 1.0, "z": 0.0})
+
+        assert busy.status_code == 429
+        assert int(busy.headers["retry-after"]) > 0
+        dem.gate.set()
+        assert first.result(timeout=20) == 200
+    # 계산이 끝나면 다시 받는다
+    assert get_map(client, 0.0, 1.0) == 200
+
+
+def test_a_remembered_map_is_served_even_while_another_is_being_computed(
+    gated: tuple[TestClient, GatedDem],
+) -> None:
+    client, dem = gated
+    dem.gate.set()
+    assert get_map(client, 1.0, 0.0) == 200  # 기억해 둘 지도
+    dem.gate.clear()
+    dem.started.clear()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        other = pool.submit(get_map, client, 0.0, 1.0)
+        assert dem.started.wait(timeout=20)
+
+        assert get_map(client, 1.0, 0.0) == 200
+
+        dem.gate.set()
+        assert other.result(timeout=20) == 200

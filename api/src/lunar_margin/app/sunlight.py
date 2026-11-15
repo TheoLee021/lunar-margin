@@ -6,10 +6,11 @@
 
 import json
 import math
+from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from pathlib import Path
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 from typing import Annotated, Self
 
 import numpy as np
@@ -33,6 +34,16 @@ _CACHE = {"Cache-Control": "public, max-age=3600"}
 # 방향을 이 자리까지 반올림해 같은 요청을 알아본다 (0.006°: 태양 지름의 1%)
 _DIRECTION_DECIMALS = 4
 _RECENT_MAPS = 8
+# 계산 중인 요청 뒤에 줄 설 수 있는 요청 수. 넘으면 429로 돌려보낸다: 기다리는 요청마다
+# 서버의 작업 스레드를 하나씩 붙잡아서, 줄이 길어지면 다른 API까지 느려진다
+_MAX_WAITING = 4
+_RETRY_AFTER_SECONDS = 5
+
+
+class SunlightBusy(Exception):
+    """지도 계산이 밀려 있어 이 요청을 줄에 세우지 않았다."""
+
+
 # 한 요청이 계산할 격자의 한 변 최대 픽셀 수. 3789(80 m)에 약 3초·0.8 GB이고 넓이에 비례해 는다
 _MAX_GRID_PX = 4096
 
@@ -58,20 +69,53 @@ class SunDirection(BaseModel):
         return (x, y, z)
 
 
-def make_renderer(dem: Dem, grid: SunlightGrid, *, reach_m: float = 200_000.0) -> Renderer:
-    """방향 -> PNG 바이트. 계산은 한 번에 하나만 하고(메모리 약 0.8 GB), 최근 결과를 기억한다."""
-    lock = Lock()
+def make_renderer(
+    dem: Dem,
+    grid: SunlightGrid,
+    *,
+    reach_m: float = 200_000.0,
+    max_waiting: int = _MAX_WAITING,
+) -> Renderer:
+    """방향 -> PNG 바이트. 계산은 한 번에 하나만 하고(메모리 약 0.8 GB), 최근 결과를 기억한다.
 
-    @lru_cache(maxsize=_RECENT_MAPS)
-    def render(direction: Direction) -> bytes:
-        grey = np.round(sunlit_fraction(dem, direction, grid, reach_m=reach_m) * 255.0)
-        rgba = np.repeat(grey.astype(np.uint8)[..., None], 4, axis=2)
-        rgba[..., 3] = 255
-        return encode_png(rgba)
+    기억한 방향은 바로 돌려준다. 새 방향은 계산 중인 요청 뒤에 max_waiting개까지 줄을 서고,
+    그보다 많으면 SunlightBusy를 낸다.
+    """
+    recent: OrderedDict[Direction, bytes] = OrderedDict()
+    recent_lock = Lock()
+    computing = Lock()
+    slots = BoundedSemaphore(1 + max_waiting)
+
+    def remembered(direction: Direction) -> bytes | None:
+        with recent_lock:
+            png = recent.get(direction)
+            if png is not None:
+                recent.move_to_end(direction)
+            return png
 
     def renderer(direction: Direction) -> bytes:
-        with lock:  # 같은 방향을 기다리던 요청은 계산이 끝난 뒤 기억된 결과를 받는다
-            return render(direction)
+        png = remembered(direction)
+        if png is not None:
+            return png
+        if not slots.acquire(blocking=False):
+            raise SunlightBusy
+        try:
+            with computing:
+                # 같은 방향을 기다리던 요청은 앞선 계산의 결과를 받는다
+                png = remembered(direction)
+                if png is None:
+                    fraction = sunlit_fraction(dem, direction, grid, reach_m=reach_m)
+                    grey = np.round(fraction * 255.0).astype(np.uint8)
+                    rgba = np.repeat(grey[..., None], 4, axis=2)
+                    rgba[..., 3] = 255
+                    png = encode_png(rgba)
+                    with recent_lock:
+                        recent[direction] = png
+                        while len(recent) > _RECENT_MAPS:
+                            recent.popitem(last=False)
+                return png
+        finally:
+            slots.release()
 
     return renderer
 
@@ -120,6 +164,12 @@ def south_pole(
 ) -> Response:
     try:
         png = render(sun.unit())
+    except SunlightBusy as error:
+        raise HTTPException(
+            status_code=429,
+            detail="Sunlight map busy; retry shortly",
+            headers={"Retry-After": str(_RETRY_AFTER_SECONDS)},
+        ) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return Response(content=png, media_type="image/png", headers=_CACHE)
