@@ -4,7 +4,6 @@ Not a flight-ready trajectory optimizer, not coupled to the dated transfer,
 and not an operational landing safety certification.
 """
 
-import math
 from datetime import timedelta
 from threading import BoundedSemaphore
 from typing import Annotated, Literal
@@ -17,10 +16,8 @@ from lunar_margin.app.analysis import get_dem
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.descent_los import LosStatus, terrain_los
 from lunar_margin.engine.descent_reference import (
-    FlightSample,
     Lander,
     PathResult,
-    PathStatus,
     evaluate_alternatives,
     pdi_from_target,
 )
