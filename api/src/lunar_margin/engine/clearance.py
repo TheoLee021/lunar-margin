@@ -41,7 +41,5 @@ def terrain_clearance_diagnostics(
     positive = clearance[clearance > 0.0]
     return ClearanceDiagnostics(
         clearance_deg=clearance,
-        visible_clearance_p10_deg=(
-            float(np.percentile(positive, 10)) if positive.size else None
-        ),
+        visible_clearance_p10_deg=(float(np.percentile(positive, 10)) if positive.size else None),
     )
