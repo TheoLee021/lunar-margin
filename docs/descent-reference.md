@@ -21,7 +21,7 @@ feasibility result*, **not** a safe landing certificate.
 - Fifteen candidate shapes per target (5 durations × 3 loft heights);
   select the feasible case with minimum *calculated* propellant among
   those shapes, or report why no tested shape passed.
-- LOLA DEM sampled along the entire candidate track. Terrain clearance
+- Propulsion acceleration and mass depletion integrated on a separate <=0.5 s grid, independent of the ~5 s reporting grid. This reduces missed inter-sample thrust peaks, but is not a continuous-time guarantee.\n- LOLA DEM sampled along the entire candidate track. Terrain clearance
   evaluated with dense time samples (initial-speed-based 40 m track
   spacing, <=0.2 s) **independently** of 5-second thrust samples.
   NaN data yields TERRAIN_UNKNOWN, never assumed flat.
@@ -97,7 +97,7 @@ vendor lander spec. DEM and SPICE data remain external to Git. Run with
    communications requirement evaluation. Earth LOS on the moving
    descent profile must not be confused with the stationary site's
    longer-term Earth visible fraction.
-6. **No flight validation yet.** Synthetic flat-surface, ridge,
+6. **Independent dynamics consistency checks, not flight validation.** A separate SciPy `solve_ivp` forward integration in an inertial frame checks the polynomial-derived acceleration, rotating-frame terms and endpoint, and an independently sampled mass integral checks consumption. A targeted regression verifies that a thrust peak missed by 5 s display sampling fails a marginal engine limit. These checks use the same idealized gravity, rotation and derived acceleration as the model; they do **not** establish realistic closed-loop guidance or actuator feasibility. Synthetic flat-surface, ridge,
    missing-DEM, thrust/fuel and alternate-target unit tests are
    reproducible. A separate real-LOLA case, reference-mission
    cross-check, trajectory integration with an independent solver,
@@ -133,3 +133,23 @@ References for the algorithm family:
   Controllable Sets*, https://www.merl.com/publications/TR2024-004
 
 No claim is made that these works endorse or validate this prototype.
+
+
+## Scoped physics verification update (2026-11-15)
+
+- Scope is confined to the existing descent engine, its dedicated physics
+  tests, and this document. No changes to shared transfer, DEM, RF, SPICE,
+  frontend, or site-ranking modules; PR remains Draft.
+- Before correction, a 600 s, zero-loft synthetic flat-DEM profile had a
+  ~6169.34 N peak on the 5 s sampling grid but a ~6170.25 N peak with
+  0.1 s sampling. Thus a 6170 N engine could be reported as passing.
+  The propulsion pass/fail computation now uses <=0.5 s samples, while
+  the public trajectory sample count remains unchanged.
+- The new forward-integration test verifies internal model consistency,
+  not a flown trajectory. It uses the time-dependent acceleration derived
+  analytically from the prescribed polynomial, so zero endpoint error
+  does not validate an actual guidance/controller implementation.
+- Verification gaps remain: rigorous time-varying SPICE frame mapping;
+  actuator dynamics, throttle/slew/gimbal limits; sampled-versus-continuous
+  thrust/terrain guarantees; navigation dispersions; uncertainty in terrain
+  heights; and an independent published descent benchmark.
