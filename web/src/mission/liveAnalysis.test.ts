@@ -28,6 +28,7 @@ function response(): Analysis {
       visible: [false, false],
       terrain_clearance_deg: [-1, -1],
     },
+    visible_clearance_p10_deg: null,
     windows: [],
     dark_periods: [{ start: params.start, end: params.end }],
   }
