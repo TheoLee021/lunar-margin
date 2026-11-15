@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from lunar_margin.app.analysis import get_dem
 from lunar_margin.engine.dem import PolarDem
-from lunar_margin.engine.viewshed import horizontal_rays, local_viewshed
+from lunar_margin.engine.viewshed import grid_sightlines, horizontal_rays, local_viewshed
 
 router = APIRouter()
 
@@ -17,6 +17,7 @@ class Viewshed(BaseModel):
     center_y_m: float
     cells: str
     eye_height_m: float
+    targets: list[tuple[tuple[float, float, float], tuple[float, float, float] | None]]
     rays: list[tuple[float, bool]]
 
 
@@ -34,5 +35,12 @@ def viewshed(
     cx, cy = dem.lonlat_to_xy(lat, lon)
     cells = (mask + ord("0")).tobytes().decode("ascii")
     return Viewshed(
-        lat=lat, lon=lon, center_x_m=cx, center_y_m=cy, cells=cells, eye_height_m=eye, rays=rays
+        lat=lat,
+        lon=lon,
+        center_x_m=cx,
+        center_y_m=cy,
+        cells=cells,
+        eye_height_m=eye,
+        rays=rays,
+        targets=grid_sightlines(dem, lat, lon),
     )

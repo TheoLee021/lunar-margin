@@ -1,12 +1,14 @@
 import { z } from 'zod'
 import { getJson } from './client'
 
+const position = z.tuple([z.number(), z.number(), z.number()])
 const schema = z.object({
   lat: z.number(),
   lon: z.number(),
   center_x_m: z.number(),
   center_y_m: z.number(),
   eye_height_m: z.number(),
+  targets: z.array(z.tuple([position, position.nullable()])),
   rays: z.array(z.tuple([z.number().min(0).max(5000), z.boolean()])).length(24),
   cells: z
     .string()

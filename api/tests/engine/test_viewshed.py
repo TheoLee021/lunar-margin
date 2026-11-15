@@ -1,7 +1,7 @@
 import numpy as np
 
 from lunar_margin.engine.dem import PolarDem
-from lunar_margin.engine.viewshed import horizontal_rays, local_viewshed
+from lunar_margin.engine.viewshed import grid_sightlines, horizontal_rays, local_viewshed
 from lunar_margin.pipeline.pds_label import PolarGridLabel
 
 
@@ -24,3 +24,21 @@ def test_horizontal_ray_stops_on_near_face_of_first_ridge() -> None:
     distance, hit = rays[6]  # East. Ridge rises from 0 to 100 m between 320 and 400 m.
     assert hit and 321 < distance < 323
     assert rays[18] == (5000, False)
+
+
+def test_grid_target_behind_ridge_has_first_hit_and_near_target_is_visible() -> None:
+    terrain = np.zeros((131, 131), dtype=np.float32)
+    terrain[:, 80] = 0.1  # 1200 m east; base starts at 1120 m
+    label = PolarGridLabel(131, 131, 80, 65, 65, 1737.4, 0, -90)
+    dem = PolarDem(terrain, label)
+    targets = grid_sightlines(dem, -90, 0)
+    east = {
+        round(dem.lonlat_to_xy(lat, lon)[0]): hit
+        for (lon, lat, _), hit in targets
+        if abs(lon - 90) < 1e-6
+    }
+    assert east[800] is None
+    hit = east[1600]
+    assert hit is not None
+    x, _ = dem.lonlat_to_xy(hit[1], hit[0])
+    assert 1120 < x < 1130

@@ -184,7 +184,10 @@ export function MissionMoonViewer({
                 <span className="text-amber-400">⊙ 관측점</span>　
                 <span className="text-green-400">● 보임</span>　
                 <span className="text-red-400">● 가려짐</span>
-                <div>수평 시선 15° 간격 · 주황색 끝점은 첫 지형 충돌</div>
+                <div>
+                  격자점 800 m 간격 · 주황점은 첫 차폐 지점 · 빨간 선은 차폐
+                  구간
+                </div>
               </>
             ) : (
               <button type="button" onClick={() => retry((n) => n + 1)}>

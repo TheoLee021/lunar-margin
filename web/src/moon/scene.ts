@@ -4,8 +4,6 @@ import {
   ArcType,
   Color,
   Entity,
-  Matrix4,
-  Transforms,
   BoundingSphere,
   Cartesian2,
   Cartesian3,
@@ -955,76 +953,65 @@ export async function createMoonScene(
       for (const entity of rayEntities) viewer.entities.remove(entity)
       rayEntities.length = 0
       if (map) {
-        const origin = Cartesian3.fromDegrees(
-          map.lon,
-          map.lat,
-          map.eye_height_m,
-          Ellipsoid.MOON,
-        )
-        const frame = Transforms.eastNorthUpToFixedFrame(origin, Ellipsoid.MOON)
-        const ends = map.rays.map(([range], i) => {
-          const angle = (i * Math.PI) / 12
-          return Matrix4.multiplyByPoint(
-            frame,
-            new Cartesian3(range * Math.sin(angle), range * Math.cos(angle), 0),
-            new Cartesian3(),
-          )
-        })
-        const ground = [origin, ...ends].map((position) =>
-          Cartographic.fromCartesian(position, Ellipsoid.MOON),
-        )
-        const draw = (samples: (Cartographic | undefined)[]) => {
-          if (generation !== rayGeneration || viewer.isDestroyed()) return
-          const startHeight = samples[0]?.height
-          const shift = Number.isFinite(startHeight)
-            ? startHeight! + 2 - map.eye_height_m
-            : 0
-          const start = Cartesian3.fromDegrees(
-            map.lon,
-            map.lat,
-            map.eye_height_m + shift,
-            Ellipsoid.MOON,
-          )
-          for (const [i, [range, hit]] of map.rays.entries()) {
-            if (!range) continue
-            const target = Cartographic.fromCartesian(ends[i]!, Ellipsoid.MOON)
-            const surfaceHeight = samples[i + 1]?.height
-            target.height =
-              hit && Number.isFinite(surfaceHeight)
-                ? surfaceHeight!
-                : target.height + shift
-            const end = Cartographic.toCartesian(target, Ellipsoid.MOON)
+        const draw = (heightShift: number) => {
+          if (viewer.isDestroyed() || generation !== rayGeneration) return
+          const position = ([lon, lat, height]: [number, number, number]) =>
+            Cartesian3.fromDegrees(
+              lon,
+              lat,
+              height + heightShift,
+              Ellipsoid.MOON,
+            )
+          for (const [target, hit] of map.targets) {
+            const end = position(target)
             rayEntities.push(
               viewer.entities.add({
-                polyline: {
-                  positions: [start, end],
-                  arcType: ArcType.NONE,
-                  width: 1.5,
-                  material: Color.AQUAMARINE,
-                  depthFailMaterial: Color.AQUAMARINE.withAlpha(0.45),
+                position: end,
+                point: {
+                  pixelSize: 4,
+                  color: hit === null ? Color.AQUAMARINE : Color.SALMON,
+                  disableDepthTestDistance: Infinity,
                 },
-                ...(hit
-                  ? {
-                      position: end,
-                      point: {
-                        pixelSize: 7,
-                        color: Color.ORANGERED,
-                        outlineWidth: 1,
-                        outlineColor: Color.WHITE,
-                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                      },
-                    }
-                  : {}),
+              }),
+            )
+            if (hit === null) continue
+            const first = position(hit)
+            rayEntities.push(
+              viewer.entities.add({
+                position: first,
+                point: {
+                  pixelSize: 6,
+                  color: Color.ORANGERED,
+                  outlineColor: Color.WHITE,
+                  outlineWidth: 1,
+                  disableDepthTestDistance: Infinity,
+                },
+                polyline: {
+                  positions: [first, end],
+                  arcType: ArcType.NONE,
+                  width: 1.4,
+                  material: Color.SALMON,
+                  depthFailMaterial: Color.SALMON,
+                },
               }),
             )
           }
         }
+        // Register all DEM points to the rendered surface at the observer, preserving line geometry.
         if (scene.sampleHeightSupported)
           void scene
-            .sampleHeightMostDetailed(ground)
-            .then(draw)
-            .catch(() => draw([]))
-        else draw([])
+            .sampleHeightMostDetailed([
+              Cartographic.fromDegrees(map.lon, map.lat),
+            ])
+            .then(([ground]) => {
+              draw(
+                ground && Number.isFinite(ground.height)
+                  ? ground.height + 2 - map.eye_height_m
+                  : 0,
+              )
+            })
+            .catch(() => draw(0))
+        else draw(0)
       }
       if (!map) {
         moonShader.setUniform('u_viewshedGrid', new Cartesian3())

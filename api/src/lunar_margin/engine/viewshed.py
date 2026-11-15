@@ -67,3 +67,43 @@ def horizontal_rays(
         fraction = clearance[previous] / (clearance[previous] - clearance[i])
         rays.append((float(distances[previous] + fraction * 5), True))
     return eye, rays
+
+
+def grid_sightlines(
+    dem: PolarDem, lat: float, lon: float
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float] | None]]:
+    """Target and optional first obstruction (lon, lat, height) for the display grid."""
+    cx, cy = dem.lonlat_to_xy(lat, lon)
+    eye = dem.height_at(lat, lon) + 2
+    step = CELL_M * 10
+    axis = np.arange(-6, 7, dtype=np.float64) * step
+    xx, yy = np.meshgrid(axis, axis)
+    distance = np.hypot(xx, yy)
+    inside = (distance > 0) & (distance <= RADIUS_M)
+    dx, dy = xx[inside], yy[inside]
+    curvature = distance[inside] ** 2 / (2 * dem.radius_m)
+    f = np.linspace(0, 1, RADIUS_M // 20 + 1)[:, None]
+    terrain = dem.sample_height_m(cx + f * dx, cy + f * dy)
+    sight = eye + f * (terrain[-1] - curvature - eye)
+    clearance = sight - (terrain - curvature * f**2)
+
+    def location(x: float, y: float, height: float) -> tuple[float, float, float]:
+        return (
+            float(np.degrees(np.arctan2(x, y))),
+            float(np.degrees(2 * np.arctan(np.hypot(x, y) / (2 * dem.radius_m))) - 90),
+            float(height),
+        )
+
+    result: list[tuple[tuple[float, float, float], tuple[float, float, float] | None]] = []
+    for col in np.flatnonzero(np.all(np.isfinite(clearance), axis=0)):
+        end = location(cx + dx[col], cy + dy[col], terrain[-1, col])
+        blocked = np.flatnonzero(clearance[1:-1, col] < 0)
+        hit = None
+        if blocked.size:
+            a = int(blocked[0])
+            u = clearance[a, col] / (clearance[a, col] - clearance[a + 1, col])
+            t = (a + u) / (len(f) - 1)
+            height = eye + t * (terrain[-1, col] - curvature[col] - eye) + t * t * curvature[col]
+            hit = location(cx + t * dx[col], cy + t * dy[col], height)
+        result.append((end, hit))
+    return result
