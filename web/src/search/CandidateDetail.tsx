@@ -14,6 +14,7 @@ import {
   scoreText,
 } from './derive'
 import { thresholdsFor } from './stepCopy'
+import { LandingGridPanel } from './LandingGridPanel'
 
 export type Selection =
   | { kind: 'candidate'; candidate: Candidate }
@@ -132,6 +133,8 @@ export function CandidateDetail({
           가시성을 바로 계산해서 볼 수 있습니다.
         </p>
       )}
+
+      <LandingGridPanel lat={Number(lat.toFixed(6))} lon={Number(lon.toFixed(6))} disabled={!analyzable} />
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center gap-3">
