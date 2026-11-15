@@ -403,7 +403,7 @@ export function PriceGrid({
                         {mean !== null ? (
                           <>
                             <small>
-                              {offer!.quoted_grid_count.toLocaleString()}개 격자
+                              {offer!.quoted_grid_count.toLocaleString()}개 격자{' '}
                               {draft.launchId
                                 ? '회사 모델 평균'
                                 : '최저 예상 비용 평균'}{' '}
