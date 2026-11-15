@@ -573,7 +573,9 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ## 격자 예약 (추가 계약)
 
-기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 Postgres 환경변수가 없거나 저장소에 연결할 수 없으면 503이다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
+기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 `RESERVATION_DATABASE_URL`이 있으면 직접 Postgres로 연결하고, 없으면 기존 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`로 서버 전용 RPC를 호출한다. 두 방식 모두 미설정이거나 저장소에 연결할 수 없으면 503이다. Supabase URL은 프로젝트 기본 주소 또는 `/rest/v1/` 주소를 지원한다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
+
+운영자 토큰이 `RESERVATION_ADMIN_TOKEN`에 있으면 기존처럼 직접 검증한다. Supabase 방식에서 이 변수가 없으면 private schema의 운영자 토큰 SHA-256 해시로 검증한다. 토큰이 없거나 틀리면 401, 해시가 아직 설정되지 않았거나 검증 저장소에 장애가 있으면 503이다. 서비스 키는 백엔드에만 보관하며 브라우저 운영자 토큰으로 사용하지 않는다.
 
 ### GET /candidates/runs/{run_id}/availability
 
