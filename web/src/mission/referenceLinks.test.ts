@@ -4,7 +4,7 @@ import { horizonsReferenceUrl, siteCoordinates } from './referenceLinks'
 describe('JPL Horizons reference links', () => {
   const site = { latitude: -89.7, longitude: 222.4, landing: '2027-01-10' }
 
-  it('builds a lunar-surface Horizons Sun ephemeris for the selected day', () => {
+  it('builds a lunar-surface Sun ephemeris', () => {
     const url = new URL(horizonsReferenceUrl(site, 'sun'))
     expect(url.origin).toBe('https://ssd.jpl.nasa.gov')
     expect(url.pathname).toBe('/api/horizons.api')
