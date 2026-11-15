@@ -575,7 +575,7 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 `RESERVATION_DATABASE_URL`이 있으면 직접 Postgres로 연결하고, 없으면 기존 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`로 서버 전용 RPC를 호출한다. 두 방식 모두 미설정이거나 저장소에 연결할 수 없으면 503이다. Supabase URL은 프로젝트 기본 주소 또는 `/rest/v1/` 주소를 지원한다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
 
-운영자 토큰이 `RESERVATION_ADMIN_TOKEN`에 있으면 기존처럼 직접 검증한다. Supabase 방식에서 이 변수가 없으면 private schema의 운영자 토큰 SHA-256 해시로 검증한다. 토큰이 없거나 틀리면 401, 해시가 아직 설정되지 않았거나 검증 저장소에 장애가 있으면 503이다. 서비스 키는 백엔드에만 보관하며 브라우저 운영자 토큰으로 사용하지 않는다.
+공개 데모 정책에 따라 예약 확정·이력 조회·취소는 로그인과 운영자 토큰 없이 누구나 사용할 수 있다. 다른 방문자의 예약도 취소할 수 있다. `RESERVATION_ADMIN_TOKEN`이나 Supabase 운영자 해시는 사용하지 않으며 `Authorization` 헤더도 필요 없다. Supabase 서비스 키는 백엔드에만 보관한다. 중복 예약 제약·입력 검증·저장소 장애 시 503은 유지한다.
 
 ### GET /candidates/runs/{run_id}/availability
 
@@ -603,7 +603,7 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ### POST /reservations
 
-운영자 전용. `Authorization: Bearer <RESERVATION_ADMIN_TOKEN>` 필요. 등록과 확정을 하나의 트랜잭션으로 수행한다.
+공개 데모 예약, 인증 헤더 없음. 등록과 확정을 하나의 트랜잭션으로 수행한다.
 
 ```json
 {
@@ -616,7 +616,7 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 }
 ```
 
-회사·임무명은 공백 제거 후 1~120자, 격자는 남극 고정 500m 셀, 기간은 정수 1~365일이다. 현재 분석 가능 기간(1850-01-01~2150-01-01 UTC) 안에 있어야 한다. cell ID·확정 시각·상태는 클라이언트에서 받지 않고 서버에서 생성한다. 겹치는 확정 예약이 있으면 409, 입력 오류 422, 운영자 토큰 없음/오류 401, 운영자 기능 미설정 503. 충돌이 나면 availability를 다시 조회한다.
+회사·임무명은 공백 제거 후 1~120자, 격자는 남극 고정 500m 셀, 기간은 정수 1~365일이다. 현재 분석 가능 기간(1850-01-01~2150-01-01 UTC) 안에 있어야 한다. cell ID·확정 시각·상태는 클라이언트에서 받지 않고 서버에서 생성한다. 겹치는 확정 예약이 있으면 409, 입력 오류 422, 저장소 미설정/연결 실패는 503이다. 충돌이 나면 availability를 다시 조회한다.
 
 성공 201, 예약 응답:
 
@@ -638,11 +638,11 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ### GET /reservations?limit=100&offset=0
 
-운영자 전용, `Cache-Control: no-store`. `limit` 1~100, `offset` 0 이상. 확정 시각 내림차순·UUID 순으로 `{"reservations": [예약 응답...]}`. 취소된 이력도 포함한다.
+공개 조회, 인증 헤더 없음, `Cache-Control: no-store`. `limit` 1~100, `offset` 0 이상. 확정 시각 내림차순·UUID 순으로 `{"reservations": [예약 응답...]}`. 취소된 이력도 포함한다.
 
 ### POST /reservations/{id}/cancel
 
-운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+공개 데모 취소, 인증 헤더·본문 없음. 방문자 누구나 해당 ID의 예약을 취소할 수 있다. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
 
 ### 발사 예정일과 모델 예상 비용 (추가)
 

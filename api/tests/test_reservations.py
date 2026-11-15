@@ -21,7 +21,6 @@ DSN = os.environ.get(
     "RESERVATION_TEST_DATABASE_URL",
     "postgresql://lunar_margin:lunar_margin@localhost:55432/lunar_margin_test",
 )
-HEADERS = {"Authorization": "Bearer test-operator"}
 BOOKING = {
     "company": "Lunar A",
     "mission_name": "South pole 1",
@@ -45,14 +44,13 @@ def client() -> TestClient:
         create_app(
             Settings(
                 reservation_database_url=SecretStr(DSN),
-                reservation_admin_token=SecretStr("test-operator"),
             )
         )
     )
 
 
 def test_confirm_conflict_and_adjacent_period(client: TestClient) -> None:
-    first = client.post("/reservations", json=BOOKING, headers=HEADERS)
+    first = client.post("/reservations", json=BOOKING)
     assert first.status_code == 201
     record = first.json()
     assert record["cell_id"] == "SP500v1:1:-2"
@@ -60,39 +58,28 @@ def test_confirm_conflict_and_adjacent_period(client: TestClient) -> None:
     assert record["ends_at"] == "2027-01-15T00:00:00Z"
     assert record["status"] == "confirmed" and record["confirmed_at"]
     # Earlier landing does not take priority over an existing confirmation.
-    conflict = client.post(
-        "/reservations", json={**BOOKING, "landing_date": "2026-12-31"}, headers=HEADERS
-    )
+    conflict = client.post("/reservations", json={**BOOKING, "landing_date": "2026-12-31"})
     assert conflict.status_code == 409
     assert (
-        client.post(
-            "/reservations", json={**BOOKING, "landing_date": "2027-01-15"}, headers=HEADERS
-        ).status_code
+        client.post("/reservations", json={**BOOKING, "landing_date": "2027-01-15"}).status_code
         == 201
     )
-    assert (
-        client.post("/reservations", json={**BOOKING, "cell_ix": 2}, headers=HEADERS).status_code
-        == 201
-    )
+    assert client.post("/reservations", json={**BOOKING, "cell_ix": 2}).status_code == 201
 
 
 def test_cancel_releases_cell_and_preserves_history_across_apps(client: TestClient) -> None:
-    booking_id = client.post("/reservations", json=BOOKING, headers=HEADERS).json()["id"]
-    assert (
-        client.post(f"/reservations/{booking_id}/cancel", headers=HEADERS).json()["status"]
-        == "cancelled"
-    )
-    assert client.post(f"/reservations/{booking_id}/cancel", headers=HEADERS).status_code == 200
-    assert client.post("/reservations", json=BOOKING, headers=HEADERS).status_code == 201
+    booking_id = client.post("/reservations", json=BOOKING).json()["id"]
+    assert client.post(f"/reservations/{booking_id}/cancel").json()["status"] == "cancelled"
+    assert client.post(f"/reservations/{booking_id}/cancel").status_code == 200
+    assert client.post("/reservations", json=BOOKING).status_code == 201
     another = TestClient(
         create_app(
             Settings(
                 reservation_database_url=SecretStr(DSN),
-                reservation_admin_token=SecretStr("test-operator"),
             )
         )
     )
-    rows = another.get("/reservations", headers=HEADERS).json()["reservations"]
+    rows = another.get("/reservations").json()["reservations"]
     assert len(rows) == 2
     assert {row["status"] for row in rows} == {"confirmed", "cancelled"}
 
@@ -103,29 +90,21 @@ def test_concurrent_confirmations_have_exactly_one_winner(client: TestClient, ce
 
     def submit(_: int) -> int:
         barrier.wait()
-        return client.post(
-            "/reservations", json={**BOOKING, "cell_ix": cell_ix}, headers=HEADERS
-        ).status_code
+        return client.post("/reservations", json={**BOOKING, "cell_ix": cell_ix}).status_code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(submit, range(2))) == [201, 409]
 
 
-def test_operator_access_is_required_and_secrets_are_not_returned(client: TestClient) -> None:
-    assert client.post("/reservations", json=BOOKING).status_code == 401
-    assert client.get("/reservations").status_code == 401
+def test_demo_does_not_require_or_publish_operator_credentials(client: TestClient) -> None:
+    assert client.post("/reservations", json=BOOKING).status_code == 201
+    assert client.get("/reservations").status_code == 200
     assert (
-        client.post(
-            "/reservations", json=BOOKING, headers={"Authorization": "Bearer wrong"}
-        ).status_code
-        == 401
+        client.get("/reservations", headers={"Authorization": "Bearer obsolete"}).status_code == 200
     )
-    assert "test-operator" not in client.get("/openapi.json").text
+    assert "HTTPBearer" not in client.get("/openapi.json").text
     assert (
-        client.post(
-            "/reservations/00000000-0000-0000-0000-000000000000/cancel", headers=HEADERS
-        ).status_code
-        == 404
+        client.post("/reservations/00000000-0000-0000-0000-000000000000/cancel").status_code == 404
     )
 
 
@@ -143,16 +122,12 @@ def test_operator_access_is_required_and_secrets_are_not_returned(client: TestCl
     ],
 )
 def test_invalid_registration_is_rejected(client: TestClient, change: dict[str, object]) -> None:
-    assert (
-        client.post("/reservations", json={**BOOKING, **change}, headers=HEADERS).status_code == 422
-    )
+    assert client.post("/reservations", json={**BOOKING, **change}).status_code == 422
 
 
 def test_missing_database_fails_closed() -> None:
-    app = create_app(
-        Settings(reservation_database_url=None, reservation_admin_token=SecretStr("test-operator"))
-    )
-    response = TestClient(app).post("/reservations", json=BOOKING, headers=HEADERS)
+    app = create_app(Settings(reservation_database_url=None))
+    response = TestClient(app).post("/reservations", json=BOOKING)
     assert response.status_code == 503
 
 
@@ -178,7 +153,6 @@ def test_candidate_availability_uses_live_reservations_without_changing_scores(
         Settings(
             data_dir=served,
             reservation_database_url=SecretStr(DSN),
-            reservation_admin_token=SecretStr("test-operator"),
         )
     )
     reader = TestClient(app)
@@ -195,7 +169,6 @@ def test_candidate_availability_uses_live_reservations_without_changing_scores(
     booking = client.post(
         "/reservations",
         json={**BOOKING, "cell_ix": cell["cell_ix"], "cell_iy": cell["cell_iy"]},
-        headers=HEADERS,
     )
     assert booking.status_code == 201
     reserved = reader.get("/candidates/runs/demo/availability").json()["candidates"]
@@ -203,7 +176,7 @@ def test_candidate_availability_uses_live_reservations_without_changing_scores(
     assert reserved[0]["conflicts"][0]["company"] == BOOKING["company"]
     assert reserved[1]["available_rank"] == 1
     assert reader.get("/candidates/runs/demo").json() == original
-    client.post(f"/reservations/{booking.json()['id']}/cancel", headers=HEADERS)
+    client.post(f"/reservations/{booking.json()['id']}/cancel")
     assert (
         reader.get("/candidates/runs/demo/availability").json()["candidates"][0]["status"]
         == "available"
@@ -216,7 +189,7 @@ def test_availability_does_not_assume_available_when_database_is_missing(served:
 
 
 def test_database_constraint_rejects_a_writer_bypassing_the_api(client: TestClient) -> None:
-    assert client.post("/reservations", json=BOOKING, headers=HEADERS).status_code == 201
+    assert client.post("/reservations", json=BOOKING).status_code == 201
     with psycopg.connect(DSN) as conn, pytest.raises(psycopg.errors.ExclusionViolation):
         conn.execute("""INSERT INTO mission_reservations.bookings
             (id, cell_id, cell_ix, cell_iy, company, mission_name, starts_at, ends_at)
@@ -231,28 +204,27 @@ def test_unreachable_database_returns_no_credentials() -> None:
                 reservation_database_url=SecretStr(
                     "postgresql://secret-user:secret-password@127.0.0.1:1/missing"
                 ),
-                reservation_admin_token=SecretStr("test-operator"),
             )
         )
     )
-    response = reader.post("/reservations", json=BOOKING, headers=HEADERS)
+    response = reader.post("/reservations", json=BOOKING)
     assert response.status_code == 503
     assert "secret-password" not in response.text and "secret-user" not in response.text
 
 
-def test_cross_origin_operator_post_is_allowed(client: TestClient) -> None:
+def test_cross_origin_public_post_is_allowed(client: TestClient) -> None:
     response = client.options(
         "/reservations",
         headers={
             "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "authorization,content-type",
+            "Access-Control-Request-Headers": "content-type",
         },
     )
     assert response.status_code == 200
     assert "POST" in response.headers["access-control-allow-methods"]
 
 
-def test_unconfigured_operator_cannot_write() -> None:
-    reader = TestClient(create_app(Settings(reservation_admin_token=None)))
-    assert reader.post("/reservations", json=BOOKING, headers=HEADERS).status_code == 503
+def test_public_demo_still_needs_a_configured_store() -> None:
+    reader = TestClient(create_app(Settings(reservation_database_url=None)))
+    assert reader.post("/reservations", json=BOOKING).status_code == 503

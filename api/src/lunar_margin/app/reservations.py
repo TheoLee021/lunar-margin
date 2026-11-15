@@ -1,13 +1,11 @@
-"""운영자 확정/취소와 후보의 실시간 예약 가용성. 기존 후보 계약은 변경하지 않는다."""
+"""공개 데모 예약 확정/취소와 후보의 실시간 예약 가용성."""
 
-import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
 from lunar_margin.app.candidates import RunId, get_run
@@ -29,7 +27,6 @@ from lunar_margin.reservations.supabase_store import (
 )
 
 router = APIRouter(tags=["reservations"])
-bearer = HTTPBearer(auto_error=False)
 
 
 def settings_for(request: Request) -> Settings:
@@ -54,44 +51,13 @@ def store_for(settings: SettingsDep) -> Store | SupabaseStore:
 StoreDep = Annotated[Store | SupabaseStore, Depends(store_for)]
 
 
-def operator(
-    settings: SettingsDep,
-    store: StoreDep,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-) -> None:
-    token = settings.reservation_admin_token
-    configured = token is not None and bool(token.get_secret_value())
-    if not configured and not isinstance(store, SupabaseStore):
-        raise HTTPException(503, "예약 운영자 설정이 필요합니다")
-    if credentials is None:
-        raise HTTPException(401, "운영자 토큰이 필요합니다", headers={"WWW-Authenticate": "Bearer"})
-    if configured and token is not None:
-        authorized = secrets.compare_digest(
-            credentials.credentials.encode(), token.get_secret_value().encode()
-        )
-    elif isinstance(store, SupabaseStore):
-        try:
-            authorized = store.authorize(credentials.credentials)
-        except ReservationUnavailable as error:
-            raise unavailable() from error
-        if authorized is None:
-            raise HTTPException(503, "예약 운영자 설정이 필요합니다")
-    else:
-        authorized = False
-    if not authorized:
-        raise HTTPException(401, "운영자 토큰이 필요합니다", headers={"WWW-Authenticate": "Bearer"})
-
-
-Operator = Annotated[None, Depends(operator)]
-
-
 def unavailable() -> HTTPException:
     # DSN, SQL, credentials and internal database messages must never reach clients.
     return HTTPException(503, "예약 저장소에 연결할 수 없습니다. 잠시 후 다시 확인하세요")
 
 
 @router.post("/reservations", status_code=201)
-def confirm(body: Registration, _: Operator, store: StoreDep) -> Booking:
+def confirm(body: Registration, store: StoreDep) -> Booking:
     try:
         return store.confirm(body)
     except (psycopg.errors.ExclusionViolation, ReservationConflict) as error:
@@ -102,7 +68,6 @@ def confirm(body: Registration, _: Operator, store: StoreDep) -> Booking:
 
 @router.get("/reservations")
 def list_bookings(
-    _: Operator,
     store: StoreDep,
     response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
@@ -116,7 +81,7 @@ def list_bookings(
 
 
 @router.post("/reservations/{booking_id}/cancel")
-def cancel(booking_id: UUID, _: Operator, store: StoreDep) -> Booking:
+def cancel(booking_id: UUID, store: StoreDep) -> Booking:
     try:
         result = store.cancel(booking_id)
     except (psycopg.Error, ReservationUnavailable) as error:
