@@ -368,6 +368,7 @@ def test_public_tariff_estimate_can_use_user_landing_without_complete_billing_te
     )
     offers = compare_grid(load_catalog(), context, x_m=0, y_m=0, destination_multiplier=1.1)
     spacex = offers[2]
+    assert offers[0].minimum_estimate_usd is None  # Published 2027 plan excludes 2028.
     assert spacex.minimum_usd is None
     assert spacex.minimum_estimate_usd == pytest.approx(3_140_000)
     assert spacex.flights[0].estimate_basis == "public_tariff"
