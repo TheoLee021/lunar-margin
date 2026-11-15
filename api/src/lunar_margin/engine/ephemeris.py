@@ -70,6 +70,18 @@ def body_vectors(body: Literal["SUN", "EARTH"], et: NDArray[np.float64]) -> NDAr
     return np.asarray(positions, dtype=np.float64)
 
 
+def sun_direction(moment: datetime) -> tuple[float, float, float]:
+    """달에서 태양을 향하는 단위 벡터 (MOON_ME 프레임, LT+S 보정). 달 위 어느 지점에서나 같다."""
+    if moment.tzinfo is None:
+        raise ValueError("moment must include a timezone")
+    utc = moment.astimezone(UTC).replace(tzinfo=None)
+    with _SPICE_LOCK:
+        et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+    x, y, z = body_vectors("SUN", np.array([et]))[0]
+    norm = math.sqrt(x * x + y * y + z * z)
+    return (float(x / norm), float(y / norm), float(z / norm))
+
+
 def topocentric_azel(
     vectors_km: NDArray[np.float64],
     lat_deg: float,

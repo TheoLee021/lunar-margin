@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
@@ -9,7 +9,7 @@ import {
 } from './MissionMoonViewer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { useDashboardRun } from './useDashboardRun'
-import { sunDirectionFromLocal } from '../moon/sun'
+import { useSunDirection } from './useSunDirection'
 
 export function MissionWorkspace({
   selection,
@@ -40,15 +40,8 @@ export function MissionWorkspace({
   searchUrl.searchParams.delete('planner')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
-  // The Sun at landing (00:00 UTC, the analysis's first sample), seen from the analysed site.
-  const sunAnalysis = analysis.kind === 'ready' ? analysis.data.sun : null
-  const sunDirection = useMemo(() => {
-    const azimuth = sunAnalysis?.series.body_azimuth_deg[0]
-    const elevation = sunAnalysis?.series.body_elevation_deg[0]
-    if (!sunAnalysis || azimuth === undefined || elevation === undefined)
-      return null
-    return sunDirectionFromLocal(sunAnalysis, azimuth, elevation)
-  }, [sunAnalysis])
+  // The Sun at landing (00:00 UTC) lights the Moon whether or not a candidate is selected.
+  const sun = useSunDirection(selection.landing)
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -56,7 +49,7 @@ export function MissionWorkspace({
         selection={selection}
         sites={sites}
         onSelect={onSelect}
-        sunDirection={sunDirection}
+        sun={sun}
       />
       <header className="pointer-events-none absolute left-4 top-4 flex max-w-[60%] flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold uppercase tracking-wide">
