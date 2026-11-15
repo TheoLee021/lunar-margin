@@ -55,15 +55,6 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run ruff check .
-      - name: Emit formatter baseline for draft review
-        run: |
-          uv run ruff format src/lunar_margin/app/descent_reference.py src/lunar_margin/engine/descent_reference.py src/lunar_margin/engine/descent_los.py tests/engine/test_descent_reference.py tests/test_descent_reference_api.py
-          for path in src/lunar_margin/app/descent_reference.py src/lunar_margin/engine/descent_reference.py src/lunar_margin/engine/descent_los.py tests/engine/test_descent_reference.py tests/test_descent_reference_api.py; do
-            echo "@@AUTO_FORMAT_BEGIN:$path"
-            base64 -w0 "$path"
-            echo
-            echo "@@AUTO_FORMAT_END:$path"
-          done
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run pytest
