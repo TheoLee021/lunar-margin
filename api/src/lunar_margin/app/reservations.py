@@ -1,13 +1,11 @@
-"""운영자 확정/취소와 후보의 실시간 예약 가용성. 기존 후보 계약은 변경하지 않는다."""
+"""공개 데모 예약 확정/취소와 후보의 실시간 예약 가용성."""
 
-import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
 from lunar_margin.app.candidates import RunId, get_run
@@ -22,9 +20,13 @@ from lunar_margin.reservations.models import (
     cell_for_point,
 )
 from lunar_margin.reservations.store import Store
+from lunar_margin.reservations.supabase_store import (
+    ReservationConflict,
+    ReservationUnavailable,
+    SupabaseStore,
+)
 
 router = APIRouter(tags=["reservations"])
-bearer = HTTPBearer(auto_error=False)
 
 
 def settings_for(request: Request) -> Settings:
@@ -34,28 +36,19 @@ def settings_for(request: Request) -> Settings:
 SettingsDep = Annotated[Settings, Depends(settings_for)]
 
 
-def operator(
-    settings: SettingsDep,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-) -> None:
-    token = settings.reservation_admin_token
-    if token is None or not token.get_secret_value():
-        raise HTTPException(503, "예약 운영자 설정이 필요합니다")
-    if credentials is None or not secrets.compare_digest(
-        credentials.credentials.encode(), token.get_secret_value().encode()
-    ):
-        raise HTTPException(401, "운영자 토큰이 필요합니다", headers={"WWW-Authenticate": "Bearer"})
-
-
-def store_for(settings: SettingsDep) -> Store:
+def store_for(settings: SettingsDep) -> Store | SupabaseStore:
     url = settings.reservation_database_url
-    if url is None or not url.get_secret_value().strip():
-        raise HTTPException(503, "예약 데이터베이스가 설정되지 않았습니다")
-    return Store(url.get_secret_value())
+    if url is not None and url.get_secret_value().strip():
+        return Store(url.get_secret_value())
+    if settings.supabase_url and settings.supabase_service_role_key:
+        try:
+            return SupabaseStore(settings.supabase_url, settings.supabase_service_role_key)
+        except (ReservationUnavailable, ValueError) as error:
+            raise unavailable() from error
+    raise HTTPException(503, "예약 데이터베이스가 설정되지 않았습니다")
 
 
-StoreDep = Annotated[Store, Depends(store_for)]
-Operator = Annotated[None, Depends(operator)]
+StoreDep = Annotated[Store | SupabaseStore, Depends(store_for)]
 
 
 def unavailable() -> HTTPException:
@@ -64,18 +57,17 @@ def unavailable() -> HTTPException:
 
 
 @router.post("/reservations", status_code=201)
-def confirm(body: Registration, _: Operator, store: StoreDep) -> Booking:
+def confirm(body: Registration, store: StoreDep) -> Booking:
     try:
         return store.confirm(body)
-    except psycopg.errors.ExclusionViolation as error:
+    except (psycopg.errors.ExclusionViolation, ReservationConflict) as error:
         raise HTTPException(409, "같은 격자에 기간이 겹치는 확정 예약이 있습니다") from error
-    except psycopg.Error as error:
+    except (psycopg.Error, ReservationUnavailable) as error:
         raise unavailable() from error
 
 
 @router.get("/reservations")
 def list_bookings(
-    _: Operator,
     store: StoreDep,
     response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
@@ -84,15 +76,15 @@ def list_bookings(
     response.headers["Cache-Control"] = "no-store"
     try:
         return BookingList(reservations=store.list(limit, offset))
-    except psycopg.Error as error:
+    except (psycopg.Error, ReservationUnavailable) as error:
         raise unavailable() from error
 
 
 @router.post("/reservations/{booking_id}/cancel")
-def cancel(booking_id: UUID, _: Operator, store: StoreDep) -> Booking:
+def cancel(booking_id: UUID, store: StoreDep) -> Booking:
     try:
         result = store.cancel(booking_id)
-    except psycopg.Error as error:
+    except (psycopg.Error, ReservationUnavailable) as error:
         raise unavailable() from error
     if result is None:
         raise HTTPException(404, "예약을 찾을 수 없습니다")
@@ -117,7 +109,7 @@ def availability(
         conflicts = store.conflicts(
             [cell.cell_id for cell in cells.values()], config.window.start, config.window.end
         )
-    except psycopg.Error as error:
+    except (psycopg.Error, ReservationUnavailable) as error:
         raise unavailable() from error
     rank = 0
     candidates: list[CandidateAvailability] = []

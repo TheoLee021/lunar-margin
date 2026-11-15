@@ -1,6 +1,6 @@
 # 착륙 격자 예약
 
-운영자가 회사·임무명·격자·착륙일·표면 임무 기간을 등록하면 즉시 확정한다. 기존 확정 예약을 보호하며, 더 이른 착륙일을 입력해도 우선권을 빼앗지 않는다. 회사별 로그인과 승인 대기 단계는 이번 범위에 없다.
+공개 데모로 방문자 누구나 토큰이나 로그인 없이 회사·임무명·격자·착륙일·표면 임무 기간을 등록하고 즉시 확정한다. 모든 방문자가 예약 이력을 조회하고 다른 방문자의 예약도 취소할 수 있다. 기존 확정 예약과 겹치는 예약은 차단하며, 더 이른 착륙일을 입력해도 우선권을 빼앗지 않는다. 회사별 로그인과 승인 대기 단계는 없다.
 
 ## 격자와 기간
 
@@ -30,7 +30,6 @@ docker compose -f compose.reservations.yaml exec postgres createdb -U lunar_marg
 `api/.env`에 다음 키를 설정한다. 개발 DB URL은 `postgresql://lunar_margin:lunar_margin@localhost:55432/lunar_margin`이다. 테스트 URL은 같은 주소의 DB 이름을 `lunar_margin_test`로 바꾼 것이다. compose의 계정은 로컬 개발 전용이다.
 
 - `RESERVATION_DATABASE_URL`: 백엔드 DB 연결 URL.
-- `RESERVATION_ADMIN_TOKEN`: 직접 생성한 긴 임의 운영자 토큰. 환경변수 값과 동일한 토큰을 화면에 입력한다.
 - `RESERVATION_TEST_DATABASE_URL`: 테스트 전용 DB. 기본값은 위 로컬 테스트 DB이다. 테스트는 이름이 `_test`로 끝나는 DB만 허용하며 예약 테이블을 비운다. 실제 예약 DB를 사용하지 않는다.
 
 ```sh
@@ -40,14 +39,20 @@ uv run fastapi dev src/lunar_margin/app/main.py
 uv run pytest tests/test_reservations.py
 ```
 
-프런트는 기존 `web/`의 `npm run dev`를 사용한다. 후보지 탐색 → 후보 ID 선택 → **운영자 예약 관리**를 펼친다. 토큰·회사·임무명을 입력하고 확정한다. **예약 이력 조회**에서 확정 예약을 취소할 수 있다. 토큰은 React 메모리에만 있고 브라우저 저장소에 남기지 않는다.
+프런트는 기존 `web/`의 `npm run dev`를 사용한다. 후보지 탐색 → 후보 ID 선택 → **예약 관리**를 펼친다. 회사·임무명을 입력하고 확정한다. **예약 이력 조회**에서 확정 예약을 취소할 수 있다. 화면과 API에 운영자 토큰 입력·인증은 없다.
 
-예약 E2E는 실제 API/Postgres와 임무 입력으로 만든 탐색 결과가 필요하다. 최신 실행에 예약 가능한 후보가 있는 상태에서 `web/`에서 `RESERVATION_E2E_ADMIN_TOKEN`을 로컬 API와 같은 운영자 토큰으로 설정하고 `npm run e2e -- e2e/reservations.spec.ts`를 실행한다. 테스트는 회사명이 `E2E-`로 시작하는 예약을 만들고 마지막에 취소한다. 조회 실패 시나리오는 503 응답을 주입해 확인한다. 개발 서버가 다른 포트이면 `E2E_BASE_URL`을 지정한다.
+예약 E2E는 실제 API/Postgres와 임무 입력으로 만든 탐색 결과가 필요하다. 최신 실행에 예약 가능한 후보가 있는 상태에서 `web/`에서 `npm run e2e -- e2e/reservations.spec.ts`를 실행한다. 별도 운영자 토큰 환경변수는 필요 없다. 테스트는 회사명이 `E2E-`로 시작하는 예약을 만들고 마지막에 취소한다. 조회 실패 시나리오는 503 응답을 주입해 확인한다. 개발 서버가 다른 포트이면 `E2E_BASE_URL`을 지정한다.
 
 기존 로컬 볼륨이나 Supabase에는 migration을 별도로 적용해야 한다. CLI가 만든 `supabase/migrations/20261115010338_landing_reservations.sql`을 DB 소유 권한으로 적용한다. 새 볼륨용 자동 초기화와 달리 기존 볼륨에는 compose 재시작만으로 새 migration이 적용되지 않는다. 이후 API 환경변수를 설정하고 재시작한다.
 
 ## Supabase 배포
 
-이번 PR은 원격 Supabase에 migration이나 운영자 토큰을 배포하지 않는다. 배포 시 위 migration을 검토·적용하고, Railway 백엔드에 Supabase의 직접 연결 또는 session pooler DSN(`sslmode=require`)과 운영자 토큰을 설정한다. DDL을 서버 시작 시 자동 실행하지 않는다.
+예약은 기존 `SUPABASE_URL`과 `SUPABASE_SERVICE_ROLE_KEY`만으로 Supabase RPC를 통해 동작한다. `RESERVATION_DATABASE_URL`이 있으면 기존 직접 Postgres 연결이 우선한다. 따라서 로컬 개발·기존 설치를 유지하면서 배포 서버에 별도 DB 주소를 추가하지 않을 수 있다. 프로젝트 기본 URL과 `/rest/v1/`이 붙은 기존 설정을 모두 지원한다. 새 라이브러리는 추가하지 않는다.
 
-`mission_reservations`는 Data API에 노출하지 않는 private schema이며 RLS가 켜져 있고 anon/authenticated 접근 정책은 없다. DB 소유자 또는 이 스키마에 권한을 부여한 서버 역할로 연결한다. 브라우저에 DB 비밀번호·service_role·운영자 토큰을 환경변수로 주입하지 않는다. 공유 운영자 토큰은 계정별 권한이나 변경자 식별을 제공하지 않는다.
+기본 예약 migration 다음에 `20261115213247_reservation_supabase_rpc.sql`, `20261115214044_reservation_complete_conflicts.sql`을 순서대로 적용한다. RPC는 `SECURITY INVOKER`이고 `service_role`만 실행할 수 있다. `anon`·`authenticated`·`PUBLIC` 실행 권한은 제거한다. 예약 테이블과 운영자 설정 테이블은 private schema에 남긴다. 확정 RPC의 한 트랜잭션 안에서 기존 advisory lock과 exclusion constraint를 사용하므로 중복 예약·인접 기간·취소 이력 정책은 동일하다. DDL을 API 시작 시 실행하지 않는다.
+
+충돌 조회는 스칼라 JSON 배열 한 개로 모든 일치 예약을 반환하여 PostgREST의 결과 행 수 제한으로 예약 상태가 누락되지 않게 한다. 목록 화면은 기존처럼 최대 100건씩 페이지를 조회한다.
+
+데모 API는 `RESERVATION_ADMIN_TOKEN` 및 기존 private 운영자 해시를 사용하지 않는다. 이전 migration의 해시 테이블·검증 함수는 호환성을 위해 남아 있지만 설정하거나 호출할 필요 없다. 기존 환경변수에 토큰이 남아 있어도 공개 데모 예약에는 영향을 주지 않는다. Supabase 오류 본문과 서비스 키는 API 응답에 포함하지 않는다.
+
+`mission_reservations`는 Data API에 노출하지 않는 private schema이며 RLS가 켜져 있고 anon/authenticated 접근 정책은 없다. 공개 방문자는 FastAPI 예약 API를 통해서만 예약한다. 직접 DB 연결은 DB 소유자 또는 이 스키마에 권한을 부여한 서버 역할로 연결한다. 브라우저에 DB 비밀번호나 service_role 키를 환경변수로 주입하지 않는다.

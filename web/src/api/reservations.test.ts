@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { confirmReservation, fetchAvailability } from './reservations'
+import {
+  cancelReservation,
+  confirmReservation,
+  fetchAvailability,
+  fetchReservations,
+} from './reservations'
 
 const booking = {
   id: '88b02b95-e126-4c10-9d89-3a3b4417ff33',
@@ -43,7 +48,7 @@ describe('reservation API boundary', () => {
     })
     expect(result.candidates[0]?.conflicts[0]?.company).toBe('A')
   })
-  it('sends operator authorization only on mutation and propagates a conflict', async () => {
+  it('confirms without authorization and still propagates a conflict', async () => {
     await expect(
       confirmReservation(
         {
@@ -54,21 +59,42 @@ describe('reservation API boundary', () => {
           landing_date: '2027-01-01',
           mission_duration_days: 14,
         },
-        'operator-secret',
         {
           baseUrl: '',
           fetchFn: async (url, init) => {
             expect(url).toBe('/reservations')
             expect(init?.method).toBe('POST')
-            expect(new Headers(init?.headers).get('Authorization')).toBe(
-              'Bearer operator-secret',
-            )
-            expect(init?.body).not.toContain('operator-secret')
+            expect(new Headers(init?.headers).has('Authorization')).toBe(false)
             return Response.json({ detail: '이미 예약됨' }, { status: 409 })
           },
         },
       ),
     ).rejects.toMatchObject({ status: 409, message: '이미 예약됨' })
+  })
+  it('lists and cancels reservations without authorization', async () => {
+    const history = await fetchReservations(100, {
+      baseUrl: '',
+      fetchFn: async (url, init) => {
+        expect(url).toBe('/reservations?limit=100&offset=100')
+        expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+        return Response.json({ reservations: [booking] })
+      },
+    })
+    expect(history.reservations[0]?.id).toBe(booking.id)
+    const cancelled = await cancelReservation(booking.id, {
+      baseUrl: '',
+      fetchFn: async (url, init) => {
+        expect(url).toBe(`/reservations/${booking.id}/cancel`)
+        expect(init?.method).toBe('POST')
+        expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+        return Response.json({
+          ...booking,
+          status: 'cancelled',
+          cancelled_at: '2026-11-15T00:00:00Z',
+        })
+      },
+    })
+    expect(cancelled.status).toBe('cancelled')
   })
   it('rejects malformed server data instead of displaying available', async () => {
     await expect(
