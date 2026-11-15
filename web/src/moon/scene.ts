@@ -196,12 +196,17 @@ export async function createMoonScene(
     )
   }
   handler.setInputAction(
-    ({ position }: ScreenSpaceEventHandler.PositionedEvent) => clickMap(position, false),
+    ({ position }: ScreenSpaceEventHandler.PositionedEvent) =>
+      clickMap(position, false),
     ScreenSpaceEventType.LEFT_CLICK,
   )
-  for (const modifier of [KeyboardEventModifier.CTRL, KeyboardEventModifier.SHIFT]) {
+  for (const modifier of [
+    KeyboardEventModifier.CTRL,
+    KeyboardEventModifier.SHIFT,
+  ]) {
     handler.setInputAction(
-      ({ position }: ScreenSpaceEventHandler.PositionedEvent) => clickMap(position, true),
+      ({ position }: ScreenSpaceEventHandler.PositionedEvent) =>
+        clickMap(position, true),
       ScreenSpaceEventType.LEFT_CLICK,
       modifier,
     )
