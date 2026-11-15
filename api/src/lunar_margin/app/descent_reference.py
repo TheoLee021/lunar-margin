@@ -48,10 +48,14 @@ class VehicleRequest(BaseModel):
         return self
 
 
+def _empty_backup_sites() -> list[SiteTarget]:
+    return []
+
+
 class DescentRequest(BaseModel):
     epoch_utc: AwareDatetime
     primary_site: SiteTarget
-    backup_sites: list[SiteTarget] = Field(default_factory=list, max_length=3)
+    backup_sites: list[SiteTarget] = Field(default_factory=_empty_backup_sites, max_length=3)
     approach_azimuth_deg: float = Field(default=90.0, ge=0, lt=360, allow_inf_nan=False)
     approach_range_km: float = Field(default=300.0, gt=0, lt=600, allow_inf_nan=False)
     clearance_m: float = Field(default=50.0, ge=0, le=10000, allow_inf_nan=False)
