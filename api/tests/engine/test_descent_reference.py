@@ -50,9 +50,7 @@ def test_100x15km_reference_matches_vis_viva() -> None:
 
 def test_flat_surface_reference_touches_down_with_zero_final_speed() -> None:
     state = pdi_from_target(-89.0, 30.0)
-    path = evaluate_reference(
-        FlatDem(), state, -89.0, 30.0, Lander(), duration_s=480.0
-    )
+    path = evaluate_reference(FlatDem(), state, -89.0, 30.0, Lander(), duration_s=480.0)
     assert path.status == "REFERENCE_FEASIBLE"
     assert path.samples[-1].altitude_agl_m == pytest.approx(0, abs=0.01)
     assert path.samples[-1].speed_mps == pytest.approx(0, abs=0.01)
@@ -62,18 +60,14 @@ def test_flat_surface_reference_touches_down_with_zero_final_speed() -> None:
 
 def test_rejects_ridge_intersection() -> None:
     state = pdi_from_target(-89.0, 30.0)
-    path = evaluate_reference(
-        RidgeDem(), state, -89.0, 30.0, Lander(), duration_s=480.0
-    )
+    path = evaluate_reference(RidgeDem(), state, -89.0, 30.0, Lander(), duration_s=480.0)
     assert path.status == "TERRAIN_COLLISION"
     assert path.min_clearance_m is not None and path.min_clearance_m < 0
 
 
 def test_does_not_label_unknown_dem_safe() -> None:
     state = pdi_from_target(-89.0, 30.0)
-    path = evaluate_reference(
-        MissingDem(), state, -89.0, 30.0, Lander(), duration_s=480.0
-    )
+    path = evaluate_reference(MissingDem(), state, -89.0, 30.0, Lander(), duration_s=480.0)
     assert path.status == "TERRAIN_UNKNOWN"
     assert path.samples == []
 
@@ -82,9 +76,7 @@ def test_rejects_insufficient_fuel_or_thrust() -> None:
     state = pdi_from_target(-89.0, 30.0)
     insufficient_fuel = Lander(wet_mass_kg=1200, dry_mass_kg=1150)
     insufficient_thrust = Lander(max_thrust_n=800)
-    fuel = evaluate_reference(
-        FlatDem(), state, -89.0, 30.0, insufficient_fuel, duration_s=480.0
-    )
+    fuel = evaluate_reference(FlatDem(), state, -89.0, 30.0, insufficient_fuel, duration_s=480.0)
     engine = evaluate_reference(
         FlatDem(), state, -89.0, 30.0, insufficient_thrust, duration_s=480.0
     )
@@ -103,8 +95,7 @@ def test_alternates_share_the_same_pdi_state() -> None:
     assert len(result) == 2
     assert all(item.status == "REFERENCE_FEASIBLE" for item in result)
     assert all(
-        item.samples[0].moon_me_xyz_m == result[0].samples[0].moon_me_xyz_m
-        for item in result
+        item.samples[0].moon_me_xyz_m == result[0].samples[0].moon_me_xyz_m for item in result
     )
 
 
