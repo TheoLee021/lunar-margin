@@ -146,3 +146,21 @@ def test_terrain_outside_a_window_still_casts_its_shadow_into_it() -> None:
     assert in_window(lit, 6_000.0, 4_000.0) == pytest.approx(1.0, abs=0.01)
     assert in_window(shadowed, 6_000.0, 4_000.0) == pytest.approx(0.0, abs=0.01)
     assert in_window(shadowed, 8_500.0, 5_000.0) == pytest.approx(0.0, abs=0.01)
+
+
+def test_far_from_the_pole_the_day_side_is_lit_and_the_night_side_is_dark() -> None:
+    # 60°S까지 닿는 거친 격자(10 km, 극에서 +-930 km), 매끈한 구. 태양 중심이 극의 지평선에 걸려
+    # 경도 0° 쪽에 있으면, 그쪽으로 300 km(위도 약 80°S)만 가도 태양이 10° 떠 있고 반대쪽은 밤이다
+    label = PolarGridLabel(201, 201, 10_000.0, 100.0, 100.0, 1737.4, 1737.4, -90.0)
+    dem = PolarDem(np.zeros((201, 201), dtype=np.float32), label)
+    grid = SunlightGrid(pixel_size_m=10_000.0, center_px=93)
+
+    image = sunlit_fraction(dem, sun_from(0.0, 0.0), grid)
+
+    def towards_sun(distance_m: float) -> float:
+        return float(image[grid.center_px - round(distance_m / grid.pixel_size_m), grid.center_px])
+
+    assert towards_sun(300_000.0) == 1.0
+    assert towards_sun(900_000.0) == 1.0  # 위도 약 61°S, 태양 고도 약 29°
+    assert towards_sun(-300_000.0) == 0.0
+    assert towards_sun(-900_000.0) == 0.0

@@ -3,8 +3,9 @@
 규약은 docs/api.md의 Tiles 절. 격자는 수평선 테이블과 같고(극 입체투영, 격자 한 칸이 한 픽셀),
 경도 0°가 위쪽, 동쪽(경도 90°)이 오른쪽이다.
 
-실행: uv run python -m lunar_margin.pipeline.overlay_tiles [--config cfg.json]
+실행: uv run python -m lunar_margin.pipeline.overlay_tiles [--config cfg.json] [--wide-only]
 먼저 같은 설정으로 `python -m lunar_margin.pipeline.horizons`를 돌려 수평선 테이블을 만들어 둔다.
+60°S까지의 DEM(`pipeline.fetch --wide`)이 있으면 넓은 구역의 경사(normal-wide)도 굽는다.
 """
 
 import argparse
@@ -21,10 +22,11 @@ from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.field import open_dem
 from lunar_margin.engine.candidates.grid import polar_grid
 from lunar_margin.engine.candidates.horizon_table import HorizonTable, find_table
-from lunar_margin.engine.dem import Dem, HeightField, RasterDem
+from lunar_margin.engine.dem import Dem, HeightField, LayeredHeights, PolarDem, RasterDem
 from lunar_margin.pipeline.geotiff import read_float_geotiff
 from lunar_margin.pipeline.horizons import TABLES_DIR, resolve_dems, table_spec_for
 from lunar_margin.pipeline.png import encode_png
+from lunar_margin.pipeline.sources import DEM_SOURCES, WIDE_DEM
 
 FORMAT_VERSION = 1
 
@@ -40,6 +42,17 @@ FINE_TILE_PX = 256
 # 5 m 지역 DEM(Shape-from-Shading)이 있는 곳에만 더 붙는 레벨. 그 지역을 덮는 타일만 만든다
 DETAIL_PIXEL_SIZES_M = (20.0, 5.0)
 SFS_DIR = "sfs"
+# 넓은 구역: 85°S 밖도 뷰어가 햇빛으로 그리도록 60°S까지 덮는 별도 레이어 (경사 한 장).
+# 극 입체투영에서 60°S는 극에서 2R tan(15°) = 약 931 km다
+WIDE_LAYER = "normal-wide"
+WIDE_MAX_LAT_DEG = -60.0
+# 첫 화면(픽셀당 약 660 m)에서 640 m와 거의 같아 보이고 한 장으로 받을 만한 크기(약 14 MB)다
+WIDE_PIXEL_SIZE_M = 960.0
+# 그 구역의 햇빛 지도 격자 (GET /sunlight/south-pole-wide.png)
+WIDE_SUNLIGHT_PIXEL_SIZE_M = 640.0
+# 넓은 구역 DEM(240 m)의 간격. 경사는 이 간격으로 재서 픽셀 안에서 평균한다
+WIDE_SAMPLE_STEP_M = 240.0
+_WIDE_CHUNK_ROWS = 256
 
 
 def detail_dem_paths(data_dir: Path) -> list[Path]:
@@ -130,24 +143,32 @@ def _write_fine_normal_level(
     }
 
 
-def _region_slopes(
-    region: RasterDem, x: NDArray[np.float64], y: NDArray[np.float64], pixel_size_m: float
+def _mean_slopes(
+    dem: HeightField,
+    x: NDArray[np.float64],
+    y: NDArray[np.float64],
+    pixel_size_m: float,
+    sample_step_m: float,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """지역 DEM의 원래 간격으로 잰 경사를 pixel_size_m 픽셀 안에서 평균한다 (밖이 섞이면 NaN)."""
-    n = max(1, round(pixel_size_m / region.pixel_size_m))
+    """sample_step_m 간격으로 잰 경사를 pixel_size_m 픽셀 안에서 평균한다 (DEM 밖이 섞이면 NaN)."""
+    n = max(1, round(pixel_size_m / sample_step_m))
     east = np.zeros_like(x)
     north = np.zeros_like(x)
     for offset_x in (np.arange(n) + 0.5) / n - 0.5:
         for offset_y in (np.arange(n) + 0.5) / n - 0.5:
             sub_east, sub_north = _slopes(
-                region,
-                x + offset_x * pixel_size_m,
-                y + offset_y * pixel_size_m,
-                region.pixel_size_m,
+                dem, x + offset_x * pixel_size_m, y + offset_y * pixel_size_m, sample_step_m
             )
             east += sub_east
             north += sub_north
     return east / (n * n), north / (n * n)
+
+
+def _region_slopes(
+    region: RasterDem, x: NDArray[np.float64], y: NDArray[np.float64], pixel_size_m: float
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """지역 DEM의 원래 간격으로 잰 경사를 pixel_size_m 픽셀 안에서 평균한다 (밖이 섞이면 NaN)."""
+    return _mean_slopes(region, x, y, pixel_size_m, region.pixel_size_m)
 
 
 def _write_detail_normal_level(
@@ -210,6 +231,76 @@ def _write_detail_normal_level(
         "tiles_per_side": tiles_per_side,
         "tile_ranges": [list(tile_range) for tile_range in ranges],
     }
+
+
+def open_wide_dem(data_dir: Path, dem: HeightField) -> HeightField | None:
+    """dem의 값을 쓰고 그 밖은 60°S까지 덮는 240 m DEM으로 메운 높이.
+
+    그 DEM을 받지 않았으면 None (`pipeline.fetch --wide`로 받는다).
+    """
+    img, lbl = (data_dir / "dem" / source.filename for source in DEM_SOURCES[WIDE_DEM])
+    if not (img.is_file() and lbl.is_file()):
+        return None
+    return LayeredHeights([dem, PolarDem.from_files(img, lbl)])
+
+
+def wide_radius_m(radius_m: float) -> float:
+    """반경 radius_m인 구에서 넓은 구역의 바깥 경계(60°S)까지, 극 입체투영 평면의 거리."""
+    return 2.0 * radius_m * math.tan(math.radians(90.0 + WIDE_MAX_LAT_DEG) / 2.0)
+
+
+def build_wide_normal_tiles(
+    dem: HeightField,
+    out: Path,
+    *,
+    radius_m: float | None = None,
+    pixel_size_m: float = WIDE_PIXEL_SIZE_M,
+    sunlight_pixel_size_m: float = WIDE_SUNLIGHT_PIXEL_SIZE_M,
+    sample_step_m: float = WIDE_SAMPLE_STEP_M,
+) -> None:
+    """극에서 radius_m(기본 60°S)까지의 경사를 out/normal-wide/에 타일 한 장으로 쓴다.
+
+    픽셀 값은 sample_step_m 간격으로 잰 경사를 그 픽셀 안에서 평균한 것이다. meta.json의
+    `sunlight`는 같은 구역의 햇빛 지도 격자다. DEM 밖은 데이터 없음이다.
+    """
+    radius = wide_radius_m(dem.radius_m) if radius_m is None else radius_m
+    center = math.ceil(radius / pixel_size_m)
+    size = 2 * center + 1
+    rgba = np.zeros((size, size, 4), dtype=np.uint8)
+    for start in range(0, size, _WIDE_CHUNK_ROWS):  # 한 번에 다 하면 수백 MB를 쓴다
+        col, row = np.meshgrid(
+            np.arange(size), np.arange(start, min(start + _WIDE_CHUNK_ROWS, size))
+        )
+        x = (col - center).astype(np.float64) * pixel_size_m
+        y = (center - row).astype(np.float64) * pixel_size_m
+        rgba[start : start + _WIDE_CHUNK_ROWS] = _encode_slopes(
+            *_mean_slopes(dem, x, y, pixel_size_m, sample_step_m)
+        )
+    _write_png(out / WIDE_LAYER / "0" / "0" / "0.png", rgba)
+    sunlight_center = math.ceil(radius / sunlight_pixel_size_m)
+    _write_meta(
+        out / WIDE_LAYER,
+        {
+            "version": FORMAT_VERSION,
+            "layer": WIDE_LAYER,
+            "levels": [
+                {
+                    "z": 0,
+                    "pixel_size_m": pixel_size_m,
+                    "size_px": size,
+                    "center_px": center,
+                    "tile_px": size,
+                    "tiles_per_side": 1,
+                }
+            ],
+            "encoding": {"bias": NORMAL_BIAS, "scale": NORMAL_SCALE},
+            "sunlight": {
+                "pixel_size_m": sunlight_pixel_size_m,
+                "size_px": 2 * sunlight_center + 1,
+                "center_px": sunlight_center,
+            },
+        },
+    )
 
 
 def build_overlay_tiles(
@@ -312,22 +403,33 @@ def build_overlay_tiles(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="SearchConfig JSON (생략하면 기본값)")
+    parser.add_argument(
+        "--wide-only",
+        action="store_true",
+        help="normal-wide 레이어만 굽는다 (수평선 테이블이 필요 없고 다른 타일은 그대로 둔다)",
+    )
     args = parser.parse_args()
     config = (
         SearchConfig.model_validate_json(args.config.read_text()) if args.config else SearchConfig()
     )
     data_dir = Settings().data_dir
-    table = find_table(data_dir / TABLES_DIR, table_spec_for(config, data_dir))
-    if table is None:
-        raise SystemExit(
-            "수평선 테이블이 없습니다. "
-            "먼저 `uv run python -m lunar_margin.pipeline.horizons`를 실행하세요"
-        )
     dem = open_dem(resolve_dems(config, data_dir).pairs)
-    detail = [open_detail_dem(path, dem.radius_m) for path in detail_dem_paths(data_dir)]
-    print(f"5 m 지역 DEM {len(detail)}개 (없으면 `pipeline.fetch --sfs`로 받는다)")
-    build_overlay_tiles(table, dem, data_dir / "tiles", detail=detail)
-    print(f"완료: {data_dir / 'tiles'} (테이블 {table.directory.name})")
+    if not args.wide_only:
+        table = find_table(data_dir / TABLES_DIR, table_spec_for(config, data_dir))
+        if table is None:
+            raise SystemExit(
+                "수평선 테이블이 없습니다. "
+                "먼저 `uv run python -m lunar_margin.pipeline.horizons`를 실행하세요"
+            )
+        detail = [open_detail_dem(path, dem.radius_m) for path in detail_dem_paths(data_dir)]
+        print(f"5 m 지역 DEM {len(detail)}개 (없으면 `pipeline.fetch --sfs`로 받는다)")
+        build_overlay_tiles(table, dem, data_dir / "tiles", detail=detail)
+    wide = open_wide_dem(data_dir, dem)
+    if wide is None:
+        print("60°S까지의 DEM이 없어 normal-wide는 건너뜀 (`pipeline.fetch --wide`로 받는다)")
+    else:
+        build_wide_normal_tiles(wide, data_dir / "tiles")
+    print(f"완료: {data_dir / 'tiles'}")
 
 
 if __name__ == "__main__":

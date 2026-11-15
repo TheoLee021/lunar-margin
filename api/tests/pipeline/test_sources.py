@@ -17,3 +17,10 @@ def test_75s_120m_covers_the_whole_south_polar_roi() -> None:
 
     # 75°S 이남, 120 m/px, 7624 x 7624 픽셀 (4 바이트)
     assert img.size_bytes == 7624 * 7624 * 4
+
+
+def test_60s_240m_reaches_60_degrees_south() -> None:
+    img, _ = DEM_SOURCES["60s_240m"]
+
+    # 60°S 이남(극에서 931 km), 240 m/px, 7760 x 7760 픽셀 (4 바이트)
+    assert img.size_bytes == 7760 * 7760 * 4

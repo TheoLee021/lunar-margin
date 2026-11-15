@@ -228,6 +228,7 @@
 | --- | --- |
 | `horizon` | 지점마다 방위각 5° 간격(72개) 지형 수평선 고도. 셰이더의 지형 그림자(cast shadow)용 |
 | `normal` | 지점마다 지역 동쪽·북쪽 경사. 셰이더의 햇빛 조명용. 레벨 0(500 m) 위에 더 촘촘한 레벨 1(160 m), 2(80 m)가 있고, 5 m 지역 DEM이 있는 곳에는 레벨 3(20 m), 4(5 m)가 더 있다 |
+| `normal-wide` | `normal`과 같은 경사를 60°S까지(극에서 약 931 km) 960 m 격자 한 장으로. 85°S 밖도 햇빛으로 그리는 데 쓴다. 60°S까지의 DEM을 받아 구운 서버에만 있다 (없으면 404) |
 
 ### `GET /tiles/{layer}/meta.json`
 
@@ -258,6 +259,17 @@
 - `tile_ranges`가 있는 레벨은 희소 레벨이다: 5 m 지역 DEM(Artemis III 후보 지역의 Shape-from-Shading DEM, [data.md](data.md))이 덮는 곳에만 타일이 있다. 항목 하나가 지역 하나의 타일 범위 `[x0, y0, x1, y1]`(양 끝 포함)이고, 범위 안의 타일은 모두 있으며 밖의 타일은 404다. 범위 안이어도 지역 밖 픽셀은 데이터 없음이므로, 클라이언트는 그런 곳에서 더 거친 레벨을 쓴다. 지역 DEM을 받지 않았으면 이 레벨들은 `levels`에 없다. ROI(85°S) 밖의 지역은 들어가지 않는다.
 - 20 m 레벨의 값은 5 m 간격으로 잰 경사를 픽셀 안에서 평균한 것이다.
 - `normal`의 `encoding`은 `{ "bias": 32768, "scale": 16384 }`.
+- `normal-wide`는 레벨 0 하나뿐이고 타일 한 장이다 (약 14 MB). 픽셀 좌표 규약과 `encoding`, 타일 형식은 `normal`과 같다. 픽셀 값은 240 m 간격으로 잰 경사를 그 픽셀 안에서 평균한 것이고, DEM 밖(정사각형 가장자리)은 데이터 없음이다. `sunlight`는 같은 구역의 햇빛 지도(`GET /sunlight/south-pole-wide.png`) 격자다.
+
+  ```json
+  {
+    "version": 1,
+    "layer": "normal-wide",
+    "levels": [{ "z": 0, "pixel_size_m": 960.0, "size_px": 1941, "center_px": 970, "tile_px": 1941, "tiles_per_side": 1 }],
+    "encoding": { "bias": 32768, "scale": 16384 },
+    "sunlight": { "pixel_size_m": 640.0, "size_px": 2911, "center_px": 1455 }
+  }
+  ```
 
 ### `GET /tiles/{layer}/{z}/{x}/{y}.png`
 
@@ -292,6 +304,17 @@
 - 계산: 빛이 평행하다고 보고 태양 방위에 나란한 단면마다 지형을 태양 쪽에서 훑는다. 격자 밖 지형도 태양 쪽 200 km까지(320 m 간격) 반영하고 달 곡률을 포함한다. 태양 원반(반지름 0.2665°)을 고도 방향 16개 띠로 나눠 보이는 띠의 넓이를 합하므로 반그림자는 17단계다. 관측 높이는 0 m. `engine/horizon.py`의 수평선과 같은 DEM(80 m, 밖은 120 m)을 쓴다.
 
 오류: `422` 방향이 없거나(영벡터, 성분 누락, 유한하지 않은 값) 수평 성분이 없는 방향(극의 천정), `429` 계산이 밀려 있음(계산 중인 요청 뒤에 4건까지만 줄을 세운다. `Retry-After` 초 뒤에 다시 요청한다. 이미 기억한 방향은 밀려 있어도 바로 돌려준다), `503` DEM 또는 `normal` 타일 없음.
+
+### `GET /sunlight/south-pole-wide.png?x=&y=&z=`
+
+같은 태양 방향의 넓은 햇빛 지도: 60°S까지(극에서 약 931 km)를 640 m 격자로 덮는다. 뷰어가 85°S 밖도 햇빛으로 그릴 때 쓰고, 85°S 안쪽은 위 80 m 지도가 더 세밀하다 (약 4초, 메모리 약 1.2 GB, 응답 약 1.1 MB).
+
+- `x`, `y`, `z`와 응답 형식, 계산 방식은 위 지도와 같다.
+- 격자는 `GET /tiles/normal-wide/meta.json`의 `sunlight` 항목이다 (`size_px` x `size_px`, 픽셀 좌표 규약은 타일과 같다). 정사각형 모서리(극에서 `center_px * pixel_size_m`보다 먼 곳)는 가장 가까운 값으로 채운다.
+- DEM은 위 지도의 DEM(80 m, 밖은 120 m)에, 그 밖을 240 m DEM(`ldem_60s_240m_float`)으로 메운 것이다.
+- 계산 줄과 `429`는 위 지도와 함께 쓴다. 최근 결과 8개를 위 지도와 따로 메모리에 둔다.
+
+오류: `422`·`429`는 위와 같다. `503` 60°S까지의 DEM 또는 `normal-wide` 타일 없음 (`pipeline.fetch --wide`와 `pipeline.overlay_tiles`로 만든다. 이때도 위 지도와 창은 그대로 동작한다. 서버가 떠 있는 동안 데이터를 만들면 다음 요청부터 돌려준다).
 
 ### `GET /sunlight/south-pole/{level}/{tile_x}/{tile_y}.png?x=&y=&z=`
 

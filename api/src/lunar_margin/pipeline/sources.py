@@ -33,7 +33,11 @@ DEM_SOURCES: dict[str, tuple[Source, Source]] = {
     "85s_20m": _dem("ldem_85s_20m", 920_272_896),
     # 75°S 이남(극에서 약 457 km). 85°S 이남 ROI의 수평선을 200 km까지 DEM 안에서 계산할 수 있다
     "75s_120m": _dem("ldem_75s_120m", 232_501_504),
+    # 60°S 이남(극에서 약 931 km). 뷰어가 85°S 밖까지 햇빛으로 그리는 넓은 구역용 (렌더링 전용)
+    "60s_240m": _dem("ldem_60s_240m", 240_870_400),
 }
+# 넓은 구역(60°S까지)의 경사 타일과 햇빛 지도에 쓰는 DEM. 기본 다운로드에 들지 않는다
+WIDE_DEM = "60s_240m"
 
 SPICE_SOURCES: tuple[Source, ...] = (
     Source("NAIF leapseconds", f"{_NAIF}/lsk/naif0012.tls", "naif0012.tls"),

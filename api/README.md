@@ -112,7 +112,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 수평선은 지점과 DEM으로만 정해지고 날짜·제약과 무관해서, 한 번 계산해 `DATA_DIR/horizons/`에 저장해 두고 이후 탐색이 읽는다 (약 210 MB, git 제외).
 `uv run python -m lunar_margin.pipeline.horizons`로 만든다. 자세한 내용은 [docs/candidates.md](../docs/candidates.md) 6a절.
-그다음 `uv run python -m lunar_margin.pipeline.overlay_tiles`가 이 테이블로 렌더링용 그림자·경사 타일(경사는 500 m 한 장 + 160 m·80 m 타일, 약 60 MB)을 `DATA_DIR/tiles/`에 굽는다. `pipeline.fetch --sfs`로 5 m 지역 DEM을 받아 두었으면 그 지역의 20 m·5 m 타일도 함께 굽는다 (`GET /tiles/...`, [docs/api.md](../docs/api.md) Tiles 절).
+그다음 `uv run python -m lunar_margin.pipeline.overlay_tiles`가 이 테이블로 렌더링용 그림자·경사 타일(경사는 500 m 한 장 + 160 m·80 m 타일, 약 60 MB)을 `DATA_DIR/tiles/`에 굽는다. `pipeline.fetch --sfs`로 5 m 지역 DEM을 받아 두었으면 그 지역의 20 m·5 m 타일도 함께 굽는다 (`GET /tiles/...`, [docs/api.md](../docs/api.md) Tiles 절). `pipeline.fetch --wide`로 60°S까지의 240 m DEM을 받아 두었으면 넓은 구역의 경사(`normal-wide`, 13 MB)도 굽는다. 그것만 구우려면 `--wide-only`를 붙인다.
 
 만드는 데 20~50분이 걸려서, 한 번 만든 테이블은 Supabase Storage(비공개 버킷)로 공유한다.
 

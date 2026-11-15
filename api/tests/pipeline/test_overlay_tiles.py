@@ -17,7 +17,7 @@ from lunar_margin.engine.candidates.horizon_table import (
 from lunar_margin.engine.candidates.projection import polar_xy_to_lonlat
 from lunar_margin.engine.dem import PolarDem, RasterDem
 from lunar_margin.engine.horizon import horizon_profile
-from lunar_margin.pipeline.overlay_tiles import build_overlay_tiles
+from lunar_margin.pipeline.overlay_tiles import build_overlay_tiles, build_wide_normal_tiles
 from lunar_margin.pipeline.pds_label import PolarGridLabel
 
 N, C = 201, 100  # 100 m 격자, 극에서 +-10 km
@@ -318,3 +318,83 @@ def test_a_region_outside_the_roi_circle_gets_no_tiles(tmp_path: Path) -> None:
     only_corner = build_detail(tmp_path / "corner", [corner])
     corner_levels = json.loads((only_corner / "normal" / "meta.json").read_text())["levels"]
     assert [level["z"] for level in corner_levels] == [0, 1, 2]
+
+
+# --- 넓은 구역 (normal-wide): 85°S 밖까지 한 장으로 덮는 경사 ----------------------------
+
+
+def build_wide(dem: PolarDem, root: Path, radius_m: float = 8_000.0) -> Path:
+    build_wide_normal_tiles(
+        dem,
+        root,
+        radius_m=radius_m,
+        pixel_size_m=500.0,
+        sunlight_pixel_size_m=250.0,
+        sample_step_m=100.0,
+    )
+    return root
+
+
+def wide_slopes_at(out: Path, x_m: float, y_m: float) -> tuple[float, float] | None:
+    level, image = level0(out, "normal-wide")
+    center, pixel = int(level["center_px"]), float(level["pixel_size_m"])
+    r, g, b, a = (int(v) for v in image[center - round(y_m / pixel), center + round(x_m / pixel)])
+    if r == g == b == a == 0:
+        return None
+    return ((r * 256 + g) - 32768) / 16384, ((b * 256 + a) - 32768) / 16384
+
+
+def test_the_wide_layer_is_one_image_out_to_its_radius_and_names_the_sunlight_grid(
+    tmp_path: Path,
+) -> None:
+    out = build_wide(tilted_dem(), tmp_path)
+
+    meta = json.loads((out / "normal-wide" / "meta.json").read_text())
+    width, height, _ = decode_png((out / "normal-wide" / "0" / "0" / "0.png").read_bytes())
+
+    assert meta["version"] == 1 and meta["layer"] == "normal-wide"
+    assert meta["levels"] == [
+        {
+            "z": 0,
+            "pixel_size_m": 500.0,
+            "size_px": 33,
+            "center_px": 16,
+            "tile_px": 33,
+            "tiles_per_side": 1,
+        }
+    ]
+    assert meta["encoding"] == {"bias": 32768, "scale": 16384}
+    # 햇빛 지도는 같은 반경을 더 촘촘한 격자로 덮는다
+    assert meta["sunlight"] == {"pixel_size_m": 250.0, "size_px": 65, "center_px": 32}
+    assert (width, height) == (33, 33)
+
+
+def test_wide_tiles_give_the_local_east_and_north_slope(tmp_path: Path) -> None:
+    # 투영 평면에서 +x(경도 90° 방향)로 5% 오르는 평면
+    out = build_wide(tilted_dem(east_per_m=0.05), tmp_path)
+
+    assert wide_slopes_at(out, 0.0, 4000.0) == pytest.approx((0.05, 0.0), abs=1e-4)
+    assert wide_slopes_at(out, 4000.0, 0.0) == pytest.approx((0.0, 0.05), abs=1e-4)
+    assert wide_slopes_at(out, 0.0, -4000.0) == pytest.approx((-0.05, 0.0), abs=1e-4)
+
+
+def test_a_wide_pixel_holds_the_mean_slope_of_the_ground_it_covers(tmp_path: Path) -> None:
+    # x = -100~100 m에서만 20 m 오르는 좁은 비탈. 500 m 픽셀 하나가 덮는 땅은 500 m에 20 m 오른다.
+    # 픽셀 간격으로만 재면 (양옆 500 m 지점의 차이) 1000 m에 20 m로 절반이 된다
+    label = PolarGridLabel(N, N, 100.0, float(C), float(C), 1737.4, 1737.4, -90.0)
+    x_m = (np.mgrid[0:N, 0:N][1] - C) * 100.0
+    ramp = PolarDem((np.clip((x_m + 100.0) / 200.0, 0.0, 1.0) * 0.020).astype(np.float32), label)
+
+    out = build_wide(ramp, tmp_path)
+
+    assert wide_slopes_at(out, 0.0, 4000.0) == pytest.approx((0.04, 0.0), abs=1e-3)
+    assert wide_slopes_at(out, 1000.0, 4000.0) == pytest.approx((0.0, 0.0), abs=1e-3)
+
+
+def test_wide_pixels_beyond_the_dem_carry_no_data(tmp_path: Path) -> None:
+    # DEM은 극에서 +-10 km인데 12 km까지 굽는다
+    out = build_wide(tilted_dem(east_per_m=0.05), tmp_path, radius_m=12_000.0)
+
+    assert wide_slopes_at(out, 0.0, 11_500.0) is None
+    assert wide_slopes_at(out, -11_500.0, 0.0) is None
+    assert wide_slopes_at(out, 0.0, 9_000.0) == pytest.approx((0.05, 0.0), abs=1e-4)
