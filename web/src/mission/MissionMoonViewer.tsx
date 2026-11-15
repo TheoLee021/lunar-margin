@@ -13,7 +13,18 @@ import type { CandidateSite, MissionSelection } from './types'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
 
 /** Close enough that metre-scale equipment reads on screen. */
-const EQUIPMENT_RANGE_M = 5000
+const EQUIPMENT_RANGE_M = 800
+/**
+ * Near ground level, not the usual look-down view. The Earth sits about 4 degrees up
+ * at the pole, so from above a line of sight lies flat on the terrain and disappears
+ * into it; from here it rises clear of the ridge line against the black sky.
+ */
+const EQUIPMENT_PITCH_DEG = -20
+/**
+ * Stand at right angles to the rays. Looking along them they are edge-on and read as
+ * dots; from the side they cross the screen and climb away from the ridge.
+ */
+const SIDE_ON_DEG = 90
 
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
@@ -69,9 +80,15 @@ export function MissionMoonViewer({
   const runTraverse = () => {
     if (!selected) return
     cancelAnimationFrame(frame.current)
+    const earthAzimuth =
+      sky.kind === 'ready'
+        ? (sky.sky.waypoints.find((point) => point)?.azimuthDeg ?? 0)
+        : 0
     viewer.current?.flyTo(
       { lat: selected.latitude, lon: selected.longitude },
       EQUIPMENT_RANGE_M,
+      EQUIPMENT_PITCH_DEG,
+      earthAzimuth - SIDE_ON_DEG,
     )
     const started = performance.now()
     const step = (now: number) => {

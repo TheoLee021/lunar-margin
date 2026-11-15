@@ -13,8 +13,17 @@ import { parseSunDirection, type Vector3 } from './sun'
 
 /** Imperative API for panels. Calls made before the Moon has loaded are applied once it is ready. */
 export interface MoonViewerHandle {
-  /** `rangeM` is the distance to the point; it defaults to a whole-site view. */
-  flyTo(location: LunarLocation, rangeM?: number): void
+  /**
+   * `rangeM` is the distance to the point, `pitchDeg` the camera's tilt (negative
+   * looking down) and `headingDeg` the compass direction it faces. They default to a
+   * whole-site view from above, looking north.
+   */
+  flyTo(
+    location: LunarLocation,
+    rangeM?: number,
+    pitchDeg?: number,
+    headingDeg?: number,
+  ): void
   /** Back to the start view straight above the south pole. No-op until the Moon has loaded. */
   flyToOverview(): void
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
@@ -58,7 +67,12 @@ export default function MoonViewer({
   const compassRef = useRef<HTMLSpanElement>(null)
   const sceneRef = useRef<MoonScene | null>(null)
   const pending = useRef<{
-    fly?: { location: LunarLocation; rangeM?: number }
+    fly?: {
+      location: LunarLocation
+      rangeM?: number
+      pitchDeg?: number
+      headingDeg?: number
+    }
     sun?: Vector3 | null
     assets?: readonly MoonAsset[]
   }>({})
@@ -81,9 +95,10 @@ export default function MoonViewer({
   useImperativeHandle(
     ref,
     () => ({
-      flyTo(location, rangeM) {
-        if (sceneRef.current) sceneRef.current.flyTo(location, rangeM)
-        else pending.current.fly = { location, rangeM }
+      flyTo(location, rangeM, pitchDeg, headingDeg) {
+        if (sceneRef.current)
+          sceneRef.current.flyTo(location, rangeM, pitchDeg, headingDeg)
+        else pending.current.fly = { location, rangeM, pitchDeg, headingDeg }
       },
       flyToOverview() {
         sceneRef.current?.flyToOverview()
@@ -132,7 +147,8 @@ export default function MoonViewer({
         pending.current = {}
         if (sun !== undefined) created.setSunDirection(sun)
         if (assets) created.setAssets(assets)
-        if (fly) created.flyTo(fly.location, fly.rangeM)
+        if (fly)
+          created.flyTo(fly.location, fly.rangeM, fly.pitchDeg, fly.headingDeg)
         setState({ kind: 'ready' })
       })
       .catch((error: unknown) => {

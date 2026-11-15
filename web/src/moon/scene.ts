@@ -71,8 +71,17 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
-  /** `rangeM` is the distance to the point; it defaults to a whole-site view. */
-  flyTo(location: LunarLocation, rangeM?: number): void
+  /**
+   * `rangeM` is the distance to the point, `pitchDeg` the camera's tilt (negative
+   * looking down) and `headingDeg` the compass direction it faces. They default to a
+   * whole-site view from above, looking north.
+   */
+  flyTo(
+    location: LunarLocation,
+    rangeM?: number,
+    pitchDeg?: number,
+    headingDeg?: number,
+  ): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
@@ -203,11 +212,11 @@ export async function createMoonScene(
   camera.setView(overview)
 
   return {
-    flyTo(location, rangeM = SITE_RANGE_M) {
+    flyTo(location, rangeM = SITE_RANGE_M, pitchDeg, headingDeg = 0) {
       flyAround(
         Cartesian3.fromDegrees(location.lon, location.lat),
-        0,
-        OBLIQUE_PITCH,
+        CesiumMath.toRadians(headingDeg),
+        pitchDeg === undefined ? OBLIQUE_PITCH : CesiumMath.toRadians(pitchDeg),
         rangeM,
         2,
       )

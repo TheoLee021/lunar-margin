@@ -1,17 +1,18 @@
 import {
-  ArcType,
   CallbackPositionProperty,
   CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
-  ColorMaterialProperty,
   ConstantProperty,
   DistanceDisplayCondition,
   Ellipsoid,
   Entity,
   HeightReference,
+  Material,
   Matrix4,
+  Polyline,
+  PolylineCollection,
   Transforms,
   VerticalOrigin,
   type Viewer,
@@ -73,12 +74,6 @@ const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
 const SIGHT_CLEAR = Color.fromCssColorString('#4ade80')
 const SIGHT_BLOCKED = Color.fromCssColorString('#f87171')
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191ee6')
-/**
- * The Earth sits about 4 degrees up at the pole, so close to the ground the ray spends
- * its first kilometres inside the terrain. The buried stretch is drawn faint instead of
- * being swallowed: that is the ridge doing the blocking, which is the point of the demo.
- */
-const BEHIND_TERRAIN_ALPHA = 0.55
 
 export interface AssetLayer {
   /**
@@ -98,8 +93,6 @@ interface Live {
   mast: Cartesian3
   color: Color
   label: string
-  /** Last drawn ray, so an unchanged one is never handed a fresh property object. */
-  sight: Cartesian3[]
   /** Last ground point that sampled cleanly, so a streaming tileset cannot drop the ray. */
   ground?: Cartesian3
 }
@@ -107,12 +100,21 @@ interface Live {
 interface Drawn {
   body: Entity
   mast: Entity
-  sight: Entity
+  sight: Polyline
   live: Live
 }
 
 export function createAssetLayer(viewer: Viewer): AssetLayer {
   const drawn = new Map<string, Drawn>()
+  /**
+   * The sight rays are primitives, not entities. An entity polyline whose positions
+   * change every frame stops drawing while it moves, because each new property object
+   * sends Cesium's updater back and forth between its static and dynamic batches.
+   * A PolylineCollection takes new positions by plain assignment and keeps drawing,
+   * and it draws straight through space, which is what a line of sight is.
+   */
+  const sights = new PolylineCollection()
+  viewer.scene.primitives.add(sights)
 
   const positionAt = (location: LunarLocation, heightM: number): Cartesian3 =>
     Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
@@ -159,7 +161,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       mast: positionAt(asset.location, asset.observerHeightM / 2),
       color: SIGHT_CLEAR,
       label: asset.label,
-      sight: [],
     }
 
     const body = viewer.entities.add({
@@ -234,19 +235,11 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       },
     })
 
-    const sight = viewer.entities.add({
+    const sight = sights.add({
+      positions: [],
+      width: 2,
       show: false,
-      polyline: {
-        positions: new ConstantProperty(live.sight),
-        // A line of sight runs straight through space; the default geodesic would bend
-        // it along the surface.
-        arcType: ArcType.NONE,
-        width: 2,
-        material: new ColorMaterialProperty(live.color),
-        depthFailMaterial: new ColorMaterialProperty(
-          live.color.withAlpha(BEHIND_TERRAIN_ALPHA),
-        ),
-      },
+      material: Material.fromType('Color', { color: live.color }),
     })
 
     return { body, mast, sight, live }
@@ -263,24 +256,16 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       )
     entities.mast.show = asset.observerHeightM >= MAST_MIN_M
 
-    const { polyline } = sight
-    if (!polyline) return
     const positions = sightPositions(asset, live)
-    // Only hand Cesium a new property when the ray actually moved. Replacing these
-    // every frame rebuilds the geometry for assets that are standing still.
-    if (!samePositions(positions, live.sight)) {
-      live.sight = positions
-      polyline.positions = new ConstantProperty(positions)
-    }
+    sight.positions = positions
     sight.show = positions.length > 0
 
+    // The colour changes when the horizon verdict flips, which is rare: rebuild the
+    // material only then, never on the frames in between.
     const color = asset.earth?.visible ? SIGHT_CLEAR : SIGHT_BLOCKED
     if (!Color.equals(color, live.color)) {
       live.color = color
-      polyline.material = new ColorMaterialProperty(color)
-      polyline.depthFailMaterial = new ColorMaterialProperty(
-        color.withAlpha(BEHIND_TERRAIN_ALPHA),
-      )
+      sight.material = Material.fromType('Color', { color })
     }
   }
 
@@ -291,7 +276,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         if (keep.has(id)) continue
         viewer.entities.remove(entities.body)
         viewer.entities.remove(entities.mast)
-        viewer.entities.remove(entities.sight)
+        sights.remove(entities.sight)
         drawn.delete(id)
       }
       for (const asset of assets) {
@@ -304,14 +289,4 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       }
     },
   }
-}
-
-function samePositions(
-  next: readonly Cartesian3[],
-  previous: readonly Cartesian3[],
-): boolean {
-  return (
-    next.length === previous.length &&
-    next.every((point, index) => Cartesian3.equals(point, previous[index]))
-  )
 }
