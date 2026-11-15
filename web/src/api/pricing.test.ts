@@ -1,5 +1,10 @@
 import { expect, test } from 'vitest'
-import { formatPrice, isTransitPossible, fetchCalendar } from './pricing'
+import {
+  formatPrice,
+  isTransitPossible,
+  fetchCalendar,
+  fetchGridPrices,
+} from './pricing'
 
 test('prices display two significant digits and transit is only an eligibility gate', () => {
   expect(formatPrice(37_248_800)).toBe('$37M')
@@ -43,4 +48,32 @@ test('calendar refuses a response for a different cargo or dates', async () => {
       },
     ),
   ).rejects.toThrow()
+})
+
+test('grid prices reject a response for a different candidate run', async () => {
+  await expect(
+    fetchGridPrices('m-requested', 24, 'surface', {
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            run_id: 'm-other',
+            landing_date: '2027-01-09',
+            mission_duration_days: 14,
+            grid_spacing_m: 500,
+            counts: {
+              fine: 0,
+              eligible: 0,
+              priced: 0,
+              terrain_excluded: 0,
+              terrain_unknown: 0,
+              unevaluated: 0,
+              coarse_ignored: 0,
+            },
+            mean: null,
+            cells: [],
+          }),
+          { status: 200 },
+        ),
+    }),
+  ).rejects.toThrow('탐색 실행')
 })

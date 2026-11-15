@@ -198,18 +198,21 @@ export async function fetchCalendar(
   return result
 }
 
-export function fetchGridPrices(
+export async function fetchGridPrices(
   runId: string,
   mass: number,
   delivery: Delivery,
   options?: RequestOptions,
 ) {
   runPath(runId) // Validate the identifier using the shared contract.
-  return getJson(
+  const result = await getJson(
     `/pricing/runs/${runId}?mass_kg=${mass}&delivery=${delivery}&include_cells=true`,
     RunPricesSchema,
     options,
   )
+  if (result.run_id !== runId)
+    throw new ApiError('가격 응답의 탐색 실행이 요청과 일치하지 않습니다.', 200)
+  return result
 }
 
 export function formatPrice(usd: number): string {

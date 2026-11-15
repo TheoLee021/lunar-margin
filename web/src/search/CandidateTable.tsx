@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import { formatPrice } from '../api/pricing'
+import type { CandidatePrices } from './useCandidatePrices'
 import type { Candidate } from '../api/candidates'
 import type { CandidateAvailability } from '../api/reservations'
 import {
@@ -13,6 +15,7 @@ import {
 interface Props {
   candidates: readonly Candidate[]
   reservations: ReadonlyMap<string, CandidateAvailability> | null
+  prices: CandidatePrices
   highlightedId: string | null
   selectedId: string | null
   onHover: (id: string | null) => void
@@ -38,6 +41,7 @@ const COLUMNS: readonly {
 export function CandidateTable({
   candidates,
   reservations,
+  prices,
   highlightedId,
   selectedId,
   onHover,
@@ -76,33 +80,42 @@ export function CandidateTable({
               예약 상태 / 가능 순위
             </th>
             {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                scope="col"
-                aria-sort={
-                  sort.key === col.key
-                    ? sort.dir === 'asc'
-                      ? 'ascending'
-                      : 'descending'
-                    : 'none'
-                }
-                className={`px-3 py-2 font-medium text-neutral-400 ${
-                  col.align === 'right' ? 'text-right' : 'text-left'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggle(col.key)}
-                  className="hover:text-neutral-100"
+              <Fragment key={col.key}>
+                <th
+                  scope="col"
+                  aria-sort={
+                    sort.key === col.key
+                      ? sort.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  className={`px-3 py-2 font-medium text-neutral-400 ${
+                    col.align === 'right' ? 'text-right' : 'text-left'
+                  }`}
                 >
-                  {col.label}
-                  {sort.key === col.key
-                    ? sort.dir === 'asc'
-                      ? ' ▲'
-                      : ' ▼'
-                    : ''}
-                </button>
-              </th>
+                  <button
+                    type="button"
+                    onClick={() => toggle(col.key)}
+                    className="hover:text-neutral-100"
+                  >
+                    {col.label}
+                    {sort.key === col.key
+                      ? sort.dir === 'asc'
+                        ? ' ▲'
+                        : ' ▼'
+                      : ''}
+                  </button>
+                </th>
+                {col.key === 'rank' ? (
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-right font-medium whitespace-nowrap text-neutral-400"
+                  >
+                    가격 (USD)
+                  </th>
+                ) : null}
+              </Fragment>
             ))}
           </tr>
         </thead>
@@ -157,6 +170,9 @@ export function CandidateTable({
                 <td className="px-3 py-1.5 text-right tabular-nums text-neutral-200">
                   {c.rank}
                 </td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap tabular-nums text-amber-300">
+                  <CandidatePriceValue prices={prices} id={c.id} />
+                </td>
                 <td className="px-3 py-1.5 text-left">
                   <button
                     type="button"
@@ -204,5 +220,61 @@ export function CandidateTable({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function CandidatePriceValue({
+  prices,
+  id,
+}: {
+  prices: CandidatePrices
+  id: string
+}) {
+  if (prices.status === 'loading')
+    return <span className="text-neutral-500">조회 중…</span>
+  if (prices.status === 'error')
+    return <span className="text-neutral-500">조회 실패</span>
+  if (prices.status === 'unavailable')
+    return <span className="text-neutral-500">산정 불가</span>
+  const cell = prices.data.get(id)
+  if (!cell)
+    return (
+      <span
+        className="text-neutral-500"
+        title="가격 산정 대상인 적합 500 m 격자에 포함되지 않습니다"
+      >
+        미산정
+      </span>
+    )
+  if (!cell.price)
+    return (
+      <span
+        className="text-neutral-500"
+        title={
+          cell.excluded_reason === 'aim_point_slope_above_10_deg'
+            ? '가격 모델의 중심 경사 한도 10° 초과'
+            : cell.excluded_reason === 'landable_fraction_below_0.05'
+              ? '가격 모델의 착륙 가능 면적 비율 5% 미만'
+              : '가격 모델의 지형 조건 미충족'
+        }
+      >
+        산정 제외
+      </span>
+    )
+  return (
+    <>
+      <span
+        title={cell.price.adjusted_usd.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        })}
+      >
+        {formatPrice(cell.price.adjusted_usd)}
+      </span>
+      {cell.price.destination_unknown || cell.aim_slope_deg === null ? (
+        <span className="block text-[10px] text-neutral-500">지형 미확인</span>
+      ) : null}
+    </>
   )
 }
