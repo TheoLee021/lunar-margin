@@ -347,12 +347,8 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         fixed_frame="MOON_ME",
         pre_loi_j2000_km_kmps=pre_moon_j2000.tolist(),
         post_loi_j2000_km_kmps=post_moon_j2000.tolist(),
-        pre_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(
-            pre_moon_si, arrival
-        ).tolist(),
-        post_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(
-            post_moon_si, arrival
-        ).tolist(),
+        pre_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(pre_moon_si, arrival).tolist(),
+        post_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(post_moon_si, arrival).tolist(),
     )
     t_post = np.unique(
         np.r_[
