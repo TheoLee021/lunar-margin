@@ -38,7 +38,7 @@ describe('Mission Engineering requirement margins', () => {
     expect(rows.every((row) => row.status === 'PASS')).toBe(true)
   })
 
-  it('marks negative constraints as FAIL instead of hiding behind an overall score', () => {
+  it('marks negative margins as FAIL', () => {
     const rows = requirementMargins(
       { ...candidate, sun: { ...candidate.sun, longest_dark_hours: 30 } },
       config,
@@ -81,7 +81,7 @@ describe('Mission Engineering requirement margins', () => {
     expect(marginSummary(rows)).toBe('UNKNOWN')
   })
 
-  it('omits unset constraints rather than inventing lander requirements', () => {
+  it('omits unset lander constraints', () => {
     const rows = requirementMargins(candidate, {
       ...config,
       thresholds: {
