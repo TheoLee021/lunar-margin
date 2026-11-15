@@ -542,7 +542,22 @@ ${sunWindowSlots
       int code = int(round(texelFetch(u_viewshed, cell, 0).r * 255.0));
       if (code == 0) return;
       vec3 tint = code == 2 ? vec3(0.10, 0.78, 0.40) : vec3(0.88, 0.25, 0.20);
-      material.diffuse = mix(material.diffuse, tint, 0.52);
+      // Radial transects lie on the terrain. Each segment uses the visibility of its own cell.
+      const float bearingStep = 0.261799388; // 24 transects, every 15 degrees
+      float radius = length(offset);
+      float bearing = atan(offset.y, offset.x);
+      float angle = mod(bearing + 0.5 * bearingStep, bearingStep) - 0.5 * bearingStep;
+      float crossTrack = radius * sin(angle);
+      float alongTrack = radius * cos(angle);
+      float line = 1.0 - smoothstep(0.25, 1.1, abs(crossTrack) / pixelM);
+      float station = clamp(floor(alongTrack / 1000.0 + 0.5), 1.0, 5.0);
+      float dotDistance = length(vec2(crossTrack, alongTrack - station * 1000.0)) / pixelM;
+      float dotInk = 1.0 - smoothstep(1.8, 2.8, dotDistance);
+      float rim = 1.0 - smoothstep(0.3, 1.4, (5000.0 - radius) / pixelM);
+      vec3 base = mix(material.diffuse, tint, code == 2 ? 0.055 : 0.14);
+      vec3 ink = code == 2 ? vec3(0.04, 0.98, 0.52) : vec3(0.96, 0.14, 0.12);
+      material.diffuse = mix(base, ink, max(0.85 * line, 0.55 * rim));
+      material.diffuse = mix(material.diffuse, mix(ink, vec3(1.0), 0.25), dotInk);
     }
   `,
   })
