@@ -147,3 +147,11 @@ continues to require its matching precomputed horizon table.
 Space Launch Schedule의 전체 발사 예정일을 데모 입력으로 고를 수 있습니다. 착륙일은 별도로 직접
 선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
 실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).
+
+Candidate search also accepts an optional **maximum regional roughness (m)**.
+It uses the 250 m regional P95 of 400 m plane-detrended RMS roughness, separate
+from slope in degrees. Leave it blank to disable; enabled terrain constraints
+require complete regional coverage. Run a new search to apply it. Candidate
+tables and details show measured roughness, and excessive roughness appears in
+exclusion reasons. This filters eligibility before ranking, without changing the
+Sun/Earth weighting or certifying landing safety.

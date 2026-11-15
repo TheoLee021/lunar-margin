@@ -471,8 +471,15 @@ def test_a_missing_supplementary_dem_is_an_error_like_the_main_one(
         run_search(SMALL, tmp_path, log=lambda _: None)
 
 
-def test_slope_filter_rejects_missing_terrain_instead_of_treating_it_as_flat(
-    data_dir: Path, tmp_path: Path
+@pytest.mark.parametrize(
+    "thresholds",
+    [
+        Thresholds(max_terrain_slope_degrees=10),
+        Thresholds(max_terrain_roughness_m=0),
+    ],
+)
+def test_terrain_filters_reject_missing_terrain_instead_of_treating_it_as_flat(
+    data_dir: Path, tmp_path: Path, thresholds: Thresholds
 ) -> None:
     import numpy as np
 
@@ -502,7 +509,7 @@ CENTER_LATITUDE = -90
             "fallback_dem": None,
             "max_range_m": 500,
             "workers": 1,
-            "thresholds": Thresholds(max_terrain_slope_degrees=10),
+            "thresholds": thresholds,
         }
     )
     heights.tofile(image)
@@ -545,3 +552,28 @@ def test_api_serves_applied_slope_and_terrain_from_a_saved_mission(
     assert body["config"]["thresholds"]["max_terrain_slope_degrees"] == 90
     assert body["candidates"][0]["terrain"]["slope_p95_deg"] > 0
     assert body["candidates"][0]["terrain"]["coverage_fraction"] == 1
+
+
+def test_roughness_limit_filters_candidates_independently_of_slope(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.candidates import run_mission
+
+    for name, limit in (("loose", 1000), ("strict", 0.001)):
+        request = mission(max_terrain_slope_degrees=None, max_terrain_roughness_m=limit)
+        run_mission(request, data_dir, tmp_path / name, base=MISSION_TINY, log=lambda _: None)
+    loose, strict = load(tmp_path / "loose"), load(tmp_path / "strict")
+    assert loose.candidates
+    assert strict.candidates == []
+    assert strict.summary.reasons["terrain_roughness_above_max"] > 0
+    assert all(
+        c.terrain is not None and c.terrain.roughness_p95_m is not None for c in loose.candidates
+    )
+
+
+@pytest.mark.parametrize("limit", [-1, float("inf"), float("nan")])
+def test_invalid_roughness_limits_are_rejected(limit: float) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        mission(max_terrain_roughness_m=limit)

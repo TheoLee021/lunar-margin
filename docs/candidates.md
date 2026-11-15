@@ -188,8 +188,8 @@ uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 받
 - **서버 시작 시 자동 받기**: 위 환경변수가 설정되어 있고 기본 설정의 테이블이 로컬에 없으면, 서버가 시작할 때 **백그라운드 스레드**로 Storage에서 받는다.
   서버는 기다리지 않고 바로 뜨고(헬스체크가 막히지 않는다), 받는 동안 시작한 탐색은 수평선을 직접 계산하며 경고를 남긴다. 실패해도 서버는 멈추지 않고 로그만 남긴다.
   DEM 파일이 아직 없으면 건너뛰고 `pipeline.fetch`를 안내한다. `HORIZON_TABLE_DOWNLOAD_ON_START=false`로 끈다.
-- **배포 환경**: `DATA_DIR`을 영구 Volume에 두어야 한다. 그렇지 않으면 배포할 때마다 약 150 MB를 다시 받는다.
-- 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`. 테스트는 가짜 서버로 했고 **실제 Supabase 프로젝트로는 아직 확인하지 않았다** (버킷 생성과 플랜별 한도 확인은 팀에서).
+- **배포 환경**: `DATA_DIR`을 영구 Volume에 두어야 한다. 그렇지 않으면 배포할 때마다 약 210 MB를 다시 받는다. 설정 절차는 [api/README.md](../api/README.md) "배포 (Railway)".
+- 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(팀 프로젝트는 `landing-spot`). 팀 Supabase 프로젝트에서 Railway 서버가 시작 시 테이블을 받아 쓰는 것을 확인했다 (2026-11-15).
 
 ## 7. 검증으로 확인한 것
 
@@ -303,3 +303,16 @@ uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 받
 세밀 528개, 중복 제거 후 총 659개 지점을 평가해 3개를 선정했고,
 4개 워커로 결과 저장까지 **28.07초**가 걸렸다. 같은 컴퓨터에서 별도 정밀 탐색이
 진행 중이었으므로 성능 보장값은 아니다. 실행 ID: `dev-v1-m-371188c132`.
+
+
+## Regional roughness constraint
+
+The optional maximum regional roughness input is in meters. It filters the
+250 m regional P95 of plane-detrended RMS roughness (400 m local windows),
+independently of the slope constraint. Blank means disabled. Incomplete terrain
+is excluded when either terrain constraint is enabled. Roughness is calculated
+with the existing terrain pass, including batched calendar search, so it does not
+repeat horizon or SPICE calculations. Candidate JSON, exports and the UI preserve
+this measurement; historic runs without it show no value rather than zero.
+The filter affects eligibility before ranking; the existing visibility weights
+are unchanged. It cannot resolve boulders or certify landing safety.

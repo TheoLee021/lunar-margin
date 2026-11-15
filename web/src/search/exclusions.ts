@@ -11,6 +11,7 @@ const FILTER_REASON_KEYS = [
   'earth_blackout_hours_above_max',
   'horizon_incomplete',
   'terrain_slope_above_max',
+  'terrain_roughness_above_max',
   'terrain_incomplete',
   'no_metrics',
 ] as const
@@ -94,6 +95,15 @@ export function dominantExclusion(
         advice: '지형 경사 한도를 늘리거나 다른 지역을 살펴보세요.',
       }
     }
+    case 'terrain_roughness_above_max':
+      return {
+        ...top,
+        limit:
+          thresholds.max_terrain_roughness_m == null
+            ? null
+            : `지역 거칠기 P95 ${thresholds.max_terrain_roughness_m} m 이하`,
+        advice: '거칠기 한도를 늘리거나 다른 지역을 살펴보세요.',
+      }
     case 'terrain_incomplete':
       return {
         ...top,
