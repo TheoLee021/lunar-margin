@@ -68,7 +68,7 @@ export function MissionMoonViewer({
   } | null>(null)
   useEffect(() => {
     if (lat === undefined || lon === undefined) return
-    viewer.current?.flyTo({ lat, lon }, 18000)
+    viewer.current?.flyTo(observer ?? { lat, lon }, 18000)
     const controller = new AbortController()
     void fetchViewshed(
       lat,
@@ -83,7 +83,7 @@ export function MissionMoonViewer({
         if (!controller.signal.aborted) setResult({ key, map: null })
       })
     return () => controller.abort()
-  }, [key, lat, lon])
+  }, [key, lat, lon, observer])
   const current = result?.key === key ? result : null
   const focusSite = (site: CandidateSite) =>
     viewer.current?.flyTo(

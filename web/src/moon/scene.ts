@@ -892,9 +892,27 @@ export async function createMoonScene(
       }
       const surface = pickSurface(position)
       if (!surface) return
-      options.onPick(
-        toLunarLocation(Cartographic.fromCartesian(surface, Ellipsoid.MOON)),
-      )
+      const ground = Cartographic.fromCartesian(surface, Ellipsoid.MOON)
+      const request = ++flight
+      const location = toLunarLocation(ground)
+      const publish = (height: number) => {
+        if (request === flight && !viewer.isDestroyed())
+          options.onPick({ ...location, surfaceHeightM: height })
+      }
+      if (scene.sampleHeightSupported) {
+        // An overview tile can be kilometres off the detailed terrain inside a crater.
+        const fallback = ground.height
+        void scene
+          .sampleHeightMostDetailed([ground])
+          .then(([sample]) => {
+            publish(
+              sample && Number.isFinite(sample.height)
+                ? sample.height
+                : fallback,
+            )
+          })
+          .catch(() => publish(fallback))
+      } else publish(ground.height)
     },
     ScreenSpaceEventType.LEFT_CLICK,
   )
@@ -937,12 +955,18 @@ export async function createMoonScene(
     },
     flyTo(location, rangeM = SITE_RANGE_M) {
       const request = ++flight
-      const position = Cartesian3.fromDegrees(location.lon, location.lat)
+      const position = Cartesian3.fromDegrees(
+        location.lon,
+        location.lat,
+        location.surfaceHeightM ?? 0,
+        Ellipsoid.MOON,
+      )
       const arrive = (surface: Cartesian3) => {
         if (viewer.isDestroyed() || request !== flight) return
         flyAround(surface, 0, OBLIQUE_PITCH, rangeM, 2)
       }
-      if (scene.clampToHeightSupported) {
+      if (location.surfaceHeightM !== undefined) arrive(position)
+      else if (scene.clampToHeightSupported) {
         void scene
           .clampToHeightMostDetailed([position])
           .then(([surface]) => arrive(surface ?? position))
