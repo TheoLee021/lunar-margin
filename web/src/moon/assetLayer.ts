@@ -11,11 +11,8 @@ import {
   Entity,
   HeadingPitchRoll,
   HorizontalOrigin,
-  Material,
   Math as CesiumMath,
   Matrix4,
-  Polyline,
-  PolylineCollection,
   Quaternion,
   Transforms,
   VerticalOrigin,
@@ -24,7 +21,26 @@ import {
 import { assetCardText } from './assetCard'
 import { assetSymbolImage, type AssetSymbol } from './assetSymbol'
 import type { LunarLocation } from './location'
-import { rayOffsetEnu, type SkyDirection } from './lineOfSight'
+import type { SkyDirection } from './lineOfSight'
+
+/**
+ * One piece of a built-up unit, placed in the unit's own frame: `alongM` runs the way
+ * it faces, `acrossM` to its right, `upM` off the ground, each to the piece's centre.
+ * A machine made of a chassis, a boom and wheels reads as a machine; one box does not.
+ */
+export interface ShapePart {
+  kind: 'box' | 'cylinder'
+  /** Across the unit, metres. A cylinder uses it as its diameter. */
+  widthM: number
+  /** Along the unit, metres. Ignored for a cylinder. */
+  depthM: number
+  heightM: number
+  acrossM?: number
+  alongM?: number
+  upM?: number
+  /** Overrides the default body colour. */
+  cssColor?: string
+}
 
 /** A piece of surface equipment, sized from its real stowed/deployed dimensions. */
 export interface AssetShape {
@@ -35,6 +51,8 @@ export interface AssetShape {
   depthM: number
   /** Height above the surface, metres. */
   heightM: number
+  /** Drawn instead of the single shape. The dimensions above stay the real envelope. */
+  parts?: readonly ShapePart[]
 }
 
 /**
@@ -65,16 +83,13 @@ export interface MoonAsset {
   shape: AssetShape
   /** Drawn instead of `shape` when given. `shape` still carries the real dimensions. */
   model?: AssetModel
-  /** Degrees clockwise from north the unit faces. Only meaningful for a model. */
+  /** Degrees clockwise from north the unit faces. */
   headingDeg?: number
   /** Badge above the unit saying what it is, since metre-scale shapes read alike. */
   symbol?: AssetSymbol
   /** The Earth in this asset's sky at the mission instant, or null when not evaluated. */
   earth: SkyDirection | null
 }
-
-/** Drawn length of a line of sight. A display choice, not the distance to the Earth. */
-const SIGHT_LENGTH_M = 40_000
 
 /**
  * Camera distance where a badge hands over to the equipment itself, metres.
@@ -90,20 +105,23 @@ const NEAR_BODY = new DistanceDisplayCondition(0, BODY_VISIBLE_WITHIN_M)
 const BADGE_RANGE = new DistanceDisplayCondition(0, 50_000)
 
 /**
- * The mast that carries the line of sight, drawn so its height is visible rather than
- * implied. A unit with a model of its own already has one, and a second would stand
- * straight through the body, so only plain shapes get it.
+ * The mast that carries the Earth link, drawn so its height is visible rather than
+ * implied. Units that bring their own geometry already have one, and a second would
+ * stand straight through the body.
  */
 const MAST_RADIUS_M = 0.12
 const MAST_MIN_M = 1
+const builtUp = (asset: MoonAsset): boolean =>
+  Boolean(asset.model ?? asset.shape.parts)
 const wantsMast = (asset: MoonAsset): boolean =>
-  !asset.model && asset.observerHeightM >= MAST_MIN_M
+  !builtUp(asset) && asset.observerHeightM >= MAST_MIN_M
 
 const MAST_COLOR = Color.fromCssColorString('#94a3b8')
 const BODY_COLOR = Color.fromCssColorString('#cbd5e1').withAlpha(0.95)
 const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
-const SIGHT_CLEAR = Color.fromCssColorString('#4ade80')
-const SIGHT_BLOCKED = Color.fromCssColorString('#f87171')
+/** The Earth verdict, carried by the card beside each unit. */
+const EARTH_CLEAR = Color.fromCssColorString('#4ade80')
+const EARTH_BLOCKED = Color.fromCssColorString('#f87171')
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191ee6')
 
 export interface AssetLayer {
@@ -115,12 +133,14 @@ export interface AssetLayer {
 }
 
 /**
- * What changes as an asset moves. The body and mast read it through callback properties
- * rather than being handed a fresh property object each frame, because that churn makes
- * Cesium rebuild their geometry on every tick of a traverse.
+ * What changes as an asset moves. Entities read it through callback properties rather
+ * than being handed a fresh property object each frame, because that churn makes
+ * Cesium rebuild their geometry on every tick of a drive.
  */
 interface Live {
-  body: Cartesian3
+  anchor: Cartesian3
+  /** One per drawn piece, already placed in the unit's own heading frame. */
+  pieces: Cartesian3[]
   orientation: Quaternion
   mast: Cartesian3
   color: Color
@@ -135,23 +155,15 @@ interface Live {
 }
 
 interface Drawn {
-  body: Entity
+  /** Carries the card and the badge; the geometry hangs off `pieces`. */
+  anchor: Entity
+  pieces: Entity[]
   mast: Entity
-  sight: Polyline
   live: Live
 }
 
 export function createAssetLayer(viewer: Viewer): AssetLayer {
   const drawn = new Map<string, Drawn>()
-  /**
-   * The sight rays are primitives, not entities. An entity polyline whose positions
-   * change every frame stops drawing while it moves, because each new property object
-   * sends Cesium's updater back and forth between its static and dynamic batches.
-   * A PolylineCollection takes new positions by plain assignment and keeps drawing,
-   * and it draws straight through space, which is what a line of sight is.
-   */
-  const sights = new PolylineCollection()
-  viewer.scene.primitives.add(sights)
 
   const positionAt = (location: LunarLocation, heightM: number): Cartesian3 =>
     Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
@@ -171,60 +183,81 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
     return live.ground
   }
 
-  const sightPositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
-    if (!asset.earth) return []
-    const frame = Transforms.eastNorthUpToFixedFrame(
+  const headingRad = (asset: MoonAsset): number =>
+    CesiumMath.toRadians(
+      (asset.headingDeg ?? 0) + (asset.model?.headingOffsetDeg ?? 0),
+    )
+
+  /** The unit's own frame on the ground: x to its right, y the way it faces, z up. */
+  const unitFrame = (asset: MoonAsset, ground: number): Matrix4 =>
+    Transforms.headingPitchRollToFixedFrame(
       positionAt(asset.location, ground),
+      new HeadingPitchRoll(headingRad(asset), 0, 0),
       Ellipsoid.MOON,
     )
-    const eye = Matrix4.multiplyByPoint(
-      frame,
-      new Cartesian3(0, 0, asset.observerHeightM),
-      new Cartesian3(),
-    )
-    const [east, north, up] = rayOffsetEnu(asset.earth, SIGHT_LENGTH_M)
-    const tip = Matrix4.multiplyByPoint(
-      frame,
-      new Cartesian3(east, north, asset.observerHeightM + up),
-      new Cartesian3(),
-    )
-    return [eye, tip]
+
+  /** Where each drawn piece sits, in order: the model, or the parts, or the one shape. */
+  const piecePositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
+    const frame = unitFrame(asset, ground)
+    const at = (across: number, along: number, up: number) =>
+      Matrix4.multiplyByPoint(
+        frame,
+        new Cartesian3(across, along, up),
+        new Cartesian3(),
+      )
+    if (asset.model) return [at(0, 0, asset.model.baseLiftM)]
+    const { parts } = asset.shape
+    if (parts)
+      return parts.map((part) =>
+        at(part.acrossM ?? 0, part.alongM ?? 0, part.upM ?? 0),
+      )
+    return [at(0, 0, asset.shape.heightM / 2)]
   }
 
-  /** Where the drawable sits: a model hangs off its own origin, a box off its centre. */
-  const anchorHeight = (asset: MoonAsset): number =>
-    asset.model ? asset.model.baseLiftM : asset.shape.heightM / 2
-
-  const facing = (asset: MoonAsset, position: Cartesian3): Quaternion =>
-    Transforms.headingPitchRollQuaternion(
-      position,
-      new HeadingPitchRoll(
-        CesiumMath.toRadians(
-          (asset.headingDeg ?? 0) + (asset.model?.headingOffsetDeg ?? 0),
-        ),
-        0,
-        0,
-      ),
-    )
+  const partGraphics = (part: ShapePart) => {
+    const material = part.cssColor
+      ? Color.fromCssColorString(part.cssColor)
+      : BODY_COLOR
+    return part.kind === 'box'
+      ? {
+          box: {
+            dimensions: new Cartesian3(part.widthM, part.depthM, part.heightM),
+            material,
+            outline: true,
+            outlineColor: BODY_OUTLINE,
+            distanceDisplayCondition: NEAR_BODY,
+          },
+        }
+      : {
+          cylinder: {
+            length: part.heightM,
+            topRadius: part.widthM / 2,
+            bottomRadius: part.widthM / 2,
+            material,
+            outline: true,
+            outlineColor: BODY_OUTLINE,
+            distanceDisplayCondition: NEAR_BODY,
+          },
+        }
+  }
 
   const create = (asset: MoonAsset): Drawn => {
     const { shape, symbol } = asset
     const live: Live = {
-      body: positionAt(asset.location, anchorHeight(asset)),
+      anchor: positionAt(asset.location, shape.heightM / 2),
+      pieces: piecePositions(asset, 0),
       orientation: Quaternion.IDENTITY,
       mast: positionAt(asset.location, asset.observerHeightM / 2),
-      color: SIGHT_CLEAR,
+      color: EARTH_CLEAR,
       card: assetCardText(asset),
       ground: 0,
     }
-    live.orientation = facing(asset, live.body)
 
-    const body = viewer.entities.add({
-      position: new CallbackPositionProperty(() => live.body, false),
+    const anchor = viewer.entities.add({
+      position: new CallbackPositionProperty(() => live.anchor, false),
       label: {
-        // A card beside the unit, not just a name. The ray that carries the same
-        // verdict is often buried in terrain, so the numbers have to stand on their
-        // own: whether the Earth is up, by how much, and from what height.
+        // A card beside the unit, not just a name: whether the Earth is up, by how
+        // much, the two angles that decided it, and the height it was measured from.
         text: new CallbackProperty(() => live.card, false),
         font: '500 12px monospace',
         showBackground: true,
@@ -250,41 +283,30 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
             },
           }
         : {}),
-      orientation: new CallbackProperty(() => live.orientation, false),
-      ...(asset.model
-        ? {
+    })
+
+    const graphics = asset.model
+      ? [
+          {
             model: {
               uri: asset.model.uri,
               scale: asset.model.scale,
               distanceDisplayCondition: NEAR_BODY,
             },
-          }
-        : shape.kind === 'box'
-          ? {
-              box: {
-                dimensions: new Cartesian3(
-                  shape.widthM,
-                  shape.depthM,
-                  shape.heightM,
-                ),
-                material: BODY_COLOR,
-                outline: true,
-                outlineColor: BODY_OUTLINE,
-                distanceDisplayCondition: NEAR_BODY,
-              },
-            }
-          : {
-              cylinder: {
-                length: shape.heightM,
-                topRadius: shape.widthM / 2,
-                bottomRadius: shape.widthM / 2,
-                material: BODY_COLOR,
-                outline: true,
-                outlineColor: BODY_OUTLINE,
-                distanceDisplayCondition: NEAR_BODY,
-              },
-            }),
-    })
+          },
+        ]
+      : (shape.parts ?? [shape]).map((part) => partGraphics(part))
+
+    const pieces = graphics.map((graphic, index) =>
+      viewer.entities.add({
+        position: new CallbackPositionProperty(
+          () => live.pieces[index] ?? live.anchor,
+          false,
+        ),
+        orientation: new CallbackProperty(() => live.orientation, false),
+        ...graphic,
+      }),
+    )
 
     const mast = viewer.entities.add({
       position: new CallbackPositionProperty(() => live.mast, false),
@@ -298,22 +320,19 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       },
     })
 
-    const sight = sights.add({
-      positions: [],
-      width: 2,
-      show: false,
-      material: Material.fromType('Color', { color: live.color }),
-    })
-
-    return { body, mast, sight, live }
+    return { anchor, pieces, mast, live }
   }
 
   const paint = (asset: MoonAsset, entities: Drawn): void => {
-    const { live, sight } = entities
+    const { live } = entities
     live.card = assetCardText(asset)
     const ground = groundAt(asset.location, live)
-    live.body = positionAt(asset.location, ground + anchorHeight(asset))
-    live.orientation = facing(asset, live.body)
+    live.anchor = positionAt(asset.location, ground + asset.shape.heightM / 2)
+    live.orientation = Transforms.headingPitchRollQuaternion(
+      live.anchor,
+      new HeadingPitchRoll(headingRad(asset), 0, 0),
+    )
+    live.pieces = piecePositions(asset, ground)
     live.mast = positionAt(asset.location, ground + asset.observerHeightM / 2)
     if (entities.mast.cylinder)
       entities.mast.cylinder.length = new ConstantProperty(
@@ -321,17 +340,8 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       )
     entities.mast.show = wantsMast(asset)
 
-    const positions = sightPositions(asset, ground)
-    sight.positions = positions
-    sight.show = positions.length > 0
-
-    // The colour changes when the horizon verdict flips, which is rare: rebuild the
-    // material only then, never on the frames in between.
-    const color = asset.earth?.visible ? SIGHT_CLEAR : SIGHT_BLOCKED
-    if (!Color.equals(color, live.color)) {
-      live.color = color
-      sight.material = Material.fromType('Color', { color })
-    }
+    const color = asset.earth?.visible ? EARTH_CLEAR : EARTH_BLOCKED
+    if (!Color.equals(color, live.color)) live.color = color
   }
 
   return {
@@ -339,9 +349,9 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       const keep = new Set(assets.map((asset) => asset.id))
       for (const [id, entities] of drawn) {
         if (keep.has(id)) continue
-        viewer.entities.remove(entities.body)
+        viewer.entities.remove(entities.anchor)
         viewer.entities.remove(entities.mast)
-        sights.remove(entities.sight)
+        for (const piece of entities.pieces) viewer.entities.remove(piece)
         drawn.delete(id)
       }
       for (const asset of assets) {

@@ -70,6 +70,70 @@ const drum = (diameterM: number, heightM: number): AssetShape => ({
   heightM,
 })
 
+const WHEEL = '#1f2937'
+const CUTTER = '#f0a43c'
+
+/**
+ * The trencher, built from its parts rather than borrowed from the rover model: it is
+ * a 4.8 x 2.0 m digging machine with a boom out front, and the rover file is a tall
+ * narrow prospector. Drawing them the same made the two moving units indistinguishable.
+ * `alongM` runs the way it drives, so the boom leads and the blade clears in front.
+ */
+const TRENCHER_SHAPE: AssetShape = {
+  kind: 'box',
+  widthM: 2,
+  depthM: 4.8,
+  heightM: 2.4,
+  parts: [
+    { kind: 'box', widthM: 1.8, depthM: 3.2, heightM: 1, upM: 0.9 },
+    {
+      kind: 'box',
+      widthM: 0.5,
+      depthM: 1.8,
+      heightM: 0.35,
+      alongM: 2.1,
+      upM: 0.95,
+    },
+    {
+      kind: 'cylinder',
+      widthM: 1.2,
+      depthM: 1.2,
+      heightM: 0.45,
+      alongM: 2.9,
+      upM: 0.55,
+      cssColor: CUTTER,
+    },
+    {
+      kind: 'box',
+      widthM: 2,
+      depthM: 0.25,
+      heightM: 0.6,
+      alongM: 2.4,
+      upM: 0.3,
+    },
+    {
+      kind: 'cylinder',
+      widthM: 0.16,
+      depthM: 0.16,
+      heightM: 1.4,
+      alongM: -1,
+      upM: 1.7,
+    },
+    ...[-1.1, 1.1].flatMap((alongM) =>
+      [-0.95, 0.95].map((acrossM) => ({
+        kind: 'box' as const,
+        widthM: 0.35,
+        depthM: 0.8,
+        heightM: 0.8,
+        acrossM,
+        alongM,
+        upM: 0.4,
+        cssColor: WHEEL,
+      })),
+    ),
+  ],
+}
+
 // Dimensions and observer heights are the deployed figures from the equipment spec
 // sheet. Offsets are ours: cable runs and stand-off distances spread a site over a few
 // hundred metres, which is also what makes the units tell apart on screen.
@@ -110,8 +174,7 @@ export const COMPANIES: readonly Company[] = [
         label: '트렌처',
         offset: { eastM: 300, northM: -260 },
         observerHeightM: 2,
-        shape: box(2, 4.8, 2.4),
-        model: roverModel(2.4),
+        shape: TRENCHER_SHAPE,
         symbol: 'trencher',
       },
       speedMS: 0.2,
