@@ -54,7 +54,7 @@ def test_missing_terrain_never_passes_through_zero_filling() -> None:
 
 def test_incomplete_footprint_rejects_center_target() -> None:
     heights = np.zeros((101, 101), dtype=np.float32)
-    heights[50, 51] = np.nan
+    heights[50, 52] = np.nan
     result = evaluate_landing_grid(dem_with(heights), -90.0, 0.0)
     center = next(t for t in result.targets if t.dx_m == 0 and t.dy_m == 0)
     assert center.terrain_screen_pass is False
