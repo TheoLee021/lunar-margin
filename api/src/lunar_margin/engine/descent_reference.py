@@ -95,9 +95,7 @@ class PathResult:
 
 def surface_vector(lat_deg: float, lon_deg: float) -> Vec:
     phi, lam = math.radians(lat_deg), math.radians(lon_deg)
-    return np.array(
-        [math.cos(phi) * math.cos(lam), math.cos(phi) * math.sin(lam), math.sin(phi)]
-    )
+    return np.array([math.cos(phi) * math.cos(lam), math.cos(phi) * math.sin(lam), math.sin(phi)])
 
 
 def pdi_from_target(
@@ -181,14 +179,10 @@ def _trajectory_at_times(
         + loft_m * bump_d[:, None] * up[None, :]
     )
     acceleration = (
-        (
-            6 * c3[None, :] * s[:, None]
-            + 12 * c4[None, :] * s2[:, None]
-            + 20 * c5[None, :] * s3[:, None]
-        )
-        / duration_s**2
-        + loft_m * bump_dd[:, None] * up[None, :]
-    )
+        6 * c3[None, :] * s[:, None]
+        + 12 * c4[None, :] * s2[:, None]
+        + 20 * c5[None, :] * s3[:, None]
+    ) / duration_s**2 + loft_m * bump_dd[:, None] * up[None, :]
     return position, velocity, acceleration
 
 
@@ -258,9 +252,7 @@ def evaluate_reference(
     thrust = mass * acceleration_mag
     propellant = float(lander.wet_mass_kg - mass[-1])
     min_agl = (
-        float(np.min(dense_agl[np.isfinite(dense_agl)]))
-        if np.isfinite(dense_agl).any()
-        else None
+        float(np.min(dense_agl[np.isfinite(dense_agl)])) if np.isfinite(dense_agl).any() else None
     )
     peak = float(np.max(thrust))
     low = float(np.min(thrust))
@@ -296,9 +288,7 @@ def evaluate_reference(
         )
         for i in indices
     ]
-    return PathResult(
-        status, duration_s, loft_m, propellant, min_agl, peak, low, samples
-    )
+    return PathResult(status, duration_s, loft_m, propellant, min_agl, peak, low, samples)
 
 
 def evaluate_alternatives(
