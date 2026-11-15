@@ -257,7 +257,11 @@ def evaluate_reference(
     mass = lander.wet_mass_kg * np.exp(-integrated_acc / (lander.isp_s * G0))
     thrust = mass * acceleration_mag
     propellant = float(lander.wet_mass_kg - mass[-1])
-    min_agl = float(np.min(dense_agl[np.isfinite(dense_agl)])) if np.isfinite(dense_agl).any() else None
+    min_agl = (
+        float(np.min(dense_agl[np.isfinite(dense_agl)]))
+        if np.isfinite(dense_agl).any()
+        else None
+    )
     peak = float(np.max(thrust))
     low = float(np.min(thrust))
 
