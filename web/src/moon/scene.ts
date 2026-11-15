@@ -18,6 +18,7 @@ import {
   Viewer,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import { createAssetLayer, type MoonAsset } from './assetLayer'
 import { shouldFreeCameraAxis } from './camera'
 import { toLunarLocation, type LunarLocation } from './location'
 import { createMarkerLayer, type MoonMarker } from './markerLayer'
@@ -70,11 +71,14 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
-  flyTo(location: LunarLocation): void
+  /** `rangeM` is the distance to the point; it defaults to a whole-site view. */
+  flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
   setSelectedMarker(id: string | null): void
+  /** Surface equipment, drawn with its line of sight to the Earth. */
+  setAssets(assets: readonly MoonAsset[]): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
   resetNorth(): void
@@ -162,6 +166,7 @@ export async function createMoonScene(
   }
 
   const markers = createMarkerLayer(viewer)
+  const assets = createAssetLayer(viewer)
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
@@ -198,12 +203,12 @@ export async function createMoonScene(
   camera.setView(overview)
 
   return {
-    flyTo(location) {
+    flyTo(location, rangeM = SITE_RANGE_M) {
       flyAround(
         Cartesian3.fromDegrees(location.lon, location.lat),
         0,
         OBLIQUE_PITCH,
-        SITE_RANGE_M,
+        rangeM,
         2,
       )
     },
@@ -215,6 +220,9 @@ export async function createMoonScene(
     },
     setSelectedMarker(id) {
       markers.setSelected(id)
+    },
+    setAssets(next) {
+      assets.setAssets(next)
     },
     setSunDirection(direction) {
       if (direction === null) {
