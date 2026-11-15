@@ -62,6 +62,10 @@ export function DatePlanner({
   }, [launchRevision])
   const availability = (departure: string) =>
     departureAvailability(launchData, launchError, draft.launchId, departure)
+  const transitPossible = isTransitPossible(draft.departure, draft.landing)
+  const isNonLunarLaunch =
+    launchData?.launches.find((launch) => launch.id === draft.launchId)
+      ?.lunar_related === false
   const departureUnavailable =
     departureStatus?.departure === draft.departure &&
     departureStatus.launchId === (draft.launchId ?? null) &&
@@ -69,7 +73,8 @@ export function DatePlanner({
   const canApply =
     !departureUnavailable &&
     availability(draft.departure) === 'scheduled' &&
-    isTransitPossible(draft.departure, draft.landing)
+    transitPossible
+
   const validDraft = ScheduleSchema.safeParse(draft).success
   const score = validDraft ? demoDateScore(draft) : null
   const [formError, setFormError] = useState('')
@@ -222,6 +227,7 @@ export function DatePlanner({
               draft={draft}
               availability={availability}
               onDepartureStatus={setDepartureStatus}
+              isNonLunarLaunch={isNonLunarLaunch}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
@@ -257,6 +263,12 @@ export function DatePlanner({
         </div>
       </div>
       <footer className="planner-footer">
+        {validDraft && !transitPossible ? (
+          <p role="status">
+            전이는 3~150일이어야 합니다. 현재{' '}
+            {dayOf(draft.landing) - dayOf(draft.departure)}일입니다.
+          </p>
+        ) : null}
         <div>
           <span aria-live="polite">
             {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}

@@ -170,6 +170,14 @@ test('launch departure changes independently from the user landing date', async 
     page.getByLabel('기준 출발일 · UTC', { exact: true }),
   ).toHaveValue('2026-11-15')
   await expect(landing).toHaveValue('2027-01-12')
+  // A real launch date is only a simulation anchor; a two-day transit remains invalid.
+  await landing.fill('2026-11-17')
+  const apply = page.getByRole('button', { name: '일정 적용' })
+  await expect(apply).toBeDisabled()
+  await expect(apply).toHaveCSS('opacity', '0.45')
+  await expect(
+    page.getByRole('status').filter({ hasText: '전이는 3~150일' }),
+  ).toContainText('현재 2일')
 })
 
 test('selected launch operator reprices the same date and grids and survives navigation', async ({
