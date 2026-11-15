@@ -35,16 +35,19 @@ export const AnalysisSchema = z
       body_azimuth_deg: z.array(z.number()),
       body_elevation_deg: z.array(z.number()),
       visible: z.array(z.boolean()),
+      terrain_clearance_deg: z.array(z.number()),
     }),
     windows: z.array(PeriodSchema),
     dark_periods: z.array(PeriodSchema),
+    visible_clearance_p10_deg: z.number().nullable(),
   })
   .refine(
     ({ horizon, series }) =>
       horizon.azimuth_deg.length === horizon.elevation_deg.length &&
       series.times.length === series.body_azimuth_deg.length &&
       series.times.length === series.body_elevation_deg.length &&
-      series.times.length === series.visible.length,
+      series.times.length === series.visible.length &&
+      series.times.length === series.terrain_clearance_deg.length,
     { message: 'array lengths do not match' },
   )
 
