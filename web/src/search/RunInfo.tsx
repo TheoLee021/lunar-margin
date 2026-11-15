@@ -6,7 +6,7 @@ import { thresholdLines } from './stepCopy'
 
 function Item({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-neutral-800/70 py-2">
+    <div className="flex flex-col gap-0.5 border-b border-white/10 py-2">
       <dt className="text-[11px] text-neutral-500">{label}</dt>
       <dd className="text-xs break-words text-neutral-100">{value}</dd>
     </div>
@@ -24,7 +24,7 @@ export function RunInfo({ run }: { run: RunDetail }) {
     <section className="flex flex-col gap-4">
       <p
         role="note"
-        className="rounded-md border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-xs leading-relaxed text-neutral-300"
+        className="rounded-md border border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-neutral-300"
       >
         <b className="text-neutral-100">분석 기간</b>은 고를 수 있는 날짜 범위가
         아니라, 이 탐색이 지점마다 지표를 계산할 때 쓴 시간 구간입니다.

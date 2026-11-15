@@ -20,20 +20,20 @@ export function StepPanel({ index, config, summary, missingLayers }: Props) {
       id="step-panel"
       role="tabpanel"
       aria-labelledby={`step-tab-${step.id}`}
-      className="flex flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-5"
+      className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-5"
     >
       <h3 className="text-base font-semibold text-neutral-50">
         {content.title}
       </h3>
       <div className="flex flex-col gap-3 text-sm leading-relaxed">
         <p className="text-neutral-200">
-          <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-300">
+          <span className="mr-2 rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-neutral-300">
             무엇을
           </span>
           {content.what}
         </p>
         <p className="text-neutral-400">
-          <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-300">
+          <span className="mr-2 rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-neutral-300">
             왜
           </span>
           {content.why}
@@ -48,7 +48,7 @@ export function StepPanel({ index, config, summary, missingLayers }: Props) {
           있습니다.
         </p>
       ) : null}
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-neutral-800 pt-4 sm:grid-cols-2">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-white/10 pt-4 sm:grid-cols-2">
         {content.numbers.map((item) => (
           <div key={item.label}>
             <dt className="text-[11px] text-neutral-500">{item.label}</dt>

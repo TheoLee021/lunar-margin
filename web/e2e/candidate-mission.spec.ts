@@ -14,7 +14,7 @@ test('mission input submits the requested JSON, shows progress, then opens the p
   let polls = 0
   await page.route('**/api/candidates/search', async (route) => {
     expect(route.request().postDataJSON()).toEqual({
-      landing_date: '2027-01-01',
+      landing_date: '2027-01-10',
       mission_duration_days: 14,
       max_continuous_darkness_hours: 24,
       max_communication_blackout_hours: 6,

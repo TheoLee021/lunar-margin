@@ -22,7 +22,7 @@ export function Distribution({ title, hint, values, unit }: Props) {
   const median = values['p50']
   if (min === undefined || max === undefined || median === undefined)
     return (
-      <div className="rounded-lg border border-dashed border-neutral-800 px-3 py-3 text-xs text-neutral-500">
+      <div className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-xs text-neutral-500">
         {title}: 값이 있는 점이 없습니다.
       </div>
     )

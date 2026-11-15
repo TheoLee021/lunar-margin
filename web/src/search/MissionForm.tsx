@@ -17,13 +17,15 @@ import {
 } from './progress'
 
 export function MissionForm({
+  initialValues = DEFAULT_MISSION_VALUES,
   onComplete,
 }: {
+  initialValues?: MissionFormValues
   onComplete: (id: string) => void
 }) {
   const [development, setDevelopment] = useState(false)
   const [now, setNow] = useState(() => Date.now())
-  const [values, setValues] = useState(DEFAULT_MISSION_VALUES)
+  const [values, setValues] = useState(initialValues)
   const [messages, setMessages] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
@@ -127,10 +129,10 @@ export function MissionForm({
   const index = stageIndex(status?.stage ?? 'queued', status?.state ?? 'queued')
   const percent = status ? stagePercent(status.done, status.total) : null
   const inputClass =
-    'rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100'
+    'rounded-md border border-white/15 bg-[#080c0f] px-3 py-2 text-sm text-neutral-100'
   return (
     <section
-      className="rounded-xl border border-neutral-700 bg-neutral-900 p-5"
+      className="rounded-xl border border-white/15 bg-[#0f1217]/60 p-5"
       aria-label="임무 조건 입력"
     >
       <h2 className="text-lg font-semibold">임무 조건으로 후보지 찾기</h2>
@@ -279,7 +281,7 @@ export function MissionForm({
       </form>
       {runId !== null ? (
         <div
-          className="mt-4 space-y-2 rounded-lg border border-neutral-700 p-4"
+          className="mt-4 space-y-2 rounded-lg border border-white/15 p-4"
           role="status"
           aria-live="polite"
         >

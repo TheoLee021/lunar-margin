@@ -44,7 +44,7 @@ export function CandidateTable({
   })
   if (candidates.length === 0)
     return (
-      <p className="rounded-lg border border-dashed border-neutral-800 px-4 py-8 text-center text-sm text-neutral-500">
+      <p className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-sm text-neutral-500">
         선정된 후보가 없습니다. 임계값이 너무 엄격하거나 계산에 성공한 점이 없을
         수 있습니다. 위의 탈락 사유를 확인하세요.
       </p>
@@ -60,9 +60,9 @@ export function CandidateTable({
   }
 
   return (
-    <div className="max-h-[28rem] overflow-auto rounded-xl border border-neutral-800">
+    <div className="max-h-[28rem] overflow-auto rounded-xl border border-white/10">
       <table className="w-full min-w-[40rem] border-collapse text-xs">
-        <thead className="sticky top-0 bg-neutral-900">
+        <thead className="sticky top-0 bg-[#0f1217]/60">
           <tr>
             {COLUMNS.map((col) => (
               <th
@@ -103,11 +103,11 @@ export function CandidateTable({
                 key={c.id}
                 onMouseEnter={() => onHover(c.id)}
                 onMouseLeave={() => onHover(null)}
-                className={`border-t border-neutral-800 ${
+                className={`border-t border-white/10 ${
                   c.id === selectedId
                     ? 'bg-sky-500/15'
                     : active
-                      ? 'bg-neutral-800/70'
+                      ? 'bg-white/[0.06]'
                       : ''
                 }`}
               >

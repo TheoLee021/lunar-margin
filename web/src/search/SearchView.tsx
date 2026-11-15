@@ -19,7 +19,8 @@ import { LayerControls, MapLegend } from './MapControls'
 import { ProcessMap } from './ProcessMap'
 import { RunInfo } from './RunInfo'
 import { MissionForm } from './MissionForm'
-import { missionSummaryItems } from './mission'
+import { DEFAULT_MISSION_VALUES, missionSummaryItems } from './mission'
+import type { Schedule } from '../mission/types'
 import { StepNav } from './StepNav'
 import { StepPanel } from './StepPanel'
 import { useRun, useRuns } from './useRuns'
@@ -32,9 +33,9 @@ function Spinner({ text }: { text: string }) {
   return (
     <div
       role="status"
-      className="flex items-center justify-center gap-3 rounded-xl border border-neutral-800 px-6 py-16 text-sm text-neutral-300"
+      className="flex items-center justify-center gap-3 rounded-xl border border-white/10 px-6 py-16 text-sm text-neutral-300"
     >
-      <span className="size-4 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-100" />
+      <span className="size-4 animate-spin rounded-full border-2 border-white/20 border-t-neutral-100" />
       {text}
     </div>
   )
@@ -72,7 +73,7 @@ function EmptyRuns() {
   return (
     <div
       data-testid="search-empty"
-      className="rounded-xl border border-dashed border-neutral-800 px-6 py-14 text-center"
+      className="rounded-xl border border-dashed border-white/10 px-6 py-14 text-center"
     >
       <p className="text-base text-neutral-200">
         아직 후보지 탐색 결과가 없습니다
@@ -81,7 +82,7 @@ function EmptyRuns() {
         위의 임무 조건을 입력하고 탐색을 실행하세요. 명령으로도 실행할 수
         있습니다.
       </p>
-      <code className="mx-auto mt-4 block max-w-full overflow-x-auto rounded-md bg-neutral-900 px-4 py-2 text-left text-xs text-neutral-200">
+      <code className="mx-auto mt-4 block max-w-full overflow-x-auto rounded-md bg-[#0f1217]/60 px-4 py-2 text-left text-xs text-neutral-200">
         {CLI_COMMAND}
       </code>
     </div>
@@ -105,7 +106,7 @@ function RunPicker({
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="min-w-48 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+          className="min-w-48 rounded-md border border-white/15 bg-[#0f1217]/60 px-3 py-2 text-sm text-neutral-100"
         >
           {runs.map((run) => (
             <option key={run.id} value={run.id}>
@@ -126,7 +127,20 @@ function RunPicker({
   )
 }
 
-export default function SearchView() {
+/** 앱에서 고른 일정(착륙일·표면 임무 기간)을 임무 입력의 초기값으로 쓴다. */
+export default function SearchView({
+  schedule,
+}: {
+  schedule?: Pick<Schedule, 'landing' | 'duration'>
+}) {
+  // MissionForm은 처음 렌더링할 때만 이 값을 읽는다.
+  const initialValues = schedule
+    ? {
+        ...DEFAULT_MISSION_VALUES,
+        landingDate: schedule.landing,
+        durationDays: String(schedule.duration),
+      }
+    : DEFAULT_MISSION_VALUES
   const [completed, setCompleted] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
   const onComplete = useCallback((id: string) => {
@@ -135,7 +149,7 @@ export default function SearchView() {
   }, [])
   return (
     <div className="flex flex-col gap-6">
-      <MissionForm onComplete={onComplete} />
+      <MissionForm initialValues={initialValues} onComplete={onComplete} />
       <SavedRuns key={revision} initialRunId={completed} />
     </div>
   )
@@ -292,7 +306,7 @@ function RunBody({ run }: { run: RunDetail }) {
     <div className="flex flex-col gap-8">
       {run.mission ? (
         <section
-          className="rounded-xl border border-neutral-700 p-4"
+          className="rounded-xl border border-white/15 p-4"
           aria-label="입력한 임무 조건"
         >
           <h3 className="font-semibold">입력한 임무 조건</h3>

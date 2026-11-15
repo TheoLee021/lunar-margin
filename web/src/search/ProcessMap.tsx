@@ -83,7 +83,7 @@ export function ProcessMap({
       <div
         role="group"
         aria-label="남극 탐색 지도. 경도 0도가 위쪽, 동쪽이 오른쪽입니다. 지도를 누르면 그 지점을 자세히 볼 수 있습니다."
-        className="relative mx-auto aspect-square w-full max-w-[44rem] overflow-hidden rounded-xl border border-neutral-800 bg-black"
+        className="relative mx-auto aspect-square w-full max-w-[44rem] overflow-hidden rounded-xl border border-white/10 bg-black"
       >
         {stack.map((name) => (
           <img
@@ -186,7 +186,7 @@ export function ProcessMap({
         {hovered && tip ? (
           <div
             role="tooltip"
-            className="pointer-events-none absolute z-10 w-max max-w-56 -translate-x-1/2 rounded-md border border-neutral-600 bg-neutral-900/95 px-2.5 py-1.5 text-[11px] leading-snug text-neutral-100 shadow-lg"
+            className="pointer-events-none absolute z-10 w-max max-w-56 -translate-x-1/2 rounded-md border border-white/20 bg-[#0f1217]/95 px-2.5 py-1.5 text-[11px] leading-snug text-neutral-100 shadow-lg"
             style={{
               left: `${(tip.u / size) * 100}%`,
               top: `${(tip.v / size) * 100}%`,

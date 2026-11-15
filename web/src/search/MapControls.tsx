@@ -54,7 +54,7 @@ export function MapLegend({ layers }: { layers: LayerStates }) {
   return (
     <div
       aria-label="범례"
-      className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-lg border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-xs text-neutral-300"
+      className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-neutral-300"
     >
       {on.map((name) => {
         switch (name) {
@@ -132,7 +132,7 @@ export function LayerControls({
 }: ControlsProps) {
   const names = LAYER_NAMES.filter((name) => available.includes(name))
   return (
-    <details className="rounded-lg border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-sm">
+    <details className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
       <summary className="cursor-pointer text-neutral-200">
         레이어 직접 조절
       </summary>

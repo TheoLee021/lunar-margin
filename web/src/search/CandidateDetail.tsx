@@ -46,7 +46,7 @@ const METRIC_NAMES: Readonly<Record<string, string>> = {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-neutral-800/70 py-1 text-xs">
+    <div className="flex items-baseline justify-between gap-3 border-b border-white/10 py-1 text-xs">
       <dt className="text-neutral-400">{label}</dt>
       <dd className="tabular-nums text-neutral-100">{value}</dd>
     </div>
@@ -102,7 +102,7 @@ export function CandidateDetail({
   return (
     <section
       aria-label="선택한 지점 상세"
-      className="flex flex-col gap-5 rounded-xl border border-neutral-800 bg-neutral-900/40 p-5"
+      className="flex flex-col gap-5 rounded-xl border border-white/10 bg-white/[0.03] p-5"
     >
       <header className="flex items-start justify-between gap-3">
         <div>
@@ -118,7 +118,7 @@ export function CandidateDetail({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-400"
+          className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-neutral-300 hover:border-sky-400"
         >
           닫기
         </button>
@@ -133,7 +133,7 @@ export function CandidateDetail({
         </p>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+      <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -165,7 +165,7 @@ export function CandidateDetail({
             <div
               role="tablist"
               aria-label="분석 종류"
-              className="flex gap-1 border-b border-neutral-800"
+              className="flex gap-1 border-b border-white/10"
             >
               {(['illumination', 'earth-visibility'] as const).map((value) => (
                 <button
@@ -350,9 +350,9 @@ function AnalysisSlot({
     return (
       <div
         role="status"
-        className="flex items-center justify-center gap-3 rounded-xl border border-neutral-800 px-6 py-12 text-sm text-neutral-300"
+        className="flex items-center justify-center gap-3 rounded-xl border border-white/10 px-6 py-12 text-sm text-neutral-300"
       >
-        <span className="size-4 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-100" />
+        <span className="size-4 animate-spin rounded-full border-2 border-white/20 border-t-neutral-100" />
         지형 수평선과 천체 위치를 계산하는 중…
       </div>
     )

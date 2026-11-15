@@ -65,10 +65,7 @@ export function FunnelPanel({ summary, config }: Props) {
                       {step.value.toLocaleString('ko-KR')}개
                     </span>
                   </div>
-                  <div
-                    aria-hidden
-                    className="mt-1 h-3 rounded-sm bg-neutral-800"
-                  >
+                  <div aria-hidden className="mt-1 h-3 rounded-sm bg-white/10">
                     <div
                       className="h-full rounded-sm bg-sky-500/80"
                       style={{
@@ -89,7 +86,7 @@ export function FunnelPanel({ summary, config }: Props) {
             사유에 걸릴 수 있습니다.
           </p>
           {reasons.length === 0 ? (
-            <p className="mt-3 rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-center text-sm text-neutral-500">
+            <p className="mt-3 rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-sm text-neutral-500">
               기록된 탈락 사유가 없습니다.
             </p>
           ) : (
@@ -102,10 +99,7 @@ export function FunnelPanel({ summary, config }: Props) {
                       {value.toLocaleString('ko-KR')}개
                     </span>
                   </div>
-                  <div
-                    aria-hidden
-                    className="mt-1 h-2 rounded-sm bg-neutral-800"
-                  >
+                  <div aria-hidden className="mt-1 h-2 rounded-sm bg-white/10">
                     <div
                       className="h-full rounded-sm bg-amber-400/80"
                       style={{ width: `${(value / maxReason) * 100}%` }}
