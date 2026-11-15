@@ -12,10 +12,10 @@ export type CandidateSite = {
   name: string
   latitude: number
   longitude: number
-  sun: number | null
-  earth: number | null
-  longestDarkness: number | null
-  slope: number | null
+  sun?: number | null
+  earth?: number | null
+  longestDarkness?: number | null
+  slope?: number | null
   grid?: PolarGridCell
   score?: number | null
 }

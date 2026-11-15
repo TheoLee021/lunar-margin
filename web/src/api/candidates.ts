@@ -44,6 +44,18 @@ const EarthMetricsSchema = z.object({
   mean_elevation_deg: NullableNumber,
 })
 
+// 후보 중심 250 m 원의 지역 지형. /analysis/site-assessment 도 같은 형태를 쓴다.
+export const TerrainSchema = z.object({
+  slope_p95_deg: NullableNumber,
+  coverage_fraction: z.number().min(0).max(1).nullable(),
+  assessment_radius_m: z.number().positive(),
+  slope_baseline_m: z.number().positive(),
+  roughness_window_m: z.number().positive(),
+  dem_pixel_m: z.number().positive(),
+  landing_safety_status: z.literal('UNVERIFIED'),
+})
+export type Terrain = z.infer<typeof TerrainSchema>
+
 export const CandidateSchema = z.object({
   id: z.string(),
   rank: z.number(),
@@ -52,18 +64,7 @@ export const CandidateSchema = z.object({
   x_m: z.number(),
   y_m: z.number(),
   grid_spacing_m: z.number(),
-  terrain: z
-    .object({
-      slope_p95_deg: NullableNumber,
-      coverage_fraction: z.number().min(0).max(1).nullable(),
-      assessment_radius_m: z.number().positive(),
-      slope_baseline_m: z.number().positive(),
-      roughness_window_m: z.number().positive(),
-      dem_pixel_m: z.number().positive(),
-      landing_safety_status: z.literal('UNVERIFIED'),
-    })
-    .nullable()
-    .optional(),
+  terrain: TerrainSchema.nullable().optional(),
   sun: SunMetricsSchema,
   earth: EarthMetricsSchema,
   eligibility: z.object({

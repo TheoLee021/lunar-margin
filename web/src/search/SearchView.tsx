@@ -24,6 +24,8 @@ import type { Schedule } from '../mission/types'
 import { StepNav } from './StepNav'
 import { StepPanel } from './StepPanel'
 import { useRun, useRuns } from './useRuns'
+import { useAvailability } from './useAvailability'
+import { ReservationPanel } from './ReservationPanel'
 
 const AUTO_PLAY_MS = 3800
 const CLI_COMMAND =
@@ -234,6 +236,7 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
 
 function RunScreen({ runId }: { runId: string }) {
   const { state, reload } = useRun(runId)
+  const availability = useAvailability(runId)
   if (state.status === 'loading')
     return <Spinner text="탐색 결과를 불러오는 중…" />
   if (state.status === 'error')
@@ -244,10 +247,28 @@ function RunScreen({ runId }: { runId: string }) {
         onRetry={reload}
       />
     )
-  return <RunBody run={state.data} />
+  return <RunBody run={state.data} availability={availability} />
 }
 
-function RunBody({ run }: { run: RunDetail }) {
+function RunBody({
+  run,
+  availability,
+}: {
+  run: RunDetail
+  availability: ReturnType<typeof useAvailability>
+}) {
+  const reservations = useMemo(
+    () =>
+      availability.state.status === 'ready'
+        ? new Map(
+            availability.state.data.candidates.map((item) => [
+              item.candidate_id,
+              item,
+            ]),
+          )
+        : null,
+    [availability.state],
+  )
   const [stepIndex, setStepIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [metric, setMetric] = useState<Metric>('sun')
@@ -440,10 +461,47 @@ function RunBody({ run }: { run: RunDetail }) {
         </p>
         <CandidateTable
           candidates={run.candidates}
+          reservations={reservations}
           highlightedId={hoveredId}
           selectedId={selectedId}
           onHover={setHoveredId}
           onSelect={selectCandidate}
+        />
+        <div className="rounded-lg border border-white/10 p-3 text-xs text-neutral-400">
+          <p>
+            과학 점수는 유지됩니다. 예약 가능 순위는 이 실행의 후보 중 겹치는
+            확정 예약을 제외한 순서입니다.
+          </p>
+          {availability.state.status === 'ready' ? (
+            <p className="mt-2">
+              확인 기간: {formatUtc(availability.state.data.starts_at)} →{' '}
+              {formatUtc(availability.state.data.ends_at)} · 종료 시각 제외
+            </p>
+          ) : null}
+          {availability.state.status === 'loading' ? (
+            <p role="status" className="mt-2">
+              예약 상태 확인 중…
+            </p>
+          ) : null}
+          {availability.state.status === 'error' ? (
+            <p role="alert" className="mt-2 text-amber-300">
+              예약 확인 불가 · 예약 확정이 차단되었습니다.{' '}
+              {availability.state.message}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={availability.reload}
+            disabled={availability.state.status === 'loading'}
+            className="mt-2 rounded border border-white/20 px-3 py-1.5 text-neutral-200 disabled:opacity-40"
+          >
+            예약 상태 새로고침
+          </button>
+        </div>
+        <ReservationPanel
+          mission={run.mission}
+          selected={selectedId ? (reservations?.get(selectedId) ?? null) : null}
+          onChanged={availability.reload}
         />
       </section>
 

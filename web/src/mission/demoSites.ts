@@ -1,55 +1,36 @@
 import type { CandidateSite } from './types'
 
-// UI fixtures only. These coordinates and scores are not landing recommendations.
+// Example coordinates for the mission HUD, not landing recommendations.
+// Their metrics come from GET /analysis/site-assessment.
 export const DEMO_SITES: readonly CandidateSite[] = [
   {
     id: 'site-1',
     name: '후보 1',
     latitude: -89.83,
     longitude: -153.7,
-    sun: 96,
-    earth: 92,
-    longestDarkness: 13,
-    slope: 8,
   },
   {
     id: 'site-2',
     name: '후보 2',
     latitude: -89.02,
     longitude: -94.4,
-    sun: 94,
-    earth: 93,
-    longestDarkness: 18,
-    slope: 6,
   },
   {
     id: 'site-3',
     name: '후보 3',
     latitude: -85.44,
     longitude: -115,
-    sun: 91,
-    earth: 91,
-    longestDarkness: 24,
-    slope: 5,
   },
   {
     id: 'site-4',
     name: '후보 4',
     latitude: -87.99,
     longitude: -166.5,
-    sun: 90,
-    earth: 94,
-    longestDarkness: 30,
-    slope: 10,
   },
   {
     id: 'site-5',
     name: '후보 5',
     latitude: -88.47,
     longitude: -67.7,
-    sun: 90,
-    earth: 90,
-    longestDarkness: 28,
-    slope: 7,
   },
 ]
