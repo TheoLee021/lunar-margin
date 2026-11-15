@@ -371,8 +371,8 @@ export function PriceGrid({
         </section>
       ) : !draft.launchId ? (
         <p className="mb-3 text-xs text-neutral-400">
-          공개 단가 우선 · 미공개 시 공통 비용 모델 · 각 500m 적합 격자의 최저
-          예상 비용 평균 · 실제 견적 아님
+          모든 발사를 달 탐사로 가정한 모델 예상 비용 · 적합 500m 격자의 최저
+          예상 비용 평균
         </p>
       ) : null}
       <div className="grid-scroll">

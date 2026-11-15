@@ -25,7 +25,6 @@ export function ReservationPanel({
   selected: CandidateAvailability | null
   onChanged: () => void
 }) {
-  const [token, setToken] = useState('')
   const [company, setCompany] = useState('')
   const [missionName, setMissionName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -35,7 +34,7 @@ export function ReservationPanel({
   const [more, setMore] = useState(false)
 
   async function load(offset: number) {
-    const result = await fetchReservations(token, offset)
+    const result = await fetchReservations(offset)
     setBookings((current) =>
       offset === 0
         ? result.reservations
@@ -62,17 +61,14 @@ export function ReservationPanel({
     if (!mission || !selected || selected.status !== 'available') return
     void operate(async () => {
       try {
-        await confirmReservation(
-          {
-            company,
-            mission_name: missionName,
-            cell_ix: selected.cell_ix,
-            cell_iy: selected.cell_iy,
-            landing_date: mission.landing_date,
-            mission_duration_days: mission.mission_duration_days,
-          },
-          token,
-        )
+        await confirmReservation({
+          company,
+          mission_name: missionName,
+          cell_ix: selected.cell_ix,
+          cell_iy: selected.cell_iy,
+          landing_date: mission.landing_date,
+          mission_duration_days: mission.mission_duration_days,
+        })
         setMessage(`${selected.cell_id} 예약을 확정했습니다.`)
       } finally {
         onChanged()
@@ -83,7 +79,7 @@ export function ReservationPanel({
   function cancel(booking: Booking) {
     void operate(async () => {
       try {
-        await cancelReservation(booking.id, token)
+        await cancelReservation(booking.id)
         setMessage(
           `${booking.company} · ${booking.cell_id} 예약을 취소했습니다.`,
         )
@@ -97,30 +93,13 @@ export function ReservationPanel({
   return (
     <details className="rounded-xl border border-white/10 bg-[#101419]/95 p-4">
       <summary className="cursor-pointer text-sm font-semibold text-neutral-100">
-        운영자 예약 관리
+        예약 관리
       </summary>
       <p className="mt-3 text-xs leading-5 text-neutral-400">
-        확정순 우선권 · 같은 500 × 500m 격자의 겹치는 기간만 제한합니다. 토큰은
-        이 화면의 메모리에만 보관됩니다.
+        공개 데모로 누구나 예약을 확정하거나 취소할 수 있습니다. 같은 500 × 500m
+        격자의 겹치는 기간은 중복 예약할 수 없습니다.
       </p>
       <form className="mt-4 flex flex-col gap-3" onSubmit={confirm}>
-        <label className="text-xs text-neutral-400">
-          운영자 토큰
-          <input
-            className={inputClass}
-            type="password"
-            autoComplete="off"
-            value={token}
-            disabled={busy}
-            required
-            onChange={(event) => {
-              setToken(event.target.value)
-              setBookings(null)
-              setError('')
-              setMessage('')
-            }}
-          />
-        </label>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="text-xs text-neutral-400">
             회사명
@@ -174,7 +153,6 @@ export function ReservationPanel({
           type="submit"
           disabled={
             busy ||
-            !token.trim() ||
             !company.trim() ||
             !missionName.trim() ||
             !mission ||
@@ -188,7 +166,7 @@ export function ReservationPanel({
         <button
           className={`${buttonClass} self-start`}
           type="button"
-          disabled={busy || !token.trim()}
+          disabled={busy}
           onClick={() => {
             void operate(() => load(0))
           }}
