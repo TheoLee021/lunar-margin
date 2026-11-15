@@ -14,7 +14,9 @@ export function MoonTrekReference({
       className="mt-4 border-t border-white/10 pt-3 text-xs"
       aria-label="NASA Moon Trek external map"
     >
-      <h3 className="font-semibold text-neutral-200">NASA Moon Trek · Map Reference</h3>
+      <h3 className="font-semibold text-neutral-200">
+        NASA Moon Trek · Map Reference
+      </h3>
       <p className="mt-1 text-[11px] text-neutral-400">
         NASA Moon Trek에서 지형 레이어를 별도로 확인할 수 있습니다. 선택한 좌표를
         참고해 지도에서 직접 찾으세요.
