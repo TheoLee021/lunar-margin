@@ -31,6 +31,20 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lunar_margin
+          POSTGRES_PASSWORD: lunar_margin
+          POSTGRES_DB: lunar_margin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lunar_margin -d lunar_margin_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      RESERVATION_TEST_DATABASE_URL: postgresql://lunar_margin:lunar_margin@localhost:5432/lunar_margin_test
     defaults:
       run:
         working-directory: api

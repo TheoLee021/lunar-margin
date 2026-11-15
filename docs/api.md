@@ -419,3 +419,74 @@ ray tracing. The ordinary single-date search endpoint retains its existing
 fallback behavior. The 15-second calendar target is measured with the local
 precomputed table, five consecutive landing dates and a 14-day mission; it is
 not a guarantee for arbitrary hardware, observer heights or mission lengths.
+
+## 격자 예약 (추가 계약)
+
+기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 Postgres 환경변수가 없거나 저장소에 연결할 수 없으면 503이다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
+
+### GET /candidates/runs/{run_id}/availability
+
+공개 조회, `Cache-Control: no-store`. 실행의 분석 기간과 후보 좌표로 실시간 예약 충돌을 판정한다. 후보 순서는 원래 과학 순위이며 과학 점수는 바꾸지 않는다.
+
+```json
+{
+  "run_id": "m-example",
+  "checked_at": "2026-11-14T20:00:00Z",
+  "starts_at": "2027-01-01T00:00:00Z",
+  "ends_at": "2027-01-15T00:00:00Z",
+  "candidates": [{
+    "candidate_id": "SP500_+1_-2",
+    "cell_id": "SP500v1:1:-2",
+    "cell_ix": 1,
+    "cell_iy": -2,
+    "status": "available",
+    "available_rank": 1,
+    "conflicts": []
+  }]
+}
+```
+
+`status`는 `available | reserved`. 예약된 후보는 `available_rank: null`이고 `conflicts`에 아래 예약 응답 배열이 들어간다. 충돌 회사·임무명·기간은 공개 후보 화면에 표시되는 정보다. 조회 실패/미확인을 `available`로 해석하지 않는다. 잘못된 ID 422, 없는 실행 404, 손상된 실행 500, 지원 범위 밖 격자 422.
+
+### POST /reservations
+
+운영자 전용. `Authorization: Bearer <RESERVATION_ADMIN_TOKEN>` 필요. 등록과 확정을 하나의 트랜잭션으로 수행한다.
+
+```json
+{
+  "company": "Lunar A",
+  "mission_name": "South pole 1",
+  "cell_ix": 1,
+  "cell_iy": -2,
+  "landing_date": "2027-01-01",
+  "mission_duration_days": 14
+}
+```
+
+회사·임무명은 공백 제거 후 1~120자, 격자는 남극 고정 500m 셀, 기간은 정수 1~365일이다. 현재 분석 가능 기간(1850-01-01~2150-01-01 UTC) 안에 있어야 한다. cell ID·확정 시각·상태는 클라이언트에서 받지 않고 서버에서 생성한다. 겹치는 확정 예약이 있으면 409, 입력 오류 422, 운영자 토큰 없음/오류 401, 운영자 기능 미설정 503. 충돌이 나면 availability를 다시 조회한다.
+
+성공 201, 예약 응답:
+
+```json
+{
+  "id": "88b02b95-e126-4c10-9d89-3a3b4417ff33",
+  "cell_id": "SP500v1:1:-2",
+  "cell_ix": 1,
+  "cell_iy": -2,
+  "company": "Lunar A",
+  "mission_name": "South pole 1",
+  "starts_at": "2027-01-01T00:00:00Z",
+  "ends_at": "2027-01-15T00:00:00Z",
+  "confirmed_at": "2026-11-14T20:00:00Z",
+  "status": "confirmed",
+  "cancelled_at": null
+}
+```
+
+### GET /reservations?limit=100&offset=0
+
+운영자 전용, `Cache-Control: no-store`. `limit` 1~100, `offset` 0 이상. 확정 시각 내림차순·UUID 순으로 `{"reservations": [예약 응답...]}`. 취소된 이력도 포함한다.
+
+### POST /reservations/{id}/cancel
+
+운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.

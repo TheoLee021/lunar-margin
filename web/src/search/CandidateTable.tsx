@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Candidate } from '../api/candidates'
+import type { CandidateAvailability } from '../api/reservations'
 import {
   fractionText,
   degText,
@@ -11,6 +12,7 @@ import {
 
 interface Props {
   candidates: readonly Candidate[]
+  reservations: ReadonlyMap<string, CandidateAvailability> | null
   highlightedId: string | null
   selectedId: string | null
   onHover: (id: string | null) => void
@@ -22,7 +24,7 @@ const COLUMNS: readonly {
   label: string
   align: 'left' | 'right'
 }[] = [
-  { key: 'rank', label: '순위', align: 'right' },
+  { key: 'rank', label: '과학 순위', align: 'right' },
   { key: 'id', label: 'ID', align: 'left' },
   { key: 'lat', label: '위도', align: 'right' },
   { key: 'lon', label: '경도(°E)', align: 'right' },
@@ -35,6 +37,7 @@ const COLUMNS: readonly {
 
 export function CandidateTable({
   candidates,
+  reservations,
   highlightedId,
   selectedId,
   onHover,
@@ -66,6 +69,12 @@ export function CandidateTable({
       <table className="w-full min-w-[40rem] border-collapse text-xs">
         <thead className="sticky top-0 bg-[#0f1217]/60">
           <tr>
+            <th
+              scope="col"
+              className="px-3 py-2 text-left font-medium text-neutral-400"
+            >
+              예약 상태 / 가능 순위
+            </th>
             {COLUMNS.map((col) => (
               <th
                 key={col.key}
@@ -99,6 +108,7 @@ export function CandidateTable({
         </thead>
         <tbody>
           {rows.map((c) => {
+            const reservation = reservations?.get(c.id)
             const active = c.id === highlightedId || c.id === selectedId
             return (
               <tr
@@ -113,6 +123,37 @@ export function CandidateTable({
                       : ''
                 }`}
               >
+                <td className="px-3 py-2 text-left">
+                  {reservation ? (
+                    <>
+                      <p
+                        className={
+                          reservation.status === 'reserved'
+                            ? 'text-amber-300'
+                            : 'text-emerald-300'
+                        }
+                      >
+                        {reservation.status === 'reserved'
+                          ? '예약됨 · 예약 불가'
+                          : `예약 가능 · ${reservation.available_rank}위`}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-neutral-500">
+                        {reservation.cell_id}
+                      </p>
+                      {reservation.conflicts.map((booking) => (
+                        <p
+                          key={booking.id}
+                          className="mt-1 text-[10px] text-neutral-400"
+                        >
+                          {booking.company} · {booking.starts_at.slice(0, 10)} →{' '}
+                          {booking.ends_at.slice(0, 10)} UTC
+                        </p>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="text-neutral-500">미확인 · 예약 불가</span>
+                  )}
+                </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-neutral-200">
                   {c.rank}
                 </td>

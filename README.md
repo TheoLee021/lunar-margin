@@ -130,3 +130,7 @@ candidate run artifacts for the search screen. Batch calculation requires a
 complete matching precomputed horizon table and reports a clear failure if it is
 missing. The measured local five-date/14-day target is under 15 seconds with that
 table available; server speed and mission length affect runtime.
+
+## 착륙 격자 예약
+
+500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
