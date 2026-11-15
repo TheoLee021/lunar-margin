@@ -1,9 +1,10 @@
 """Local DEM landing-target grid endpoint (screening, NOT landing certification)."""
 
 from collections.abc import Callable
+from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -25,7 +26,7 @@ class LandingGridQuery(BaseModel):
     max_roughness_m: float | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
-    def ensure_target_inside(self) -> "LandingGridQuery":
+    def ensure_target_inside(self) -> Self:
         if self.target_radius_m >= self.assessment_radius_m:
             raise ValueError("target radius must be smaller than assessment radius")
         return self
@@ -100,18 +101,7 @@ def get_grid_evaluator(settings: Annotated[Settings, Depends(get_settings)]) -> 
             max_slope_deg=query.max_slope_deg,
             max_roughness_m=query.max_roughness_m,
         )
-        return LandingGridResponse(
-            lat=query.lat, lon=query.lon,
-            **{
-                key: getattr(result, key)
-                for key in (
-                    "assessment_radius_m", "target_radius_m", "sample_step_m",
-                    "slope_baseline_m", "roughness_window_m", "max_slope_deg",
-                    "max_roughness_m", "total_target_centers", "passing_target_centers",
-                    "cells", "targets", "best_target", "landing_safety_status", "limitation",
-                )
-            },
-        )
+        return LandingGridResponse.model_validate({"lat": query.lat, "lon": query.lon, **asdict(result)})
 
     return evaluate
 
