@@ -20,6 +20,8 @@ from lunar_margin.engine.provider_pricing import (
     ProviderOffer,
     QuoteContext,
     compare_grid,
+    estimate_blocked,
+    estimate_catalog,
     flight_issues,
     load_catalog,
     minimum_grid_prices,
@@ -31,6 +33,7 @@ CatalogDep = Annotated[Catalog, Depends(load_catalog)]
 
 
 class ProviderCalendarRequest(CalendarRequest):
+    estimate: bool = False
     departure_dates: list[date] = Field(min_length=1, max_length=5)
     source_run_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,120}$")
 
@@ -56,6 +59,7 @@ class CalendarCell(Model):
         "no_published_quote",
         "search_required",
         "quoted",
+        "estimated",
         "partial_coverage",
         "no_eligible",
         "invalid_transit",
@@ -69,6 +73,7 @@ class CalendarCell(Model):
 
 
 class ProviderCalendar(Model):
+    estimate: bool = False
     catalog_checked_on: date
     mass_kg: float
     delivery: Delivery
@@ -93,6 +98,8 @@ class GridComparison(Model):
     x_m: float
     y_m: float
     minimum_usd: float | None
+    minimum_estimate_usd: float | None
+    estimate: bool
     providers: list[ProviderOffer]
     destination_multiplier: float | None
     terrain_unknown: bool | None
@@ -112,8 +119,12 @@ def get_grid_comparison(
     dem: PricingDemDep,
 ) -> GridComparison:
     needs_terrain = any(
-        not flight_issues(flight, request)
-        for provider in catalog.providers
+        (
+            not estimate_blocked(flight, request)
+            if request.estimate
+            else not flight_issues(flight, request)
+        )
+        for provider in estimate_catalog(catalog, request).providers
         for flight in provider.flights
     )
     terrain: Terrain | None = None
@@ -145,6 +156,11 @@ def get_grid_comparison(
         x_m=request.x_m,
         y_m=request.y_m,
         minimum_usd=min(values) if values else None,
+        minimum_estimate_usd=min(
+            (o.minimum_estimate_usd for o in offers if o.minimum_estimate_usd is not None),
+            default=None,
+        ),
+        estimate=request.estimate,
         providers=offers,
         destination_multiplier=multiplier,
         terrain_unknown=None
@@ -212,6 +228,7 @@ def get_provider_calendar(
         dates.append(SearchDate(landing_date=landing, run_id=run_id, state=state, message=message))
         for departure in request.departure_dates:
             context = QuoteContext(
+                estimate=request.estimate,
                 departure_date=departure,
                 landing_date=landing,
                 mass_kg=request.mass_kg,
@@ -219,9 +236,15 @@ def get_provider_calendar(
             )
             possible: dict[ProviderId, list[str]] = {
                 provider.id: [
-                    flight.id for flight in provider.flights if not flight_issues(flight, context)
+                    flight.id
+                    for flight in provider.flights
+                    if (
+                        not estimate_blocked(flight, context)
+                        if request.estimate
+                        else not flight_issues(flight, context)
+                    )
                 ]
-                for provider in catalog.providers
+                for provider in estimate_catalog(catalog, context).providers
             }
             provider_ids: list[ProviderId] = [key for key, value in possible.items() if value]
             cell = CalendarCell(
@@ -283,7 +306,7 @@ def get_provider_calendar(
                     update={
                         "status": "no_eligible"
                         if n == 0
-                        else "quoted"
+                        else ("estimated" if request.estimate else "quoted")
                         if mean is not None
                         else "partial_coverage",
                         "mean_min_usd": mean,
@@ -294,6 +317,7 @@ def get_provider_calendar(
                 )
             )
     return ProviderCalendar(
+        estimate=request.estimate,
         catalog_checked_on=catalog.checked_on,
         mass_kg=request.mass_kg,
         delivery=request.delivery,

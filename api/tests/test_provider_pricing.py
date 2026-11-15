@@ -250,6 +250,22 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     assert detail.status_code == 200
     assert len(detail.json()["providers"]) == 6
     assert detail.json()["minimum_usd"] == 100
+    estimated = client.post(
+        "/pricing/providers/calendar",
+        json={
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": ["2027-01-06"],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+        },
+    )
+    assert estimated.status_code == 200
+    assert estimated.json()["estimate"] is True
+    assert estimated.json()["cells"][0]["status"] == "estimated"
+    assert estimated.json()["cells"][0]["eligible_grid_count"] == 110
+    assert estimated.json()["cells"][0]["mean_min_usd"] == pytest.approx(100)
     # A destination with only one covered grid must not silently shrink the mean's population.
     catalog = published_catalog()
     providers = catalog.providers.copy()
@@ -309,3 +325,50 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     ).json()
     assert changed["dates"][0]["state"] == "not_computed"
     assert changed["dates"][0]["run_id"] != legacy_id
+
+
+def test_model_estimate_uses_common_tariff_without_claiming_a_bookable_quote() -> None:
+    context = QuoteContext.model_validate(
+        {
+            "departure_date": "2027-01-06",
+            "landing_date": "2027-01-10",
+            "mass_kg": 24,
+            "delivery": "surface",
+            "estimate": True,
+        }
+    )
+    offers = compare_grid(load_catalog(), context, x_m=0, y_m=0, destination_multiplier=1.1)
+    assert len(offers) == 6
+    voyager = offers[-1]
+    assert voyager.minimum_usd is None
+    assert voyager.minimum_estimate_usd == pytest.approx(32_180_000)
+    assert voyager.flights[0].estimate_basis == "common_model"
+    assert "price_unpublished" in voyager.flights[0].issues
+    assert offers[2].minimum_estimate_usd is None
+    assert offers[3].minimum_estimate_usd == pytest.approx(32_180_000)
+    values = minimum_grid_prices(
+        load_catalog(),
+        context,
+        x_m=np.zeros(2),
+        y_m=np.zeros(2),
+        destination_multipliers=np.array([1.0, 1.1]),
+    )
+    np.testing.assert_allclose(values, [29_300_000, 32_180_000])
+
+
+def test_public_tariff_estimate_can_use_user_landing_without_complete_billing_terms() -> None:
+    context = QuoteContext.model_validate(
+        {
+            "departure_date": "2028-01-06",
+            "landing_date": "2028-01-10",
+            "mass_kg": 24,
+            "delivery": "surface",
+            "estimate": True,
+        }
+    )
+    offers = compare_grid(load_catalog(), context, x_m=0, y_m=0, destination_multiplier=1.1)
+    spacex = offers[2]
+    assert spacex.minimum_usd is None
+    assert spacex.minimum_estimate_usd == pytest.approx(3_140_000)
+    assert spacex.flights[0].estimate_basis == "public_tariff"
+    assert spacex.flights[0].estimate_assumptions
