@@ -47,6 +47,16 @@ class StorageNotConfigured(StorageError):
     pass
 
 
+def _project_url(url: str) -> str:
+    """프로젝트 기본 주소만 남긴다. 대시보드의 REST(/rest/v1)·Storage(/storage/v1) 주소를 붙여
+    넣어도 같은 프로젝트로 읽는다."""
+    cleaned = url.strip().rstrip("/")
+    for suffix in ("/rest/v1", "/storage/v1"):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned.removesuffix(suffix)
+    return cleaned.rstrip("/")
+
+
 @dataclass(frozen=True)
 class StorageConfig:
     url: str
@@ -61,7 +71,7 @@ class StorageConfig:
                 "SUPABASE_SERVICE_ROLE_KEY (and optionally SUPABASE_BUCKET) in api/.env"
             )
         return cls(
-            url=settings.supabase_url.rstrip("/"),
+            url=_project_url(settings.supabase_url),
             key=settings.supabase_service_role_key,
             bucket=settings.supabase_bucket,
         )

@@ -229,3 +229,25 @@ def test_credentials_come_from_settings() -> None:
     cfg = StorageConfig.from_settings(settings)
 
     assert (cfg.url, cfg.key, cfg.bucket) == ("https://x.supabase.co", "k", "b")
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("https://x.supabase.co", "https://x.supabase.co"),
+        ("https://x.supabase.co/", "https://x.supabase.co"),
+        # 대시보드에서 복사하기 쉬운 데이터베이스(REST) 주소나 Storage 주소도 받아 준다
+        ("https://x.supabase.co/rest/v1/", "https://x.supabase.co"),
+        ("https://x.supabase.co/rest/v1", "https://x.supabase.co"),
+        ("https://x.supabase.co/storage/v1/", "https://x.supabase.co"),
+        ("  https://x.supabase.co/rest/v1/  ", "https://x.supabase.co"),
+    ],
+)
+def test_the_project_url_is_normalised_whatever_supabase_address_was_pasted(
+    given: str, expected: str
+) -> None:
+    from lunar_margin.app.settings import Settings
+
+    cfg = StorageConfig.from_settings(Settings(supabase_url=given, supabase_service_role_key="k"))
+
+    assert cfg.url == expected
