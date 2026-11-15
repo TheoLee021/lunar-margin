@@ -311,12 +311,14 @@ function RunBody({ run }: { run: RunDetail }) {
         >
           <h3 className="font-semibold">입력한 임무 조건</h3>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            {missionSummaryItems(run.mission).map((item) => (
-              <div key={item.label}>
-                <dt className="text-xs text-neutral-400">{item.label}</dt>
-                <dd className="text-sm">{item.value}</dd>
-              </div>
-            ))}
+            {missionSummaryItems(run.mission, run.config.thresholds).map(
+              (item) => (
+                <div key={item.label}>
+                  <dt className="text-xs text-neutral-400">{item.label}</dt>
+                  <dd className="text-sm">{item.value}</dd>
+                </div>
+              ),
+            )}
           </dl>
         </section>
       ) : null}

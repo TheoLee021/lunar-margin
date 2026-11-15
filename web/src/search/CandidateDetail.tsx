@@ -260,6 +260,35 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
 
       <div className="flex flex-col gap-4 text-xs">
         <div>
+          <h4 className="mb-1 font-semibold text-neutral-200">지역 지형</h4>
+          {candidate.terrain ? (
+            <>
+              <dl>
+                <Row
+                  label="지역 경사 P95"
+                  value={degText(candidate.terrain.slope_p95_deg)}
+                />
+                <Row
+                  label="DEM 유효 표본"
+                  value={fractionText(candidate.terrain.coverage_fraction)}
+                />
+              </dl>
+              <p className="mt-1 text-neutral-400">
+                반경 {candidate.terrain.assessment_radius_m} m · 경사 기준{' '}
+                {candidate.terrain.slope_baseline_m} m · DEM{' '}
+                {candidate.terrain.dem_pixel_m} m
+              </p>
+              <p className="mt-1 text-amber-300">
+                착륙 안전성 UNVERIFIED · 미세 장애물·발판·지반 안전성 미검증
+              </p>
+            </>
+          ) : (
+            <p className="text-neutral-400">
+              이 실행은 지역 경사를 계산하지 않았습니다.
+            </p>
+          )}
+        </div>
+        <div>
           <h4 className="mb-1 font-semibold text-neutral-200">점수</h4>
           <dl>
             <Row label="종합 점수" value={scoreText(score.total)} />
