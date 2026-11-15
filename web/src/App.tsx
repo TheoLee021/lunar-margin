@@ -15,14 +15,17 @@ const DatePlanner = lazy(() =>
 )
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
-type View = 'mission' | 'analysis' | 'orbit'
+const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
+type View = 'mission' | 'analysis' | 'orbit' | 'search'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
   const view = new URLSearchParams(window.location.search).get('view')
-  return view === 'analysis' || view === 'orbit' ? view : 'mission'
+  return view === 'analysis' || view === 'orbit' || view === 'search'
+    ? view
+    : 'mission'
 }
 
 function initialSelection(): MissionSelection {
@@ -49,7 +52,8 @@ function locationFor(
 ): string {
   const url = new URL(window.location.href)
   url.pathname = view === 'orbit' ? '/orbit' : '/'
-  if (view === 'analysis') url.searchParams.set('view', 'analysis')
+  if (view === 'analysis' || view === 'search')
+    url.searchParams.set('view', view)
   else url.searchParams.delete('view')
   url.searchParams.set('departure', selection.departure)
   url.searchParams.set('arrival', selection.landing)
@@ -131,6 +135,11 @@ export default function App() {
             }
             onBack={() => navigate('mission', true)}
           />
+        ) : view === 'search' ? (
+          <SearchWorkspace
+            schedule={selection}
+            onBack={() => navigate('mission')}
+          />
         ) : (
           <MissionApp
             selection={selection}
@@ -150,24 +159,33 @@ export default function App() {
         )}
       </Suspense>
       {view === 'mission' ? (
-        <a
-          className="hud-button fixed bottom-10 left-32 z-20"
-          href={locationFor('analysis', selection, false)}
-          onClick={(event) => {
-            if (
-              event.button !== 0 ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            )
-              return
-            event.preventDefault()
-            navigate('analysis')
-          }}
-        >
-          상세 분석
-        </a>
+        <div className="fixed bottom-10 left-32 z-20 flex gap-2">
+          <a
+            className="hud-button"
+            href={locationFor('analysis', selection, false)}
+            onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return
+              event.preventDefault()
+              navigate('analysis')
+            }}
+          >
+            상세 분석
+          </a>
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => navigate('search')}
+          >
+            후보지 탐색
+          </button>
+        </div>
       ) : null}
     </>
   )

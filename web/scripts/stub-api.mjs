@@ -3,6 +3,7 @@
 // 값은 물리 계산이 아니라 그럴듯한 합성 데이터다.
 //   lat=-88.888 → 500,  lat=-87.777 → 항상 암흑(windows 비어 있음)
 import { createServer } from 'node:http'
+import { handleCandidates } from './stub-candidates.mjs'
 
 const PORT = Number(process.env.PORT ?? 8000)
 const DAY_MS = 86_400_000
@@ -162,6 +163,7 @@ createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
   if (req.method === 'OPTIONS') return json(res, 204, {})
   if (url.pathname === '/health') return json(res, 200, { status: 'ok' })
+  if (handleCandidates(url.pathname, res)) return
   const match = /^\/analysis\/(illumination|earth-visibility)$/.exec(
     url.pathname,
   )
