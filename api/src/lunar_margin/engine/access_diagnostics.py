@@ -83,9 +83,7 @@ def target_range_km(
     if vectors_km.ndim != 2 or vectors_km.shape[1] != 3:
         raise ValueError("target vectors must be an (N, 3) array")
     lat, lon = math.radians(lat_deg), math.radians(lon_deg)
-    up = np.array(
-        [math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)]
-    )
+    up = np.array([math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)])
     site_km = up * ((MOON_RADIUS_M + observer_height_m) / 1000.0)
     return np.linalg.norm(vectors_km - site_km, axis=1)
 
@@ -107,13 +105,9 @@ def nominal_rf_diagnostics(
         raise ValueError("all ranges must be finite and positive")
     if step_minutes <= 0 or config.frequency_hz <= 0 or config.tx_power_w <= 0:
         raise ValueError("invalid RF configuration or sample interval")
-    fspl_db = 20.0 * np.log10(
-        4.0 * math.pi * distances_km * 1000.0 * config.frequency_hz / C_MPS
-    )
+    fspl_db = 20.0 * np.log10(4.0 * math.pi * distances_km * 1000.0 * config.frequency_hz / C_MPS)
     tx_dbm = 10.0 * math.log10(config.tx_power_w) + 30.0
-    rx_dbm = (
-        tx_dbm + config.tx_gain_dbi + config.rx_gain_dbi - fspl_db - config.misc_loss_db
-    )
+    rx_dbm = tx_dbm + config.tx_gain_dbi + config.rx_gain_dbi - fspl_db - config.misc_loss_db
     margins = rx_dbm - config.rx_required_dbm
     usable = geometric_visible & (margins >= config.target_margin_db)
     blocked_runs = find_runs(usable, False)
@@ -122,7 +116,5 @@ def nominal_rf_diagnostics(
     return RFDiagnostics(
         available_fraction=float(usable.mean()),
         longest_unavailable_hours=float(longest_blocked * step_minutes / 60.0),
-        min_visible_margin_db=(
-            float(np.min(visible_margins)) if visible_margins.size else None
-        ),
+        min_visible_margin_db=(float(np.min(visible_margins)) if visible_margins.size else None),
     )
