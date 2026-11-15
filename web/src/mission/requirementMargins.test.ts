@@ -57,8 +57,12 @@ describe('Mission Engineering requirement margins', () => {
         max_rf_blackout_hours: 6,
       },
     })
-    expect(rows.find((r) => r.key === 'communication-fraction')?.margin).toBe(0)
-    expect(rows.find((r) => r.key === 'communication-blackout')?.margin).toBe(1)
+    expect(
+      rows.find((r) => r.key === 'communication-fraction')?.margin,
+    ).toBe(0)
+    expect(
+      rows.find((r) => r.key === 'communication-blackout')?.margin,
+    ).toBe(1)
   })
 
   it('does not interpret missing data as zero or PASS', () => {
@@ -70,7 +74,9 @@ describe('Mission Engineering requirement margins', () => {
         thresholds: { ...config.thresholds, min_rf_fraction: 0.8 },
       },
     )
-    expect(rows.find((r) => r.key === 'communication-fraction')?.status).toBe('UNKNOWN')
+    expect(
+      rows.find((r) => r.key === 'communication-fraction')?.status,
+    ).toBe('UNKNOWN')
     expect(rows.find((r) => r.key === 'slope')?.status).toBe('UNKNOWN')
     expect(marginSummary(rows)).toBe('UNKNOWN')
   })
