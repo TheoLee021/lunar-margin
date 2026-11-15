@@ -1,4 +1,4 @@
-"""GET /analysis/illumination, /analysis/earth-visibility (계약: docs/api.md)."""
+"""GET /analysis/illumination, /earth-visibility, /site-assessment (계약: docs/api.md)."""
 
 import math
 from collections.abc import Callable
@@ -15,7 +15,9 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
-from lunar_margin.engine.metrics import SiteAnalysis, analyze_site, find_runs
+from lunar_margin.engine.metrics import SiteAnalysis, VisibilityMetrics, analyze_site, find_runs
+from lunar_margin.engine.site_characteristics import characterize_region
+from lunar_margin.pipeline.candidate_schema import TerrainMetrics
 from lunar_margin.pipeline.sources import DEM_SOURCES
 
 Kind = Literal["SUN", "EARTH"]
@@ -81,6 +83,20 @@ class AnalysisResponse(BaseModel):
     series: Series
     windows: list[Period]
     dark_periods: list[Period]
+
+
+class SiteAssessment(BaseModel):
+    """후보 비교용 요약. 시계열 없이 일조·지구 지표와 250 m 지역 지형만 담는다."""
+
+    lat: float
+    lon: float
+    start: str
+    end: str
+    step_minutes: int
+    observer_height_m: float
+    sun: Metrics
+    earth: Metrics
+    terrain: TerrainMetrics
 
 
 Analyzer = Callable[[Kind, AnalysisQuery], SiteAnalysis]
@@ -152,12 +168,22 @@ def _periods(analysis: SiteAnalysis, value: bool) -> list[Period]:
     ]
 
 
+def _metrics(metrics: VisibilityMetrics) -> Metrics:
+    return Metrics(
+        visible_fraction=round(metrics.visible_fraction, 4),
+        longest_dark_hours=round(metrics.longest_dark_hours, 3),
+        windows_per_24h=round(metrics.windows_per_24h, 4),
+        mean_elevation_deg=None
+        if metrics.mean_elevation_deg is None
+        else round(metrics.mean_elevation_deg, 3),
+    )
+
+
 def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisResponse:
     try:
         analysis = analyzer(kind, query)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    metrics = analysis.metrics
     return AnalysisResponse(
         lat=query.lat,
         lon=query.lon,
@@ -165,14 +191,7 @@ def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisRe
         end=_utc(query.end),
         step_minutes=query.step_minutes,
         observer_height_m=query.observer_height_m,
-        metrics=Metrics(
-            visible_fraction=round(metrics.visible_fraction, 4),
-            longest_dark_hours=round(metrics.longest_dark_hours, 3),
-            windows_per_24h=round(metrics.windows_per_24h, 4),
-            mean_elevation_deg=None
-            if metrics.mean_elevation_deg is None
-            else round(metrics.mean_elevation_deg, 3),
-        ),
+        metrics=_metrics(analysis.metrics),
         horizon=Horizon(
             azimuth_deg=_round(analysis.horizon.azimuth_deg),
             elevation_deg=_round(analysis.horizon.elevation_deg),
@@ -202,3 +221,31 @@ def illumination(query: QueryDep, analyzer: AnalyzerDep) -> AnalysisResponse:
 @router.get("/earth-visibility")
 def earth_visibility(query: QueryDep, analyzer: AnalyzerDep) -> AnalysisResponse:
     return _respond("EARTH", query, analyzer)
+
+
+@router.get("/site-assessment")
+def site_assessment(
+    query: QueryDep, analyzer: AnalyzerDep, dem: Annotated[PolarDem, Depends(get_dem)]
+) -> SiteAssessment:
+    """위 두 분석과 같은 계산의 지표에 후보 탐색과 같은 250 m 지역 경사를 붙인다."""
+    try:
+        sun = analyzer("SUN", query)
+        earth = analyzer("EARTH", query)
+        region = characterize_region(dem, query.lat, query.lon)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return SiteAssessment(
+        lat=query.lat,
+        lon=query.lon,
+        start=_utc(query.start),
+        end=_utc(query.end),
+        step_minutes=query.step_minutes,
+        observer_height_m=query.observer_height_m,
+        sun=_metrics(sun.metrics),
+        earth=_metrics(earth.metrics),
+        terrain=TerrainMetrics(
+            slope_p95_deg=None if region.slope_p95_deg is None else round(region.slope_p95_deg, 3),
+            coverage_fraction=round(region.coverage_fraction, 4),
+            dem_pixel_m=float(dem.label.map_scale_m),
+        ),
+    )
