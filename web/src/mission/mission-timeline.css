@@ -1,0 +1,56 @@
+@layer components {
+  .mission-timeline-guide {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .mission-timeline-guide > span::before {
+    content: '';
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    background: var(--sun);
+    border-radius: 2px;
+  }
+  .mission-timeline-guide .timeline-blocked-key::before {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--muted) 0 1px,
+      transparent 1px 3px
+    );
+    border: 1px solid var(--muted);
+  }
+  .mission-timeline-panel {
+    display: grid;
+    gap: 12px;
+  }
+  .mission-timeline-panel .hint {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--muted);
+    margin: 0;
+  }
+  .unified-timeline {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: pan-y;
+  }
+  .timeline-inspection {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .timeline-inspection output {
+    font-family: var(--f-mono);
+  }
+  .timeline-inspection input {
+    grid-column: 1/-1;
+    width: 100%;
+    accent-color: var(--fg);
+  }
+}

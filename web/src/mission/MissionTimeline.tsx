@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react'
 import { nearestIndex, niceTicks } from '../analysis/derive'
 import type { Timeline } from './types'
+import './mission-timeline.css'
 
 function timeLabel(day: number) {
   const minutes = Math.round(day * 1440)
