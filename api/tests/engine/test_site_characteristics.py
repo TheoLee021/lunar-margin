@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+from lunar_margin.engine.candidates.projection import polar_xy_to_lonlat
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.site_characteristics import (
     characterize_region,
@@ -101,6 +102,23 @@ def test_circular_region_slope_detects_incline() -> None:
     region = characterize_region(dem, -90.0, 0.0)
     assert region.coverage_fraction == 1.0
     assert region.slope_p95_deg == pytest.approx(12.0, abs=0.05)
+
+
+def test_circular_region_roughness_matches_pointwise_roughness_on_rough_terrain() -> None:
+    rng = np.random.default_rng(7)
+    dem = make_dem(rng.normal(0.0, 5.0, (N, N)).astype(np.float32))
+    steps = np.arange(-2, 3, dtype=np.float64) * SCALE_M
+    dx, dy = np.meshgrid(steps, steps)
+    inside = dx**2 + dy**2 <= 250.0**2
+    lat, lon = polar_xy_to_lonlat(dx[inside], dy[inside], dem.radius_m)
+    pointwise = [
+        local_roughness_rms_m(dem, float(a), float(o), window_m=400.0)
+        for a, o in zip(lat, lon, strict=True)
+    ]
+
+    region = characterize_region(dem, -90.0, 0.0, radius_m=250.0, roughness_window_m=400.0)
+
+    assert region.roughness_p95_m == pytest.approx(float(np.percentile(pointwise, 95)), rel=1e-6)
 
 
 def test_circular_region_missing_dem_samples_reduce_coverage() -> None:

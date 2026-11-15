@@ -180,14 +180,12 @@ def characterize_region(
     wx, wy = np.meshgrid(window_offsets, window_offsets)
     wx, wy = wx.ravel(), wy.ravel()
     design = np.column_stack((wx, wy, np.ones_like(wx)))
-    roughness = np.full(n, np.nan, dtype=np.float64)
-    for index in np.flatnonzero(valid):
-        z = dem.sample_height_m(xs[index] + wx, ys[index] + wy)
-        if not np.isfinite(z).all():
-            valid[index] = False
-            continue
-        coeff, _, _, _ = np.linalg.lstsq(design, z, rcond=None)
-        roughness[index] = float(np.sqrt(np.mean((z - design @ coeff) ** 2)))
+    z = dem.sample_height_m((xs[:, None] + wx).ravel(), (ys[:, None] + wy).ravel())
+    z = z.reshape(n, wx.size)
+    valid &= np.isfinite(z).all(axis=1)
+    # Every window shares the same offsets, so one pseudo-inverse fits all planes at once.
+    residual = z - (z @ np.linalg.pinv(design).T) @ design.T
+    roughness = np.sqrt(np.mean(residual**2, axis=1))
 
     count = int(np.count_nonzero(valid))
     return RegionalTerrain(
