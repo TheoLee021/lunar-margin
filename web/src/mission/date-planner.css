@@ -498,10 +498,14 @@
     font: 600 12px var(--f-body);
     cursor: pointer;
   }
+  #applyWindow:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
   #applyWindow span {
     padding-left: 16px;
   }
-  #applyWindow:hover {
+  #applyWindow:enabled:hover {
     background: #fff;
   }
   @media (max-width: 1000px) {
