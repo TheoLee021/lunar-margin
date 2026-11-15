@@ -709,6 +709,8 @@ def test_missing_rf_metrics_cannot_pass_an_enabled_communications_filter(data_di
     result = run_search(config, data_dir, field_provider=incomplete, log=lambda _: None)
     assert result.summary.counts["eligible"] == 0
     assert result.summary.reasons["rf_incomplete"] > 0
+
+
 def test_search_reuses_saved_3m_horizons_for_another_date(data_dir: Path, tmp_path: Path) -> None:
     root = tmp_path / "input"
     root.mkdir()

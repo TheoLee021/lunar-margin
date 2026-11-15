@@ -541,7 +541,13 @@ function RunBody({
               : `${selection.x_m.toFixed(0)},${selection.y_m.toFixed(0)}`
           }
           selection={selection}
-          runId={run.mission ? run.id : undefined}
+          runId={
+            run.mission &&
+            run.config.grid_spacing_m === 500 &&
+            !run.id.startsWith('dev-')
+              ? run.id
+              : undefined
+          }
           config={run.config}
           insideRoi={insideRoi}
           onClose={() => setSelection(null)}
