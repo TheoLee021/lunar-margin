@@ -571,3 +571,27 @@ tariff_basis: public_tariff|common_model, tariff_source, assumptions}`다. 미�
 `mean_min_usd`는 같은 적합 500m 격자 전체의 선택 회사 모델 산술평균이다.
 단일 회사이므로 격자별 최솟값도 그 회사 가격이다. `eligible_provider_ids`는 알려진
 6사 ID만 담으며 ULA 등은 빈 배열이다. 이 경우 `selection.company_name`으로 회사를 구분한다.
+
+### Optional regional roughness filtering
+
+`POST /candidates/search`, `/search/dev` and calendar mission inputs accept
+`max_terrain_roughness_m`: a finite number ≥ 0, or `null`/omitted to disable.
+This is the maximum 95th-percentile roughness in a 250 m radius, not slope in
+degrees. Local roughness is the RMS elevation residual after removing a best-fit
+plane over a 400 m window. The primary LOLA DEM resolution remains 80 m.
+
+Coarse promotion and fine eligibility enforce the limit inclusively. An enabled
+roughness filter requires 100% valid regional coverage; missing terrain never
+passes as zero roughness. Excess roughness yields `terrain_roughness_above_max`;
+incomplete/missing regional terrain yields `terrain_incomplete`.
+
+Candidate `terrain.roughness_p95_m` is additive and nullable for historical runs.
+It is also exported in CSV, `candidates_simple.json`, and `sites.npz` (as
+`terrain_roughness_p95_m`). `/analysis/site-assessment` exposes the same regional
+roughness field. The candidate table/detail and input summary show meters and
+whether the saved run applied the limit. Mission cache version 3 prevents reuse
+of runs that ignored this filter. This hard filter changes which candidates can
+be ranked; it does not introduce an arbitrary roughness score weight.
+
+RF communication changes are tracked separately; this roughness change preserves
+the existing geometric Earth-visibility metric and scoring.

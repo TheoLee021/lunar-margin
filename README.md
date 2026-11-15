@@ -140,3 +140,12 @@ table available; server speed and mission length affect runtime.
 ## 착륙 격자 예약
 
 500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
+
+
+Candidate search also accepts an optional **maximum regional roughness (m)**.
+It uses the 250 m regional P95 of 400 m plane-detrended RMS roughness, separate
+from slope in degrees. Leave it blank to disable; enabled terrain constraints
+require complete regional coverage. Run a new search to apply it. Candidate
+tables and details show measured roughness, and excessive roughness appears in
+exclusion reasons. This filters eligibility before ranking, without changing the
+Sun/Earth weighting or certifying landing safety.

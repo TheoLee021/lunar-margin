@@ -34,6 +34,7 @@ const COLUMNS: readonly {
   { key: 'sun', label: '일조율', align: 'right' },
   { key: 'earth', label: '지구 가시율', align: 'right' },
   { key: 'slope', label: '지역 경사 P95', align: 'right' },
+  { key: 'roughness', label: '지역 거칠기 P95', align: 'right' },
   { key: 'score', label: '점수', align: 'right' },
   { key: 'region', label: '영역', align: 'right' },
 ]
@@ -207,6 +208,11 @@ export function CandidateTable({
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {degText(c.terrain?.slope_p95_deg ?? null)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {c.terrain?.roughness_p95_m == null
+                    ? '—'
+                    : `${c.terrain.roughness_p95_m.toFixed(2)} m`}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {scoreText(c.score.total)}

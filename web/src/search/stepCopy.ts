@@ -72,6 +72,10 @@ export function thresholdLines(thresholds: SearchThresholds): string[] {
     lines.push(
       `250 m 지역 경사 P95 ${thresholds.max_terrain_slope_degrees}° 이하 (DEM 표본 100%)`,
     )
+  if (thresholds.max_terrain_roughness_m != null)
+    lines.push(
+      `250 m 지역 거칠기 P95 ${thresholds.max_terrain_roughness_m} m 이하 (DEM 표본 100%)`,
+    )
   return lines
 }
 
@@ -172,7 +176,7 @@ export function stepContent(
           lines.length === 0
             ? '임계값이 아직 정해지지 않아 계산에 성공한 모든 점이 적격입니다. 초록이 적격, 빨강이 제외, 회색이 판정 불가입니다. 분포를 보고 임계값을 정하면 이 단계에서 걸러집니다.'
             : `다음 조건을 모두 만족하는 점만 적격입니다: ${lines.join(', ')}. 초록이 적격, 빨강이 제외, 회색이 판정 불가입니다.`,
-        why: '조건은 "반드시 지켜야 하는 것"이고 점수는 "높을수록 좋은 것"이라 따로 다룹니다. 지형 경사 조건은 DEM 표본이 불완전하거나 값을 계산하지 못하면 제외합니다. 다른 결측 지표는 0으로 치지 않고 적용하지 못한 조건으로 기록합니다.',
+        why: '조건은 "반드시 지켜야 하는 것"이고 점수는 "높을수록 좋은 것"이라 따로 다룹니다. 지형 경사·거칠기 조건은 DEM 표본이 불완전하거나 값을 계산하지 못하면 제외합니다. 다른 결측 지표는 0으로 치지 않고 적용하지 못한 조건으로 기록합니다.',
         numbers: [
           { label: '적격', value: countText(count(c, 'eligible')) },
           { label: '제외', value: countText(count(c, 'excluded')) },

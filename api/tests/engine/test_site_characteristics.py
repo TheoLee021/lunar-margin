@@ -104,6 +104,16 @@ def test_circular_region_slope_detects_incline() -> None:
     assert region.slope_p95_deg == pytest.approx(12.0, abs=0.05)
 
 
+@pytest.mark.parametrize("elevation_m", [-5000.0, -250.0, 250.0, 5000.0])
+def test_flat_region_has_exact_zero_roughness_at_any_elevation(elevation_m: float) -> None:
+    dem = make_dem(np.full((N, N), elevation_m, dtype=np.float32))
+
+    region = characterize_region(dem, -90.0, 0.0)
+
+    assert region.coverage_fraction == 1.0
+    assert region.roughness_p95_m == 0.0
+
+
 def test_circular_region_roughness_matches_pointwise_roughness_on_rough_terrain() -> None:
     rng = np.random.default_rng(7)
     dem = make_dem(rng.normal(0.0, 5.0, (N, N)).astype(np.float32))

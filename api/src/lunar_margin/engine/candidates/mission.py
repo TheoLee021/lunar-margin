@@ -27,7 +27,7 @@ PRIORITY_WEIGHTS: dict[str, tuple[float, float]] = {
     "solar": (0.75, 0.25),
     "earth": (0.25, 0.75),
 }
-PLAN_VERSION = "2"  # Regional terrain slope is now enforced; never reuse pre-slope runs.
+PLAN_VERSION = "3"  # Do not reuse historical runs that ignored regional roughness.
 # 임무 기간은 짧으므로 30분 간격이면 24시간·6시간 한도를 충분히 가릴 수 있다
 MISSION_STEP_MINUTES = 30
 
@@ -40,6 +40,7 @@ class MissionRequest(BaseModel):
     max_continuous_darkness_hours: float | None = Field(default=None, ge=0.0)
     max_communication_blackout_hours: float | None = Field(default=None, ge=0.0)
     max_terrain_slope_degrees: float | None = Field(default=None, gt=0.0, le=90.0)
+    max_terrain_roughness_m: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
     search_region: Literal["south", "global"] = "south"
     optimization_priority: Literal["balanced", "solar", "earth"] = "balanced"
     observer_height_m: float | None = Field(default=None, ge=0.0, le=100.0)
@@ -87,6 +88,7 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
                 max_sun_dark_hours=mission.max_continuous_darkness_hours,
                 max_earth_blackout_hours=mission.max_communication_blackout_hours,
                 max_terrain_slope_degrees=mission.max_terrain_slope_degrees,
+                max_terrain_roughness_m=mission.max_terrain_roughness_m,
             ),
             "weights": Weights(sun=sun_weight, earth=earth_weight),
             "observer_height_m": mission.observer_height_m or 0.0,
