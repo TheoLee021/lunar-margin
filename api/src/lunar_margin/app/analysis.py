@@ -92,7 +92,7 @@ def get_settings() -> Settings:
 
 
 @lru_cache(maxsize=2)
-def _build_analyzer(data_dir: Path) -> Analyzer:
+def _load_dem(data_dir: Path) -> PolarDem:
     """DEM과 SPICE 커널을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
     img_source, lbl_source = DEM_SOURCES["80s_80m"]
     img = data_dir / "dem" / img_source.filename
@@ -106,7 +106,12 @@ def _build_analyzer(data_dir: Path) -> Analyzer:
         load_kernels(data_dir / "spice")
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail=f"{error}") from error
-    dem = PolarDem.from_files(img, lbl)
+    return PolarDem.from_files(img, lbl)
+
+
+@lru_cache(maxsize=2)
+def _build_analyzer(data_dir: Path) -> Analyzer:
+    dem = _load_dem(data_dir)
 
     def analyze(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
         return analyze_site(
@@ -125,6 +130,10 @@ def _build_analyzer(data_dir: Path) -> Analyzer:
 
 def get_analyzer(settings: Annotated[Settings, Depends(get_settings)]) -> Analyzer:
     return _build_analyzer(settings.data_dir)
+
+
+def get_dem(settings: Annotated[Settings, Depends(get_settings)]) -> PolarDem:
+    return _load_dem(settings.data_dir)
 
 
 def _utc(moment: datetime) -> str:
