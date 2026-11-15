@@ -1,18 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { dayOf, iso, short } from './missionDates'
-import type { Schedule } from './types'
+import { MissionCharts } from './MissionCharts'
+import { missionParams } from './liveAnalysis'
+import {
+  useMissionAnalysis,
+  type MissionAnalysisResult,
+} from './useMissionAnalysis'
+import { demoDateScore } from './demoDateScore'
+import type { CandidateSite, Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
 import { PriceGrid } from './PriceGrid'
 import './date-planner.css'
 
 type Props = {
   schedule: Schedule
+  site: CandidateSite
+  appliedAnalysis: MissionAnalysisResult
+  hour: number
   onViewOrbit: (schedule: Schedule) => void
   onApply: (schedule: Schedule) => void
   onClose: () => void
 }
 export function DatePlanner({
   schedule,
+  site,
+  appliedAnalysis,
+  hour,
   onApply,
   onViewOrbit,
   onClose,
@@ -32,6 +45,13 @@ export function DatePlanner({
     (_, i) => dayOf(anchors.landing) + i - 2,
   )
   const validDraft = ScheduleSchema.safeParse(draft).success
+  const score = validDraft ? demoDateScore(draft) : null
+  const sameSurfacePeriod =
+    draft.landing === schedule.landing && draft.duration === schedule.duration
+  const preview = useMissionAnalysis(
+    validDraft && !sameSurfacePeriod ? missionParams(site, draft) : null,
+  )
+  const live = sameSurfacePeriod ? appliedAnalysis : preview
   const [formError, setFormError] = useState('')
   useEffect(() => {
     const dialog = ref.current!,
@@ -52,6 +72,14 @@ export function DatePlanner({
       departure: iso(dayOf(d.departure) + step),
       landing: iso(dayOf(d.landing) + step),
     }))
+  }
+  function selectLanding(landing: string) {
+    const departure =
+      dayOf(landing) > dayOf(draft.departure)
+        ? draft.departure
+        : iso(dayOf(landing) - 4)
+    setDraft((d) => ({ ...d, departure, landing }))
+    setAnchors({ departure, landing })
   }
   return (
     <dialog
@@ -176,6 +204,23 @@ export function DatePlanner({
               </p>
             ) : null}
           </section>
+          {validDraft ? (
+            <>
+              <MissionCharts
+                score={score}
+                live={live}
+                hour={hour}
+                onLanding={selectLanding}
+              />
+            </>
+          ) : (
+            <section className="group" role="status">
+              <h2>일정을 확인하세요</h2>
+              <p className="hint">
+                착륙일을 출발일 이후로 선택하면 일정 분석이 표시됩니다.
+              </p>
+            </section>
+          )}
         </div>
       </div>
       <footer className="planner-footer">

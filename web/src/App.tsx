@@ -264,6 +264,9 @@ function MissionApp({
         >
           <DatePlanner
             schedule={selection}
+            hour={0}
+            site={site}
+            appliedAnalysis={live}
             onApply={onApply}
             onViewOrbit={onViewOrbit}
             onClose={() => onPlannerChange(false)}

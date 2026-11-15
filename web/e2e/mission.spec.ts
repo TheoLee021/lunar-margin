@@ -25,6 +25,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   expect(earthResponse.ok()).toBe(true)
   const sun: Analysis = await sunResponse.json()
   const earth: Analysis = await earthResponse.json()
+  const degree = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`
   await page.goto('/')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
@@ -105,8 +106,30 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(grid.locator('thead')).toContainText('Jan 08')
 
   await expect(
-    dialog.getByRole('region', { name: '미션 기간 타임라인' }),
-  ).toHaveCount(0)
+    dialog.getByRole('img', { name: '착륙일별 예시 점수' }),
+  ).toBeVisible()
+  const timeline = dialog.getByRole('region', { name: '미션 기간 타임라인' })
+  await expect(
+    timeline.getByRole('img', {
+      name: '고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인',
+    }),
+  ).toBeVisible()
+  await timeline.getByRole('slider', { name: '타임라인 검토 시점' }).fill('1')
+  await expect(timeline.locator('output')).toHaveText(
+    'D+0 00:30 · 2027-01-10 00:30 UTC',
+  )
+  await expect(
+    timeline.getByText(
+      `태양 ${degree(sun.series.body_elevation_deg[1]!)} · ${sun.series.visible[1] ? '햇빛 있음' : '햇빛 없음'}`,
+      { exact: true },
+    ),
+  ).toBeVisible()
+  await expect(
+    timeline.getByText(
+      `지구 ${degree(earth.series.body_elevation_deg[1]!)} · ${earth.series.visible[1] ? '지구 가시' : '지구 차폐'}`,
+      { exact: true },
+    ),
+  ).toBeVisible()
   const combination = dialog.getByRole('button', {
     name: /출발 2027-01-07, 착륙 2027-01-11,/,
   })
@@ -129,6 +152,9 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await dialog
     .getByRole('combobox', { name: /착륙 후 표면 임무/ })
     .selectOption('7')
+  await expect(
+    timeline.getByText('2027-01-11 → 2027-01-18 UTC', { exact: false }),
+  ).toBeVisible()
   await dialog.getByRole('button', { name: '일정 적용 ↗' }).click()
   await expect(dialog).not.toBeVisible()
   await expect(opener).toContainText('2027.01.07')
