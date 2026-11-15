@@ -29,7 +29,9 @@ export function MissionEngineering({
       className="mt-4 border-t border-white/10 pt-3 text-xs"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold text-neutral-100">Mission Engineering · Margins</h3>
+        <h3 className="font-semibold text-neutral-100">
+          Mission Engineering · Margins
+        </h3>
         <strong className={statusStyle[summary]}>
           {summary === 'NOT_ASSESSED' ? 'NO THRESHOLDS' : summary}
         </strong>
@@ -39,25 +41,52 @@ export function MissionEngineering({
         위반입니다. 결측은 통과로 처리하지 않습니다.
       </p>
       {rows.length === 0 ? (
-        <p className="mt-2 text-neutral-400">설정된 정량 한도가 없어 적격 판정을 요약할 수 없습니다.</p>
+        <p className="mt-2 text-neutral-400">
+          설정된 정량 한도가 없어 적격 판정을 요약할 수 없습니다.
+        </p>
       ) : (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-[11px]">
             <thead className="text-neutral-400">
               <tr>
-                <th scope="col" className="pb-2 pr-2 font-medium">Requirement</th>
-                <th scope="col" className="pb-2 pr-2 font-medium">Measured</th>
-                <th scope="col" className="pb-2 pr-2 font-medium">Margin</th>
-                <th scope="col" className="pb-2 font-medium">State</th>
+                <th scope="col" className="pb-2 pr-2 font-medium">
+                  Requirement
+                </th>
+                <th scope="col" className="pb-2 pr-2 font-medium">
+                  Measured
+                </th>
+                <th scope="col" className="pb-2 pr-2 font-medium">
+                  Margin
+                </th>
+                <th scope="col" className="pb-2 font-medium">
+                  State
+                </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.key} className="border-t border-white/10" title={row.interpretation}>
-                  <th scope="row" className="py-2 pr-2 font-normal text-neutral-200">{row.label}</th>
-                  <td className="py-2 pr-2 font-mono">{numeric(row.value, row.unit)}</td>
-                  <td className="py-2 pr-2 font-mono">{row.margin === null ? '—' : `${row.margin >= 0 ? '+' : ''}${numeric(row.margin, row.unit)}`}</td>
-                  <td className={`py-2 font-mono ${statusStyle[row.status]}`}>{row.status}</td>
+                <tr
+                  key={row.key}
+                  className="border-t border-white/10"
+                  title={row.interpretation}
+                >
+                  <th
+                    scope="row"
+                    className="py-2 pr-2 font-normal text-neutral-200"
+                  >
+                    {row.label}
+                  </th>
+                  <td className="py-2 pr-2 font-mono">
+                    {numeric(row.value, row.unit)}
+                  </td>
+                  <td className="py-2 pr-2 font-mono">
+                    {row.margin === null
+                      ? '—'
+                      : `${row.margin >= 0 ? '+' : ''}${numeric(row.margin, row.unit)}`}
+                  </td>
+                  <td className={`py-2 font-mono ${statusStyle[row.status]}`}>
+                    {row.status}
+                  </td>
                 </tr>
               ))}
             </tbody>
