@@ -94,7 +94,7 @@ Open the mission date planner (`/?planner=1`), or choose “이 임무 조건으
 rows show equal-weight means over **all eligible fine 500m samples**, before
 Top-K selection, with priced counts and a modeled fixed-fee range. A date with no
 result shows “미계산”; “미계산 날짜 탐색 · 500m” starts one batch of precision
-searches for the missing dates. Completed runs are reused;
+searches for the missing dates. Completed runs are reused. Clicking a completed date cell opens its exact saved candidate run (including no-eligible results), preserving departure, landing, duration and run ID in the URL without starting another search. Missing results keep the ordinary draft-date selection behavior;
 10km development results and coarse-only samples are never averaged as 500m data.
 
 The price is `F + c*m*F_destination*F_demand`. A 500m-radius native-DEM slope

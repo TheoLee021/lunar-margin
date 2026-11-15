@@ -148,6 +148,17 @@ export function PriceGrid({
   const hasMissing =
     data?.dates.some((row) => !['ready', 'no_eligible'].includes(row.state)) ??
     true
+  function candidateHref(departure: number, landing: number, runId: string) {
+    const url = new URL(window.location.href)
+    url.pathname = '/'
+    url.searchParams.set('view', 'search')
+    url.searchParams.delete('planner')
+    url.searchParams.set('departure', iso(departure))
+    url.searchParams.set('arrival', iso(landing))
+    url.searchParams.set('duration', String(draft.duration))
+    url.searchParams.set('run', runId)
+    return `${url.pathname}${url.search}`
+  }
   return (
     <>
       <div className="price-inputs">
@@ -309,7 +320,24 @@ export function PriceGrid({
               const mean = row?.pricing?.mean
               return (
                 <tr key={l}>
-                  <th scope="row">{short(l)}</th>
+                  <th scope="row">
+                    {row?.state === 'ready' || row?.state === 'no_eligible' ? (
+                      <a
+                        href={candidateHref(
+                          isTransitPossible(draft.departure, iso(l))
+                            ? dayOf(draft.departure)
+                            : l - 4,
+                          l,
+                          row.run_id,
+                        )}
+                        aria-label={`${short(l)} · 착륙 ${iso(l)} 후보지 탐색 열기`}
+                      >
+                        {short(l)}
+                      </a>
+                    ) : (
+                      short(l)
+                    )}
+                  </th>
                   {departures.map((d) => {
                     const possible = isTransitPossible(iso(d), iso(l))
                     const label = row
@@ -317,6 +345,36 @@ export function PriceGrid({
                       : calendar.loading
                         ? '불러오는 중'
                         : '미계산'
+                    const selected =
+                      dayOf(draft.departure) === d && dayOf(draft.landing) === l
+                    const className =
+                      mean && mean.adjusted_usd <= minimum * 1.05
+                        ? 'low-cost'
+                        : undefined
+                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean ? `평균 ${formatPrice(mean.adjusted_usd)}` : label}`
+                    const completed =
+                      row?.state === 'ready' || row?.state === 'no_eligible'
+                    const content = (
+                      <>
+                        <span>
+                          {mean ? formatPrice(mean.adjusted_usd) : label}
+                        </span>
+                        {mean ? (
+                          <>
+                            <small>
+                              {formatPrice(mean.range_low_usd)}–
+                              {formatPrice(mean.range_high_usd)}
+                            </small>
+                            <small>
+                              {row!.pricing!.counts.priced.toLocaleString()}개
+                              격자 평균 · {l - d}일 비행
+                            </small>
+                          </>
+                        ) : (
+                          <small>{row?.message ?? `${l - d}일 비행`}</small>
+                        )}
+                      </>
+                    )
                     return (
                       <td key={d}>
                         {!possible ? (
@@ -326,38 +384,25 @@ export function PriceGrid({
                           >
                             —<small>전이 3~150일</small>
                           </div>
+                        ) : completed ? (
+                          <a
+                            href={candidateHref(d, l, row.run_id)}
+                            aria-label={`${accessibleLabel}, 후보지 탐색 열기`}
+                            aria-current={selected ? 'date' : undefined}
+                            className={className}
+                            title="이 날짜의 저장된 후보지 탐색 결과 열기"
+                          >
+                            {content}
+                          </a>
                         ) : (
                           <button
                             type="button"
-                            aria-pressed={
-                              dayOf(draft.departure) === d &&
-                              dayOf(draft.landing) === l
-                            }
-                            aria-label={`출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean ? `평균 ${formatPrice(mean.adjusted_usd)}` : label}`}
-                            className={
-                              mean && mean.adjusted_usd <= minimum * 1.05
-                                ? 'low-cost'
-                                : undefined
-                            }
+                            aria-pressed={selected}
+                            aria-label={accessibleLabel}
+                            className={className}
                             onClick={() => onSelect(iso(d), iso(l))}
                           >
-                            <span>
-                              {mean ? formatPrice(mean.adjusted_usd) : label}
-                            </span>
-                            {mean ? (
-                              <>
-                                <small>
-                                  {formatPrice(mean.range_low_usd)}–
-                                  {formatPrice(mean.range_high_usd)}
-                                </small>
-                                <small>
-                                  {row!.pricing!.counts.priced.toLocaleString()}
-                                  개 격자 평균 · {l - d}일 비행
-                                </small>
-                              </>
-                            ) : (
-                              <small>{row?.message ?? `${l - d}일 비행`}</small>
-                            )}
+                            {content}
                           </button>
                         )}
                       </td>
