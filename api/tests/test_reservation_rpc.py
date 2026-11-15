@@ -70,8 +70,24 @@ def test_rpc_operator_hash_and_default_execution_privileges(client: TestClient) 
                 has_function_privilege('pg_monitor',p.oid,'EXECUTE'),p.prosecdef
             FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
             WHERE n.nspname='public' AND p.proname LIKE 'reservation_%'""").fetchall()
-        assert len(privileges) == 5
+        assert len(privileges) == 6
         assert all(
             not public_execution and not definer for _, public_execution, definer in privileges
         )
+        connection.rollback()
+
+
+def test_conflict_payload_stays_complete_when_postgrest_limits_result_rows(
+    client: TestClient,
+) -> None:
+    with psycopg.connect(DSN) as connection:
+        connection.execute("""SELECT public.reservation_confirm(ix,0,'RPC','Row limit',
+            '2027-01-01T00:00:00Z','2027-01-15T00:00:00Z')
+            FROM generate_series(-500,500) AS ix""")
+        # PostgREST's result-row cap must not cap the contents of this one JSON value.
+        result = connection.execute("""SELECT jsonb_array_length(
+            public.reservation_conflicts_complete(
+            ARRAY(SELECT 'SP500v1:' || ix::text || ':0' FROM generate_series(-500,500) AS ix),
+            '2027-01-01T00:00:00Z','2027-01-15T00:00:00Z')) LIMIT 1""").fetchone()
+        assert result == (1001,)
         connection.rollback()

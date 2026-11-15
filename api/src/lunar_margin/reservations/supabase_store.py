@@ -66,7 +66,7 @@ class SupabaseStore:
 
     def conflicts(self, cells: list[str], start: datetime, end: datetime) -> list[Booking]:
         raw = self._rpc(
-            "reservation_conflicts",
+            "reservation_conflicts_complete",
             {"p_cell_ids": cells, "p_starts_at": start.isoformat(), "p_ends_at": end.isoformat()},
         )
         try:

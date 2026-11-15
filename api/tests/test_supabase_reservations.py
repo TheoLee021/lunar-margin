@@ -95,7 +95,9 @@ def test_availability_uses_existing_supabase_settings_without_a_database_dsn(
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["candidates"][0]["status"] == "available"
     assert response.json()["candidates"][0]["available_rank"] == 1
-    assert rpc.calls[0][0] == "https://project.supabase.co/rest/v1/rpc/reservation_conflicts"
+    assert (
+        rpc.calls[0][0] == "https://project.supabase.co/rest/v1/rpc/reservation_conflicts_complete"
+    )
     assert "server-only-key" not in response.text
 
 
