@@ -90,8 +90,8 @@ Candidate search UI: choose **후보지 탐색**, enter a mission, and optionall
 ## Candidate-search terrain slope
 
 Candidate search now enforces the optional maximum terrain slope in both standard
-and development searches. It uses the same 250 m regional DEM slope P95 as the
-mission dashboard (160 m slope baseline, 400 m roughness window). Incomplete
+and development searches. It uses the 250 m regional DEM slope P95
+(160 m slope baseline, 400 m roughness window). Incomplete
 regional terrain cannot pass. The table and candidate detail show measured slopes;
 the filter step explains slope and terrain-coverage exclusions. Historical runs
 remain readable and are labeled as not applying slope. Start a new search to apply
