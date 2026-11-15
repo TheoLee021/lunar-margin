@@ -320,6 +320,14 @@ function RunBody({ run }: { run: RunDetail }) {
           </dl>
         </section>
       ) : null}
+      {run.mission ? (
+        <a
+          className="hud-button self-start"
+          href={`/?planner=1&pricing_run=${encodeURIComponent(run.id)}&arrival=${run.mission.landing_date}&departure=${new Date(Date.parse(run.mission.landing_date) - 4 * 86400000).toISOString().slice(0, 10)}&duration=${run.mission.mission_duration_days}`}
+        >
+          이 임무 조건으로 날짜별 가격 비교
+        </a>
+      ) : null}
       {run.summary.warnings.length > 0 ? (
         <ul
           role="alert"

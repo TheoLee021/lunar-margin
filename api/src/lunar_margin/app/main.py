@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from lunar_margin.app.analysis import router as analysis_router
+from lunar_margin.app.calendar_start import router as calendar_start_router
 from lunar_margin.app.candidates import router as candidates_router
+from lunar_margin.app.pricing import router as pricing_router
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.trajectory import router as trajectory_router
 from lunar_margin.pipeline.table_prefetch import start_prefetch
@@ -30,12 +32,14 @@ def create_app(settings: Settings) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_origin_regex=settings.cors_origin_regex or None,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
 
     app.include_router(analysis_router)
     app.include_router(candidates_router)
+    app.include_router(pricing_router)
+    app.include_router(calendar_start_router)
     app.include_router(trajectory_router)
 
     @app.get("/health")

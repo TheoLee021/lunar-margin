@@ -1,4 +1,59 @@
 @layer components {
+  .price-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 20px 0 12px;
+  }
+  .price-inputs label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .price-inputs input,
+  .price-inputs select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    color: var(--fg);
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .price-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+  }
+  .price-actions button {
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .price-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .cost-grid button span {
+    font-size: clamp(12px, 1.5vw, 20px);
+  }
+  .cost-grid .invalid-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  @media (max-width: 680px) {
+    .price-inputs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
   .group {
     padding: 12px 14px;
     display: flex;

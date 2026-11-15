@@ -1,30 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { dayOf, exampleCost, iso, short, DAY } from './missionDates'
-import { MissionCharts } from './MissionCharts'
-import { missionParams } from './liveAnalysis'
-import {
-  useMissionAnalysis,
-  type MissionAnalysisResult,
-} from './useMissionAnalysis'
-import { demoDateScore } from './demoDateScore'
-import type { CandidateSite, Schedule } from './types'
+import { dayOf, iso, short } from './missionDates'
+import type { Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
+import { PriceGrid } from './PriceGrid'
 import './date-planner.css'
 
 type Props = {
   schedule: Schedule
-  site: CandidateSite
-  appliedAnalysis: MissionAnalysisResult
-  hour: number
   onViewOrbit: (schedule: Schedule) => void
   onApply: (schedule: Schedule) => void
   onClose: () => void
 }
 export function DatePlanner({
   schedule,
-  site,
-  appliedAnalysis,
-  hour,
   onApply,
   onViewOrbit,
   onClose,
@@ -43,18 +31,7 @@ export function DatePlanner({
     { length: 5 },
     (_, i) => dayOf(anchors.landing) + i - 2,
   )
-  const prices = landings
-    .flatMap((l) => departures.map((d) => exampleCost(d, l)))
-    .filter((p): p is number => p !== null)
-  const minimum = Math.min(...prices)
   const validDraft = ScheduleSchema.safeParse(draft).success
-  const score = validDraft ? demoDateScore(draft) : null
-  const sameSurfacePeriod =
-    draft.landing === schedule.landing && draft.duration === schedule.duration
-  const preview = useMissionAnalysis(
-    validDraft && !sameSurfacePeriod ? missionParams(site, draft) : null,
-  )
-  const live = sameSurfacePeriod ? appliedAnalysis : preview
   const [formError, setFormError] = useState('')
   useEffect(() => {
     const dialog = ref.current!,
@@ -75,14 +52,6 @@ export function DatePlanner({
       departure: iso(dayOf(d.departure) + step),
       landing: iso(dayOf(d.landing) + step),
     }))
-  }
-  function selectLanding(landing: string) {
-    const departure =
-      dayOf(landing) > dayOf(draft.departure)
-        ? draft.departure
-        : iso(dayOf(landing) - 4)
-    setDraft((d) => ({ ...d, departure, landing }))
-    setAnchors({ departure, landing })
   }
   return (
     <dialog
@@ -124,7 +93,7 @@ export function DatePlanner({
             <div className="window-toolbar">
               <div>
                 <h3>출발일 × 착륙일</h3>
-                <p>각 기준일 ±2일 · 날짜 조합별 예시 비용 / USD million</p>
+                <p>500m 격자 평균 가격 · USD million</p>
               </div>
               <div className="week-nav">
                 <button
@@ -193,132 +162,23 @@ export function DatePlanner({
                 </select>
               </label>
             </div>
-            <div className="grid-scroll">
-              <table
-                className="cost-grid"
-                aria-label="출발일과 착륙일별 예시 비용"
-              >
-                <thead>
-                  <tr>
-                    <th scope="col" className="axis-cell">
-                      착륙 ↓<br />
-                      출발 →
-                    </th>
-                    {departures.map((d) => (
-                      <th key={d} scope="col">
-                        {short(d)}
-                        <small>
-                          {new Intl.DateTimeFormat('en-US', {
-                            weekday: 'short',
-                            timeZone: 'UTC',
-                          }).format(d * DAY)}
-                        </small>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {landings.map((l) => (
-                    <tr key={l}>
-                      <th scope="row">{short(l)}</th>
-                      {departures.map((d) => {
-                        const price = exampleCost(d, l),
-                          selected =
-                            d === dayOf(draft.departure) &&
-                            l === dayOf(draft.landing)
-                        return (
-                          <td
-                            key={d}
-                            className={
-                              price === null ? 'unavailable' : undefined
-                            }
-                          >
-                            {price === null ? (
-                              <span aria-label="선택 불가">—</span>
-                            ) : (
-                              <button
-                                type="button"
-                                aria-pressed={selected}
-                                aria-label={`출발 ${iso(d)}, 착륙 ${iso(l)}, 예시 비용 ${price.toFixed(1)} million USD`}
-                                className={
-                                  price < minimum + 7 ? 'low-cost' : undefined
-                                }
-                                onClick={() =>
-                                  setDraft((s) => ({
-                                    ...s,
-                                    departure: iso(d),
-                                    landing: iso(l),
-                                  }))
-                                }
-                              >
-                                <span>
-                                  ${price.toFixed(1)}
-                                  <small>M</small>
-                                </span>
-                                {price === minimum ? (
-                                  <small className="best-cost">최저 비용</small>
-                                ) : (
-                                  <small>{l - d}일 비행</small>
-                                )}
-                              </button>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {prices.length === 0 ? (
-              <p role="status" className="hint">
-                선택 가능한 날짜 조합이 없습니다. 기준 출발일과 착륙일을
-                조정하세요.
-              </p>
-            ) : null}
+            <PriceGrid
+              departures={departures}
+              landings={landings}
+              draft={draft}
+              onSelect={(departure, landing) =>
+                setDraft((s) => ({ ...s, departure, landing }))
+              }
+            />
             {formError ? (
               <p role="alert" className="hint">
                 {formError}
               </p>
             ) : null}
-            <div className="grid-key">
-              <span>
-                <i />
-                낮은 예시 비용
-              </span>
-              <span>
-                <i />
-                선택한 조합
-              </span>
-              <span>— 출발일 이후 착륙만 가능</span>
-              <span>열: 출발일 · 행: 착륙일 / UTC</span>
-            </div>
           </section>
-          {validDraft ? (
-            <>
-              <MissionCharts
-                score={score}
-                live={live}
-                hour={hour}
-                onLanding={selectLanding}
-              />
-            </>
-          ) : (
-            <section className="group" role="status">
-              <h2>일정을 확인하세요</h2>
-              <p className="hint">
-                착륙일을 출발일 이후로 선택하면 일정 분석이 표시됩니다.
-              </p>
-            </section>
-          )}
         </div>
       </div>
       <footer className="planner-footer">
-        <p>
-          <span className="example-dot" />
-          비용은 목업 예시입니다.
-          <small>궤도 보기로 이동하면 선택한 일정이 유지됩니다.</small>
-        </p>
         <div>
           <span aria-live="polite">
             {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}

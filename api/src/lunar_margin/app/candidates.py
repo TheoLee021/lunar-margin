@@ -137,16 +137,16 @@ def get_launcher() -> Launcher:
 
 
 LauncherDep = Annotated[Launcher, Depends(get_launcher)]
-_START_LOCK = threading.Lock()
+SEARCH_START_LOCK = threading.Lock()
 
 
-def _is_complete(run_dir: Path) -> bool:
+def is_run_complete(run_dir: Path) -> bool:
     return all(
         (run_dir / name).exists() for name in ("candidates.json", "summary.json", "map.json")
     )
 
 
-def _running_other_than(runs_dir: Path, run_id: str) -> str | None:
+def running_other_than(runs_dir: Path, run_id: str) -> str | None:
     if not runs_dir.is_dir():
         return None
     for other in sorted(runs_dir.iterdir()):
@@ -188,13 +188,13 @@ def _start_search(
     run_id = f"dev-v1-{mission.run_id()}" if development else mission.run_id()
     runs_dir = _runs_dir(settings)
     run_dir = runs_dir / run_id
-    with _START_LOCK:
+    with SEARCH_START_LOCK:
         status = read_status(run_dir) if run_dir.is_dir() else None
-        if _is_complete(run_dir) and (status is None or status.state == "done"):
+        if is_run_complete(run_dir) and (status is None or status.state == "done"):
             return SearchStarted(run_id=run_id, state="done", cached=True)
         if status is not None and status.state in ("queued", "running"):
             return SearchStarted(run_id=run_id, state=status.state, cached=False)
-        busy = _running_other_than(runs_dir, run_id)
+        busy = running_other_than(runs_dir, run_id)
         if busy is not None:
             raise HTTPException(
                 status_code=409,
@@ -235,7 +235,7 @@ def get_status(run_id: RunId, settings: SettingsDep) -> StatusOut:
     run_dir = _runs_dir(settings) / run_id
     status = read_status(run_dir) if run_dir.is_dir() else None
     if status is None:
-        if run_dir.is_dir() and _is_complete(run_dir):  # CLI --run-id로 만든 예전 방식의 실행
+        if run_dir.is_dir() and is_run_complete(run_dir):  # CLI --run-id로 만든 예전 방식의 실행
             status = RunStatus(state="done", stage="done", done=0, total=0)
         else:
             raise HTTPException(status_code=404, detail=f"run '{run_id}' not found")
