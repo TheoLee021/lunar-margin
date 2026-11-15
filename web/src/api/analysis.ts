@@ -61,6 +61,10 @@ export const SiteAssessmentSchema = z.object({
   observer_height_m: z.number(),
   sun: MetricsSchema,
   earth: MetricsSchema,
+  solar_continuity: z.object({
+    longest_sun_visible_hours: z.number(),
+    visibility_transitions: z.number(),
+  }),
   terrain: TerrainSchema,
 })
 export type SiteAssessment = z.infer<typeof SiteAssessmentSchema>
