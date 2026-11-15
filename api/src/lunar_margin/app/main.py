@@ -10,6 +10,7 @@ from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.calendar_start import router as calendar_start_router
 from lunar_margin.app.candidates import router as candidates_router
 from lunar_margin.app.pricing import router as pricing_router
+from lunar_margin.app.provider_pricing import router as provider_pricing_router
 from lunar_margin.app.reservations import router as reservations_router
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.trajectory import router as trajectory_router
@@ -40,6 +41,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(analysis_router)
     app.include_router(candidates_router)
     app.include_router(pricing_router)
+    app.include_router(provider_pricing_router)
     app.include_router(calendar_start_router)
     app.include_router(reservations_router)
     app.include_router(trajectory_router)

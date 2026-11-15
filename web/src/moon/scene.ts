@@ -70,7 +70,7 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
-  flyTo(location: LunarLocation): void
+  flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
@@ -162,10 +162,26 @@ export async function createMoonScene(
   }
 
   const markers = createMarkerLayer(viewer)
+  let flight = 0
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
-      const markerId = markers.markerIdOf(scene.pick(position))
+      const picked: unknown = scene.pick(position)
+      const cluster = markers.clusterPositionsOf(picked)
+      if (cluster) {
+        flight++
+        const bounds = BoundingSphere.fromPoints(cluster)
+        camera.flyToBoundingSphere(bounds, {
+          offset: new HeadingPitchRange(
+            0,
+            -CesiumMath.PI_OVER_TWO,
+            Math.max(bounds.radius * 5, 5_000),
+          ),
+          duration: 1.2,
+        })
+        return
+      }
+      const markerId = markers.markerIdOf(picked)
       if (markerId !== undefined) {
         options.onMarkerSelect(markerId)
         return
@@ -198,16 +214,22 @@ export async function createMoonScene(
   camera.setView(overview)
 
   return {
-    flyTo(location) {
-      flyAround(
-        Cartesian3.fromDegrees(location.lon, location.lat),
-        0,
-        OBLIQUE_PITCH,
-        SITE_RANGE_M,
-        2,
-      )
+    flyTo(location, rangeM = SITE_RANGE_M) {
+      const request = ++flight
+      const position = Cartesian3.fromDegrees(location.lon, location.lat)
+      const arrive = (surface: Cartesian3) => {
+        if (viewer.isDestroyed() || request !== flight) return
+        flyAround(surface, 0, OBLIQUE_PITCH, rangeM, 2)
+      }
+      if (scene.clampToHeightSupported) {
+        void scene
+          .clampToHeightMostDetailed([position])
+          .then(([surface]) => arrive(surface ?? position))
+          .catch(() => arrive(position))
+      } else arrive(position)
     },
     flyToOverview() {
+      flight++
       camera.flyTo({ ...overview, duration: 1.2 })
     },
     setMarkers(next) {
@@ -245,6 +267,7 @@ export async function createMoonScene(
       )
     },
     destroy() {
+      markers.destroy()
       removePreRender()
       removePostRender()
       handler.destroy()

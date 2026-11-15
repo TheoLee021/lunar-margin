@@ -28,7 +28,7 @@ uv run fastapi dev src/lunar_margin/app/main.py  # http://localhost:8000
 curl "localhost:8000/analysis/illumination?lat=-89.45&lon=222&start=2027-01-01T00:00:00Z&end=2027-02-01T00:00:00Z"
 ```
 
-데이터는 `DATA_DIR`(기본 `api/data/`, git 제외)에 저장된다. 배포에서는 Railway Volume 경로로 지정한다.
+데이터는 `DATA_DIR`(기본 `api/data/`, git 제외)에 저장된다. 배포 설정은 아래 "배포 (Railway)".
 데이터가 없으면 분석 API는 `503`과 안내 메시지를 반환한다 (`/health`는 영향 없음).
 
 ```sh
@@ -36,6 +36,34 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 ```
 
 첫 `pytest` 실행은 데이터를 내려받는다(네트워크 필요).
+
+## 배포 (Railway)
+
+이미지에는 NASA 데이터가 들어 있지 않다. **영구 Volume과 `DATA_DIR`이 없으면** 데이터가 컨테이너 임시 디스크에 놓여 배포할 때마다 사라지고,
+분석 API는 `503 NASA data not found`, 전이 궤도 API는 `503 SPICE data missing`을 돌려준다.
+
+1. Volume을 서비스에 붙이고 마운트 경로를 `/data`로 둔다. 데이터가 약 700 MB(DEM 2개, SPICE, 수평선 테이블)라
+   Trial 플랜 한도(0.5 GB)에는 들어가지 않는다. Hobby 플랜에서 5 GB로 둔다 (요금은 실제 사용량 기준).
+2. 환경변수를 설정한다.
+
+   | 변수 | 값 |
+   | --- | --- |
+   | `DATA_DIR` | `/data` |
+   | `CORS_ORIGINS` | `https://lunar-margin.vercel.app` |
+   | `CORS_ORIGIN_REGEX` | Vercel PR Preview 도메인 (`.env.example` 참고) |
+   | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | 팀 Supabase 프로젝트 값 |
+   | `SUPABASE_BUCKET` | `landing-spot` |
+
+3. 처음 한 번 NASA 원천 데이터를 Volume에 받는다 (약 510 MB). 이미 있는 파일은 sha256만 확인하고 건너뛴다.
+
+   ```sh
+   railway link                                          # repo에서 한 번, 서비스 선택
+   railway ssh -- python -m lunar_margin.pipeline.fetch
+   ```
+
+4. 재배포한다. 수평선 테이블은 서버가 시작할 때 Storage에서 받는데, 그때 DEM이 없으면 건너뛰기 때문이다.
+
+확인: `railway ssh -- df -h /data`로 용량, `railway ssh -- ls /data/dem /data/spice /data/horizons`로 파일을 본다.
 
 ## 사용하는 NASA 데이터
 
@@ -85,7 +113,7 @@ uv run python -m lunar_margin.pipeline.horizons --upload     # 만든 테이블�
 uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 Storage에서 받기 (sha256 확인)
 ```
 
-`api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(기본 `horizon-tables`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
+`api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(팀 프로젝트는 `landing-spot`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
 
 **서버를 시작할 때 테이블이 없으면 위 설정이 있는 경우 자동으로 받는다** (백그라운드, 서버는 바로 뜬다). 배포에서는 `DATA_DIR`을 영구 Volume에 두면 다시 받지 않는다. `HORIZON_TABLE_DOWNLOAD_ON_START=false`로 끈다.
 

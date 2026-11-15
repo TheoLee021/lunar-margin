@@ -391,7 +391,48 @@ The date planner starts missing dates using `POST /pricing/calculate` (below).
 Departure affects only the 3–150 day transit eligibility gate; it adds no price
 multiplier. The planner makes no flight-availability claim.
 
-### Batch calendar calculation
+### Published provider comparisons
+
+These additive endpoints distinguish the six named delivery providers from the
+historical single-tariff benchmark above. They do not mutate searches or bookings.
+Data sources, unknown-value policy and measured scope: [provider-pricing.md](provider-pricing.md).
+
+- `GET /pricing/providers/catalog`: versioned six-provider catalog, `checked_on`,
+  published sources, day/month/year/NET schedule precision, nullable public terms.
+- `POST /pricing/providers/calendar`: the existing calendar input plus unique
+  `departure_dates` (1–5) and optional `source_run_id`. Returns `mass_kg`, `delivery`,
+  `mission_duration_days`, `catalog_checked_on`, `dates` and the departure × landing
+  `cells`. Landing dates still pass the mission/ephemeris validator.
+- `POST /pricing/providers/compare`: `departure_date`, `landing_date`, `mass_kg`,
+  `delivery`, `x_m`, `y_m`. Returns the echoed context, all six `providers`, nullable
+  `minimum_usd`, `destination_multiplier`, `terrain_unknown`, `demand_multiplier=1`
+  and `demand_unknown=true`. Each provider lists its missions, issues, public rate,
+  nullable fixed/minimum/step billing terms, capacity, sources and nullable price.
+
+Calendar `dates` contain `landing_date`, `run_id`, `state` (`completed`,
+`not_computed`, `running`, `failed`, `unavailable`) and nullable `message`.
+An explicit saved source run is reused only if its mission conditions match;
+edited conditions use their own search. Development grids never enter means.
+
+Each calendar cell contains `departure_date`, `landing_date`, `run_id`, `status`,
+`mean_min_usd`, `eligible_grid_count`, `terrain_unknown_count`, `quoted_grid_count`
+and `eligible_provider_ids`. Statuses are `no_published_quote`, `search_required`,
+`quoted`, `partial_coverage`, `no_eligible`, `invalid_transit`, `unavailable`.
+`mean_min_usd` is non-null only for complete quote coverage of every originally
+priceable 500m grid. A missing grid count is null, not a measured zero.
+The response declares `aggregation=mean_of_grid_minima` and
+`sampling=all_eligible_500m_grids`. Counts do not refer to Top-K candidates.
+
+Unknown public flight data skip grid pricing entirely. Qualifying flights share
+one per-date terrain read and vectorized per-provider comparisons. Repeated
+departure cells with the same eligible flight set reuse those comparisons within
+the request. Schedule matching adds no ad hoc time surcharge. A known rate alone,
+an old benchmark tariff or a government mission contract total cannot qualify a
+company quote; complete public billing, capacity, date and destination terms are
+required. Non-null flight prices have no blocking issues and grade
+`modeled_from_published_terms`. Prices are estimates, not a booking confirmation.
+
+### Batch calendar calculation (environment analysis)
 
 `POST /pricing/calculate` accepts the same body as `/pricing/calendar`. It returns
 `{run_ids: string[], state: "queued" | "running" | "done", cached: boolean}` with

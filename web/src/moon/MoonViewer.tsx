@@ -12,7 +12,7 @@ import { parseSunDirection, type Vector3 } from './sun'
 
 /** Imperative API for panels. Calls made before the Moon has loaded are applied once it is ready. */
 export interface MoonViewerHandle {
-  flyTo(location: LunarLocation): void
+  flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view straight above the south pole. No-op until the Moon has loaded. */
   flyToOverview(): void
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
@@ -50,7 +50,10 @@ export default function MoonViewer({
   const containerRef = useRef<HTMLDivElement>(null)
   const compassRef = useRef<HTMLSpanElement>(null)
   const sceneRef = useRef<MoonScene | null>(null)
-  const pending = useRef<{ fly?: LunarLocation; sun?: Vector3 | null }>({})
+  const pending = useRef<{
+    fly?: { location: LunarLocation; rangeM?: number }
+    sun?: Vector3 | null
+  }>({})
   const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const ready = state.kind === 'ready'
@@ -70,9 +73,9 @@ export default function MoonViewer({
   useImperativeHandle(
     ref,
     () => ({
-      flyTo(location) {
-        if (sceneRef.current) sceneRef.current.flyTo(location)
-        else pending.current.fly = location
+      flyTo(location, rangeM) {
+        if (sceneRef.current) sceneRef.current.flyTo(location, rangeM)
+        else pending.current.fly = { location, rangeM }
       },
       flyToOverview() {
         sceneRef.current?.flyToOverview()
@@ -116,7 +119,7 @@ export default function MoonViewer({
         const { fly, sun } = pending.current
         pending.current = {}
         if (sun !== undefined) created.setSunDirection(sun)
-        if (fly) created.flyTo(fly)
+        if (fly) created.flyTo(fly.location, fly.rangeM)
         setState({ kind: 'ready' })
       })
       .catch((error: unknown) => {
