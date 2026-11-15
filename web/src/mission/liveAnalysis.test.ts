@@ -26,6 +26,7 @@ function response(): Analysis {
       body_azimuth_deg: [315, 45],
       body_elevation_deg: [-1, -0.5],
       visible: [false, false],
+      terrain_clearance_deg: [-1, -1],
     },
     windows: [],
     dark_periods: [{ start: params.start, end: params.end }],
