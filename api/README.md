@@ -14,6 +14,7 @@
 | API `GET /analysis/illumination`, `GET /analysis/earth-visibility` | 완료 (`docs/api.md` 계약 반영) |
 | 착륙 후보지 탐색 (남극, 거친→세밀) | 구현 (`docs/candidates.md`) |
 | 오버레이 타일 사전 계산 (`/tiles/...`) | 구현 (수평선 500 m, 경사 500·160·80 m + 후보 지역 20·5 m. `docs/api.md` Tiles 절) |
+| 햇빛 지도 `GET /sunlight/south-pole.png` (`engine/sunlight.py`) | 구현 (태양 방향별 80 m 지형 그림자, `docs/api.md` Sunlight 절) |
 | CI에서 SPICE 커널 캐시 | 미착수 (아래 "알려진 한계") |
 
 ## 빠른 시작
