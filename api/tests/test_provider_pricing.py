@@ -265,7 +265,23 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     assert estimated.json()["estimate"] is True
     assert estimated.json()["cells"][0]["status"] == "estimated"
     assert estimated.json()["cells"][0]["eligible_grid_count"] == 110
-    assert estimated.json()["cells"][0]["mean_min_usd"] == pytest.approx(100)
+    assert estimated.json()["cells"][0]["mean_min_usd"] == pytest.approx(600_000)
+    assert estimated.json()["cells"][0]["lowest_company_names"] == ["SpaceX"]
+    assert estimated.json()["cells"][0]["lowest_launch_id"]
+    no_launch = client.post(
+        "/pricing/providers/calendar",
+        json={
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": ["2027-01-05"],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+        },
+    ).json()["cells"][0]
+    assert no_launch["status"] == "no_launch"
+    assert no_launch["mean_min_usd"] is None
+    assert no_launch["lowest_company_names"] == []
     # Switching operators changes only pricing: the same 110 saved fine grids are reused.
     from lunar_margin.app.launch_schedule import get_reader
 
@@ -278,7 +294,7 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
         request = {
             "mission": mission.model_dump(mode="json"),
             "landing_dates": ["2027-01-10"],
-            "departure_dates": ["2027-01-06", "2027-01-07"],
+            "departure_dates": [launch.departure_date.isoformat()] if launch.departure_date else [],
             "mass_kg": 1,
             "delivery": "surface",
             "estimate": True,
@@ -290,6 +306,8 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
         assert result["selection"]["company_id"] == provider_id
         assert result["selection"]["company_name"] == operator
         for selected_cell in result["cells"]:
+            assert selected_cell["lowest_company_names"] == [operator]
+            assert selected_cell["lowest_launch_id"] == launch.id
             assert selected_cell["status"] == "estimated"
             assert selected_cell["mean_min_usd"] == pytest.approx(price)
             assert selected_cell["eligible_grid_count"] == selected_cell["quoted_grid_count"] == 110

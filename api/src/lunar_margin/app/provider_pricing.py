@@ -27,7 +27,12 @@ from lunar_margin.engine.provider_pricing import (
     load_catalog,
     minimum_grid_prices,
 )
-from lunar_margin.engine.selected_company import CompanyModel, company_model
+from lunar_margin.engine.selected_company import (
+    CompanyModel,
+    company_model,
+    minimum_company_prices,
+    scheduled_models,
+)
 from lunar_margin.pipeline.candidate_status import read_status
 
 router = APIRouter(prefix="/pricing/providers", tags=["provider pricing"])
@@ -62,6 +67,7 @@ class CalendarCell(Model):
     run_id: str
     status: Literal[
         "no_published_quote",
+        "no_launch",
         "search_required",
         "quoted",
         "estimated",
@@ -70,6 +76,8 @@ class CalendarCell(Model):
         "invalid_transit",
         "unavailable",
     ]
+    lowest_company_names: list[str] = Field(default_factory=list)
+    lowest_launch_id: str | None = None
     mean_min_usd: float | None = None
     eligible_grid_count: int | None = None
     terrain_unknown_count: int | None = None
@@ -182,14 +190,12 @@ def get_provider_calendar(
     settings: SettingsDep,
     dem: PricingDemDep,
 ) -> ProviderCalendar:
+    launches = get_reader().peek().launches if request.estimate else []
     selected: CompanyModel | None = None
+    selected_departure: date | None = None
     if request.selected_launch_id:
         launch = next(
-            (
-                item
-                for item in get_reader().peek().launches
-                if item.id == request.selected_launch_id
-            ),
+            (item for item in launches if item.id == request.selected_launch_id),
             None,
         )
         if launch is None:
@@ -197,6 +203,7 @@ def get_provider_calendar(
                 status_code=409,
                 detail="선택한 발사 일정을 찾을 수 없습니다. 목록에서 다시 선택하세요.",
             )
+        selected_departure = launch.departure_date
         selected = company_model(
             catalog, launch, mass_kg=request.mass_kg, delivery=request.delivery
         )
@@ -205,6 +212,19 @@ def get_provider_calendar(
     grids: dict[date, RunPrices] = {}
     vectors: dict[date, tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]] = {}
     minima: dict[tuple[date, tuple[str, ...]], NDArray[np.float64]] = {}
+    winners: dict[tuple[date, tuple[str, ...]], list[CompanyModel]] = {}
+    departure_models = (
+        {
+            departure: ([selected] if selected_departure == departure else [])
+            if selected is not None
+            else scheduled_models(
+                catalog, launches, departure, mass_kg=request.mass_kg, delivery=request.delivery
+            )
+            for departure in request.departure_dates
+        }
+        if request.estimate
+        else {}
+    )
     saved_ids: dict[date, str] = {}
     if request.source_run_id:
         source_root = settings.data_dir / "candidates" / request.source_run_id
@@ -258,21 +278,28 @@ def get_provider_calendar(
                 mass_kg=request.mass_kg,
                 delivery=request.delivery,
             )
-            possible: dict[ProviderId, list[str]] = {
-                provider.id: [
-                    flight.id
-                    for flight in provider.flights
-                    if (
-                        not estimate_blocked(flight, context)
-                        if request.estimate
-                        else not flight_issues(flight, context)
+            models = departure_models.get(departure, [])
+            possible: dict[ProviderId, list[str]] = (
+                {
+                    provider.id: [
+                        flight.id
+                        for flight in provider.flights
+                        if not flight_issues(flight, context)
+                    ]
+                    for provider in catalog.providers
+                }
+                if not request.estimate
+                else {}
+            )
+            provider_ids: list[ProviderId] = (
+                list(
+                    dict.fromkeys(
+                        model.company_id for model in models if model.company_id is not None
                     )
-                ]
-                for provider in estimate_catalog(catalog, context).providers
-            }
-            provider_ids: list[ProviderId] = [key for key, value in possible.items() if value]
-            if selected is not None:
-                provider_ids = [selected.company_id] if selected.company_id is not None else []
+                )
+                if request.estimate
+                else [key for key, value in possible.items() if value]
+            )
             cell = CalendarCell(
                 departure_date=departure,
                 landing_date=landing,
@@ -280,10 +307,13 @@ def get_provider_calendar(
                 status="no_published_quote",
                 eligible_provider_ids=provider_ids,
             )
+            if request.estimate and not models:
+                cells.append(cell.model_copy(update={"status": "no_launch"}))
+                continue
             if not 3 <= (landing - departure).days <= 150:
                 cells.append(cell.model_copy(update={"status": "invalid_transit"}))
                 continue
-            if not provider_ids and selected is None:
+            if not request.estimate and not provider_ids:
                 cells.append(cell)
                 continue  # Public terms are unknown: no DEM loop or six repeated searches.
             if state != "completed":
@@ -319,13 +349,10 @@ def get_provider_calendar(
                 landing,
                 tuple(sorted(flight for value in possible.values() for flight in value)),
             )
-            if selected is not None:
-                key = (landing, ("selected-company", selected.launch_id))
-            if key not in minima and selected is not None:
-                minima[key] = (
-                    selected.fixed_usd
-                    + selected.tariff_usd_per_kg * selected.billable_mass_kg * factors
-                )
+            if request.estimate:
+                key = (landing, ("scheduled", *sorted(model.launch_id for model in models)))
+                if key not in minima:
+                    minima[key], winners[key] = minimum_company_prices(models, factors)
             if key not in minima:
                 minima[key] = minimum_grid_prices(
                     catalog, context, x_m=x_m, y_m=y_m, destination_multipliers=factors
@@ -334,9 +361,15 @@ def get_provider_calendar(
             finite = values[np.isfinite(values)]
             n, priced = len(values), len(finite)
             mean = math.fsum(float(value) for value in finite) / n if n and n == priced else None
+            contributing = winners.get(key, []) if mean is not None else []
+            company_names = list(dict.fromkeys(model.company_name for model in contributing))
             cells.append(
                 cell.model_copy(
                     update={
+                        "lowest_company_names": company_names,
+                        "lowest_launch_id": contributing[0].launch_id
+                        if len(company_names) == 1
+                        else None,
                         "status": "no_eligible"
                         if n == 0
                         else ("estimated" if request.estimate else "quoted")

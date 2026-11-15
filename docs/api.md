@@ -595,3 +595,15 @@ be ranked; it does not introduce an arbitrary roughness score weight.
 
 RF communication changes are tracked separately; this roughness change preserves
 the existing geometric Earth-visibility metric and scoring.
+
+모델 날짜표 cell의 `lowest_company_names: string[]`는 각 적합 격자의 최저가 계산에
+기여한 발사사 이름이다. 동률·격자별 다른 최저가 회사는 모두 포함한다. 가격이 없는
+셀은 빈 배열이다. `lowest_launch_id: string|null`는 기여 회사가 하나일 때 해당 공개
+발사편 ID이며, 여러 회사가 기여하면 null이다. 엄격한 공개 견적 모드에서는 이 추가
+모델 필드를 기본 빈 배열/null로 반환한다.
+
+`estimate:true`에서 발사편을 선택하지 않으면 `/launches`의 해당 UTC 출발일에
+등록된 발사사 모델끼리만 비교한다. 선택 시에도 해당 편의 예정일만 허용한다.
+해당 날짜에 발사편이 없거나 날짜가 미정이면 `status: no_launch`와 null 가격을
+반환하며 DEM을 계산하지 않는다. 월·연도를 임의의 출발일로 확장하지 않는다.
+회사당 지형 분석을 반복하지 않고 저장된 목적지 계수에 모델 가격 벡터를 적용한다.
