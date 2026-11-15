@@ -9,6 +9,8 @@ test('mission planner previews dates, discards drafts and applies the selection'
   page,
   request,
 }) => {
+  // The mission flow includes several real NASA/SPICE calculations and a 503 retry.
+  test.setTimeout(120_000)
   const query =
     'lat=-89.02&lon=-94.4&start=2027-01-10T00:00:00Z&end=2027-01-24T00:00:00Z&step_minutes=30&observer_height_m=0'
   const sunResponse = await request.get(`/api/analysis/illumination?${query}`)
@@ -158,7 +160,9 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(metrics.locator('dd')).toHaveCount(0)
   await page.unroute('**/api/analysis/earth-visibility?**')
   await metrics.getByRole('button', { name: '분석 다시 시도' }).click()
-  await expect(metrics.getByRole('definition')).toHaveCount(4)
+  await expect(metrics.getByRole('definition')).toHaveCount(4, {
+    timeout: 45_000,
+  })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await opener.click()
