@@ -310,7 +310,18 @@ def estimate_blocked(flight: Flight, context: QuoteContext) -> bool:
         "delivery_unserved",
         "capacity_exceeded",
     }
-    return bool(hard.intersection(flight_issues(flight, context)))
+    if hard.intersection(flight_issues(flight, context)):
+        return True
+    for schedule, value in (
+        (flight.departure, context.departure_date),
+        (flight.arrival, context.landing_date),
+    ):
+        if schedule.precision in ("year", "month", "day", "window") and (
+            (schedule.start is not None and value < schedule.start)
+            or (schedule.end is not None and value > schedule.end)
+        ):
+            return True
+    return False
 
 
 def estimate_terms(flight: Flight, context: QuoteContext) -> tuple[float, float, float, list[str]]:
