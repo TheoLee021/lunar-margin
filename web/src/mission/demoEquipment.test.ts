@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMPANIES,
+  offsetDistanceM,
   buildEquipmentAssets,
   companyById,
   driveDurationMs,
@@ -63,6 +64,45 @@ describe('COMPANIES', () => {
 
   it('falls back to the first company for an unknown id', () => {
     expect(companyById('no-such-company')).toBe(COMPANIES[0])
+  })
+})
+
+describe('placement against the spec sheet', () => {
+  it('keeps every cable-fed unit within reach of its power unit', () => {
+    for (const company of COMPANIES) {
+      if (company.placement.kind !== 'cable') continue
+      const { powerUnitId, cableLengthM } = company.placement
+      const power = company.statics.find((spec) => spec.id === powerUnitId)
+      expect(power, `${company.id} has no ${powerUnitId}`).toBeDefined()
+      for (const spec of company.statics) {
+        if (spec.id === powerUnitId) continue
+        const run = offsetDistanceM(spec.offset, power!.offset)
+        expect(
+          run,
+          `${company.id}/${spec.id} is ${run.toFixed(0)} m from power, over ${cableLengthM} m`,
+        ).toBeLessThanOrEqual(cableLengthM)
+      }
+    }
+  })
+
+  it('spreads the seismic stations past the baseline they need', () => {
+    for (const company of COMPANIES) {
+      if (company.placement.kind !== 'spread') continue
+      const { between, minSeparationM } = company.placement
+      const placed = between.map((id) => {
+        const spec = company.statics.find((candidate) => candidate.id === id)
+        expect(spec, `${company.id} has no ${id}`).toBeDefined()
+        return spec!
+      })
+      for (let i = 0; i < placed.length; i += 1)
+        for (let j = i + 1; j < placed.length; j += 1) {
+          const gap = offsetDistanceM(placed[i]!.offset, placed[j]!.offset)
+          expect(
+            gap,
+            `${placed[i]!.id} and ${placed[j]!.id} are ${gap.toFixed(0)} m apart, under ${minSeparationM} m`,
+          ).toBeGreaterThanOrEqual(minSeparationM)
+        }
+    }
   })
 })
 

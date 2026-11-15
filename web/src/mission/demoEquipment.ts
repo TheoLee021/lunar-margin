@@ -32,6 +32,19 @@ export interface MobileUnit {
   path: readonly SurfaceOffset[]
 }
 
+/**
+ * What the spec sheet says about where a unit may stand. Five of the six run power
+ * down a cable, so everything they land has to sit within reach of the power unit.
+ * The seismic array is the inverse: its stations locate events by comparing arrival
+ * times, so a short baseline gives a poor fix and they must be far apart.
+ *
+ * These are the only placement facts the spec gives. The metre offsets below are ours,
+ * and the tests check them against these limits rather than against nothing.
+ */
+export type Placement =
+  | { kind: 'cable'; powerUnitId: string; cableLengthM: number }
+  | { kind: 'spread'; between: readonly string[]; minSeparationM: number }
+
 export interface Company {
   id: string
   name: string
@@ -39,6 +52,7 @@ export interface Company {
   tagline: string
   statics: readonly EquipmentSpec[]
   mobile?: MobileUnit
+  placement: Placement
 }
 
 /**
@@ -72,6 +86,65 @@ const drum = (diameterM: number, heightM: number): AssetShape => ({
 
 const WHEEL = '#1f2937'
 const CUTTER = '#f0a43c'
+const PANEL = '#38509c'
+const FRAME = '#94a3b8'
+
+/**
+ * A vertical solar array: a mast off a small base carrying two panel wings. Near the
+ * pole the Sun stays on the horizon, which is why these stand up rather than lie flat.
+ */
+const solarArray = (widthM: number, heightM: number): AssetShape => ({
+  kind: 'box',
+  widthM,
+  depthM: 2.4,
+  heightM,
+  parts: [
+    { kind: 'box', widthM: 1.6, depthM: 1.6, heightM: 0.4, upM: 0.2 },
+    {
+      kind: 'cylinder',
+      widthM: 0.4,
+      depthM: 0.4,
+      heightM: heightM * 0.6,
+      upM: heightM * 0.3,
+      cssColor: FRAME,
+    },
+    ...[-1, 1].map((side) => ({
+      kind: 'box' as const,
+      widthM: widthM / 2 - 0.2,
+      depthM: 0.12,
+      heightM: heightM * 0.45,
+      acrossM: (side * widthM) / 4,
+      upM: heightM * 0.72,
+      cssColor: PANEL,
+    })),
+  ],
+})
+
+/** A dish on a mast. The dish is drawn as a flat disc, which reads at these sizes. */
+const dishMast = (heightM: number): AssetShape => ({
+  kind: 'box',
+  widthM: 1.6,
+  depthM: 1.6,
+  heightM,
+  parts: [
+    { kind: 'box', widthM: 1, depthM: 1, heightM: 0.3, upM: 0.15 },
+    {
+      kind: 'cylinder',
+      widthM: 0.3,
+      depthM: 0.3,
+      heightM: heightM * 0.8,
+      upM: heightM * 0.4,
+      cssColor: FRAME,
+    },
+    {
+      kind: 'cylinder',
+      widthM: 1.4,
+      depthM: 1.4,
+      heightM: 0.25,
+      upM: heightM * 0.9,
+    },
+  ],
+})
 
 /**
  * The trencher, built from its parts rather than borrowed from the rover model: it is
@@ -140,6 +213,7 @@ const TRENCHER_SHAPE: AssetShape = {
 export const COMPANIES: readonly Company[] = [
   {
     id: 'terra-nova-works',
+    placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 500 },
     name: 'Terra Nova Works',
     tagline: '레골리스를 녹여 착륙장을 짓는다',
     statics: [
@@ -148,7 +222,7 @@ export const COMPANIES: readonly Company[] = [
         label: '태양광 어레이',
         offset: { eastM: -250, northM: 180 },
         observerHeightM: 10,
-        shape: box(8, 2.2, 8),
+        shape: solarArray(8, 8),
         symbol: 'solar',
       },
       {
@@ -162,9 +236,32 @@ export const COMPANIES: readonly Company[] = [
       {
         id: 'printer',
         label: '소결 프린터',
-        offset: { eastM: 160, northM: -120 },
+        offset: { eastM: 140, northM: -100 },
         observerHeightM: 1.5,
-        shape: box(6, 6, 4.5),
+        shape: {
+          kind: 'box',
+          widthM: 6,
+          depthM: 6,
+          heightM: 4.5,
+          // A spider gantry: four legs, a body between them and an arm that sweeps
+          // the laser head over the patch it is sintering.
+          parts: [
+            { kind: 'box', widthM: 2.4, depthM: 2.4, heightM: 1.2, upM: 3 },
+            { kind: 'box', widthM: 5.6, depthM: 0.4, heightM: 0.3, upM: 3.8 },
+            ...[-1, 1].flatMap((x) =>
+              [-1, 1].map((y) => ({
+                kind: 'cylinder' as const,
+                widthM: 0.3,
+                depthM: 0.3,
+                heightM: 3.2,
+                acrossM: x * 2.4,
+                alongM: y * 2.4,
+                upM: 1.6,
+                cssColor: FRAME,
+              })),
+            ),
+          ],
+        },
         symbol: 'printer',
       },
     ],
@@ -192,6 +289,7 @@ export const COMPANIES: readonly Company[] = [
   },
   {
     id: 'meridian-relay',
+    placement: { kind: 'cable', powerUnitId: 'power-unit', cableLengthM: 400 },
     name: 'Meridian Relay',
     tagline: '지구 직통 통신 시간을 판다',
     statics: [
@@ -200,7 +298,7 @@ export const COMPANIES: readonly Company[] = [
         label: 'DTE 안테나 A',
         offset: { eastM: -180, northM: 140 },
         observerHeightM: 3,
-        shape: box(1.6, 1.6, 3),
+        shape: dishMast(3),
         symbol: 'antenna',
       },
       {
@@ -208,7 +306,7 @@ export const COMPANIES: readonly Company[] = [
         label: 'DTE 안테나 B',
         offset: { eastM: 210, northM: 90 },
         observerHeightM: 3,
-        shape: box(1.6, 1.6, 3),
+        shape: dishMast(3),
         symbol: 'antenna',
       },
       {
@@ -223,6 +321,7 @@ export const COMPANIES: readonly Company[] = [
   },
   {
     id: 'helios-grid',
+    placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 1000 },
     name: 'Helios Grid',
     tagline: '수직 태양광을 세우고 전력을 판다',
     statics: [
@@ -231,7 +330,7 @@ export const COMPANIES: readonly Company[] = [
         label: '수직 태양광 어레이',
         offset: { eastM: -140, northM: 160 },
         observerHeightM: 10,
-        shape: box(10, 2.4, 10),
+        shape: solarArray(10, 10),
         symbol: 'solar',
       },
       {
@@ -246,6 +345,7 @@ export const COMPANIES: readonly Company[] = [
   },
   {
     id: 'vestige-resources',
+    placement: { kind: 'cable', powerUnitId: 'base', cableLengthM: 200 },
     name: 'Vestige Resources',
     tagline: '영구 음영 분화구 안으로 들어간다',
     statics: [
@@ -254,7 +354,40 @@ export const COMPANIES: readonly Company[] = [
         label: '충전 기지',
         offset: { eastM: -90, northM: 140 },
         observerHeightM: 1.5,
-        shape: box(5, 2, 6),
+        shape: {
+          kind: 'box',
+          widthM: 5,
+          depthM: 2,
+          heightM: 6,
+          // A single panel wing on a mast, with the dock the rover parks in below.
+          parts: [
+            { kind: 'box', widthM: 1.8, depthM: 1.8, heightM: 0.5, upM: 0.25 },
+            {
+              kind: 'cylinder',
+              widthM: 0.4,
+              depthM: 0.4,
+              heightM: 3.6,
+              upM: 1.8,
+              cssColor: FRAME,
+            },
+            {
+              kind: 'box',
+              widthM: 4.6,
+              depthM: 0.15,
+              heightM: 2.4,
+              upM: 4.4,
+              cssColor: PANEL,
+            },
+            {
+              kind: 'box',
+              widthM: 1.6,
+              depthM: 1.6,
+              heightM: 0.4,
+              alongM: 1.6,
+              upM: 0.2,
+            },
+          ],
+        },
         symbol: 'base',
       },
     ],
@@ -283,6 +416,7 @@ export const COMPANIES: readonly Company[] = [
   },
   {
     id: 'umbra-compute',
+    placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 600 },
     name: 'Umbra Compute',
     tagline: '달 위의 데이터센터',
     statics: [
@@ -291,7 +425,7 @@ export const COMPANIES: readonly Company[] = [
         label: '태양광 어레이',
         offset: { eastM: -230, northM: 170 },
         observerHeightM: 10,
-        shape: box(10, 2.4, 10),
+        shape: solarArray(10, 10),
         symbol: 'solar',
       },
       {
@@ -307,7 +441,25 @@ export const COMPANIES: readonly Company[] = [
         label: '방열판',
         offset: { eastM: 190, northM: -150 },
         observerHeightM: 0.5,
-        shape: box(6, 2.8, 3),
+        shape: {
+          kind: 'box',
+          widthM: 6,
+          depthM: 2.8,
+          heightM: 3,
+          // Panels stood up on a low frame, facing cold sky rather than lit ground.
+          parts: [
+            { kind: 'box', widthM: 6, depthM: 2.4, heightM: 0.3, upM: 0.15 },
+            ...[-2, 0, 2].map((acrossM) => ({
+              kind: 'box' as const,
+              widthM: 1.6,
+              depthM: 0.12,
+              heightM: 2.4,
+              acrossM,
+              upM: 1.5,
+              cssColor: FRAME,
+            })),
+          ],
+        },
         symbol: 'radiator',
       },
       {
@@ -315,13 +467,18 @@ export const COMPANIES: readonly Company[] = [
         label: 'DTE 안테나',
         offset: { eastM: -50, northM: -210 },
         observerHeightM: 4,
-        shape: box(1.6, 1.6, 4),
+        shape: dishMast(4),
         symbol: 'antenna',
       },
     ],
   },
   {
     id: 'cairn-geophysics',
+    placement: {
+      kind: 'spread',
+      between: ['seis-a', 'seis-b', 'seis-c'],
+      minSeparationM: 800,
+    },
     name: 'Cairn Geophysics',
     tagline: '지하에 무엇이 있는지 측정해 판다',
     statics: [
@@ -512,4 +669,9 @@ export function buildEquipmentAssets(
     )
   }
   return drawn
+}
+
+/** Planar distance between two offsets, metres. Over a few hundred metres that is exact enough. */
+export function offsetDistanceM(a: SurfaceOffset, b: SurfaceOffset): number {
+  return Math.hypot(a.eastM - b.eastM, a.northM - b.northM)
 }
