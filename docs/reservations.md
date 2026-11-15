@@ -48,6 +48,20 @@ uv run pytest tests/test_reservations.py
 
 ## Supabase 배포
 
-이번 PR은 원격 Supabase에 migration이나 운영자 토큰을 배포하지 않는다. 배포 시 위 migration을 검토·적용하고, Railway 백엔드에 Supabase의 직접 연결 또는 session pooler DSN(`sslmode=require`)과 운영자 토큰을 설정한다. DDL을 서버 시작 시 자동 실행하지 않는다.
+예약은 기존 `SUPABASE_URL`과 `SUPABASE_SERVICE_ROLE_KEY`만으로 Supabase RPC를 통해 동작한다. `RESERVATION_DATABASE_URL`이 있으면 기존 직접 Postgres 연결이 우선한다. 따라서 로컬 개발·기존 설치를 유지하면서 배포 서버에 별도 DB 주소를 추가하지 않을 수 있다. 프로젝트 기본 URL과 `/rest/v1/`이 붙은 기존 설정을 모두 지원한다. 새 라이브러리는 추가하지 않는다.
 
-`mission_reservations`는 Data API에 노출하지 않는 private schema이며 RLS가 켜져 있고 anon/authenticated 접근 정책은 없다. DB 소유자 또는 이 스키마에 권한을 부여한 서버 역할로 연결한다. 브라우저에 DB 비밀번호·service_role·운영자 토큰을 환경변수로 주입하지 않는다. 공유 운영자 토큰은 계정별 권한이나 변경자 식별을 제공하지 않는다.
+기본 예약 migration 다음에 `20261115213247_reservation_supabase_rpc.sql`, `20261115214044_reservation_complete_conflicts.sql`을 순서대로 적용한다. RPC는 `SECURITY INVOKER`이고 `service_role`만 실행할 수 있다. `anon`·`authenticated`·`PUBLIC` 실행 권한은 제거한다. 예약 테이블과 운영자 설정 테이블은 private schema에 남긴다. 확정 RPC의 한 트랜잭션 안에서 기존 advisory lock과 exclusion constraint를 사용하므로 중복 예약·인접 기간·취소 이력 정책은 동일하다. DDL을 API 시작 시 실행하지 않는다.
+
+충돌 조회는 스칼라 JSON 배열 한 개로 모든 일치 예약을 반환하여 PostgREST의 결과 행 수 제한으로 예약 상태가 누락되지 않게 한다. 목록 화면은 기존처럼 최대 100건씩 페이지를 조회한다.
+
+Railway에 `RESERVATION_ADMIN_TOKEN`이 없을 때는 Supabase의 private 운영자 해시를 검증한다. DB 소유자가 긴 임의 토큰을 한 번 생성하여 다음처럼 해시만 저장한다. 실제 토큰은 운영자가 화면에 입력하며 서비스 키를 입력하지 않는다. 아래 예시 문자열을 실제 토큰으로 바꾸고, 실제 토큰이나 SQL을 Git에 저장하지 않는다.
+
+```sql
+INSERT INTO mission_reservations.operator_credentials (singleton, token_sha256)
+VALUES (true, encode(sha256(convert_to('replace-with-a-long-random-operator-token', 'UTF8')), 'hex'))
+ON CONFLICT (singleton) DO UPDATE SET token_sha256 = EXCLUDED.token_sha256;
+```
+
+`RESERVATION_ADMIN_TOKEN`을 별도로 설정한 기존 서버는 해당 값을 계속 사용한다. 토큰·해시가 설정되지 않았거나 Supabase 검증이 실패하면 예약을 허용하지 않는다. Supabase 오류 본문·서비스 키·토큰은 API 응답에 포함하지 않는다. API 조회/확정/취소 계약은 유지한다.
+
+`mission_reservations`는 Data API에 노출하지 않는 private schema이며 RLS가 켜져 있고 anon/authenticated 접근 정책은 없다. 직접 DB 연결은 DB 소유자 또는 이 스키마에 권한을 부여한 서버 역할로 연결한다. 브라우저에 DB 비밀번호·service_role·운영자 토큰을 환경변수로 주입하지 않는다. 공유 운영자 토큰은 계정별 권한이나 변경자 식별을 제공하지 않는다.
