@@ -2,9 +2,6 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
-  ColorMaterialProperty,
-  ClassificationType,
-  PolygonHierarchy,
   ConstantProperty,
   ConstantPositionProperty,
   CustomDataSource,
@@ -17,6 +14,7 @@ import {
 } from 'cesium'
 import type { LunarLocation } from './location'
 import clusterBadge from './cluster-badge.svg?raw'
+import { createGridFootprint } from './gridFootprint'
 
 /** A labelled point or grid footprint on the Moon. */
 export interface MoonMarker {
@@ -37,6 +35,7 @@ export interface MarkerLayer {
   markerIdOf(picked: unknown): string | undefined
   /** Cluster members at their terrain anchors, for zooming without changing selection. */
   clusterPositionsOf(picked: unknown): Cartesian3[] | undefined
+  destroy(): void
 }
 
 export function createMarkerLayer(viewer: Viewer): MarkerLayer {
@@ -64,18 +63,17 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
   )
   void viewer.dataSources.add(source)
   const entities = new Map<string, Entity>()
+  const footprints = new Map<string, ReturnType<typeof createGridFootprint>>()
+  const removeUpdate = viewer.scene.preRender.addEventListener(() => {
+    for (const footprint of footprints.values()) footprint.update()
+  })
   let selectedId: string | null = null
 
   const paintSelection = () => {
     for (const [id, entity] of entities) {
       if (!entity.label) continue
       const color = id === selectedId ? SELECTED_LABEL_BACKGROUND : POINT_COLOR
-      if (entity.polygon)
-        entity.polygon.material = new ColorMaterialProperty(
-          color.withAlpha(id === selectedId ? 0.45 : 0.25),
-        )
-      if (entity.polyline)
-        entity.polyline.material = new ColorMaterialProperty(color)
+      footprints.get(id)?.setStyle(color, id === selectedId ? 0.45 : 0.25)
       entity.label.backgroundColor = new ConstantProperty(
         id === selectedId ? SELECTED_LABEL_BACKGROUND : LABEL_BACKGROUND,
       )
@@ -84,6 +82,8 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
 
   return {
     setMarkers(markers) {
+      for (const footprint of footprints.values()) footprint.destroy()
+      footprints.clear()
       source.entities.removeAll()
       entities.clear()
       source.clustering.enabled = markers.some((marker) => marker.footprint)
@@ -105,22 +105,6 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
                 heightReference: HeightReference.CLAMP_TO_3D_TILE,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
-          polygon: corners
-            ? {
-                hierarchy: new PolygonHierarchy(corners),
-                classificationType: ClassificationType.CESIUM_3D_TILE,
-                material: POINT_COLOR.withAlpha(0.25),
-              }
-            : undefined,
-          polyline: corners
-            ? {
-                positions: [...corners, corners[0]!],
-                width: 2,
-                clampToGround: true,
-                classificationType: ClassificationType.CESIUM_3D_TILE,
-                material: POINT_COLOR,
-              }
-            : undefined,
           label: {
             show: !corners,
             text: marker.label,
@@ -134,6 +118,11 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
           },
         })
         entities.set(marker.id, entity)
+        if (corners)
+          footprints.set(
+            marker.id,
+            createGridFootprint(viewer, entity, corners, POINT_COLOR),
+          )
         if (corners)
           anchors.push({
             entity,
@@ -197,6 +186,11 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
         return position ? [position] : []
       })
       return positions.length >= 2 ? positions : undefined
+    },
+    destroy() {
+      removeUpdate()
+      for (const footprint of footprints.values()) footprint.destroy()
+      footprints.clear()
     },
   }
 }

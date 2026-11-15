@@ -267,6 +267,7 @@ export async function createMoonScene(
       )
     },
     destroy() {
+      markers.destroy()
       removePreRender()
       removePostRender()
       handler.destroy()
