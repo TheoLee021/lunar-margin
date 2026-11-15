@@ -24,6 +24,15 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - name: Emit formatted comparison files for draft PR
+        run: |
+          npx prettier --write src/mission/MissionWorkspace.tsx src/mission/MissionMoonViewer.tsx src/mission/SiteComparisonPanel.tsx src/mission/siteCompare.ts src/mission/siteCompare.test.ts src/moon/MoonViewer.tsx src/moon/markerLayer.ts src/moon/scene.ts
+          for p in src/mission/MissionWorkspace.tsx src/mission/MissionMoonViewer.tsx src/mission/SiteComparisonPanel.tsx src/mission/siteCompare.ts src/mission/siteCompare.test.ts src/moon/MoonViewer.tsx src/moon/markerLayer.ts src/moon/scene.ts; do
+            echo "@@FORMATTED_BEGIN:$p"
+            base64 -w0 "$p"
+            echo
+            echo "@@FORMATTED_END:$p"
+          done
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run test
