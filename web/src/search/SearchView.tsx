@@ -26,6 +26,7 @@ import { StepPanel } from './StepPanel'
 import { useRun, useRuns } from './useRuns'
 import { useAvailability } from './useAvailability'
 import { ReservationPanel } from './ReservationPanel'
+import { useCandidatePrices } from './useCandidatePrices'
 
 const AUTO_PLAY_MS = 3800
 const CLI_COMMAND =
@@ -237,6 +238,7 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
 function RunScreen({ runId }: { runId: string }) {
   const { state, reload } = useRun(runId)
   const availability = useAvailability(runId)
+  const pricing = useCandidatePrices(runId)
   if (state.status === 'loading')
     return <Spinner text="탐색 결과를 불러오는 중…" />
   if (state.status === 'error')
@@ -247,15 +249,19 @@ function RunScreen({ runId }: { runId: string }) {
         onRetry={reload}
       />
     )
-  return <RunBody run={state.data} availability={availability} />
+  return (
+    <RunBody run={state.data} availability={availability} pricing={pricing} />
+  )
 }
 
 function RunBody({
   run,
   availability,
+  pricing,
 }: {
   run: RunDetail
   availability: ReturnType<typeof useAvailability>
+  pricing: ReturnType<typeof useCandidatePrices>
 }) {
   const reservations = useMemo(
     () =>
@@ -367,14 +373,16 @@ function RunBody({
         >
           <h3 className="font-semibold">입력한 임무 조건</h3>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            {missionSummaryItems(run.mission, run.config.thresholds).map(
-              (item) => (
-                <div key={item.label}>
-                  <dt className="text-xs text-neutral-400">{item.label}</dt>
-                  <dd className="text-sm">{item.value}</dd>
-                </div>
-              ),
-            )}
+            {missionSummaryItems(
+              run.mission,
+              run.config.thresholds,
+              run.config.rf != null,
+            ).map((item) => (
+              <div key={item.label}>
+                <dt className="text-xs text-neutral-400">{item.label}</dt>
+                <dd className="text-sm">{item.value}</dd>
+              </div>
+            ))}
           </dl>
         </section>
       ) : null}
@@ -459,9 +467,29 @@ function RunBody({
           후보를 누르면 지도에 표시되고 자세한 값이 열립니다. 지도의 아무
           지점이나 눌러도 그곳을 바로 계산해 볼 수 있습니다.
         </p>
+        <p className="text-xs text-neutral-400">
+          가격 기준: 24 kg · 표면 하역 · USD 모델 추정
+        </p>
+        {pricing.state.status === 'error' ? (
+          <div role="alert" className="text-xs text-amber-300">
+            <p>격자 가격을 불러오지 못했습니다.</p>
+            <button
+              type="button"
+              onClick={pricing.reload}
+              className="mt-2 rounded border border-white/20 px-3 py-1.5 text-neutral-200"
+            >
+              가격 다시 불러오기
+            </button>
+          </div>
+        ) : pricing.state.status === 'unavailable' ? (
+          <p className="text-xs text-neutral-400">
+            가격은 임무 조건이 저장된 500 m 정밀 탐색 결과에서 제공됩니다.
+          </p>
+        ) : null}
         <CandidateTable
           candidates={run.candidates}
           reservations={reservations}
+          prices={pricing.state}
           highlightedId={hoveredId}
           selectedId={selectedId}
           onHover={setHoveredId}
@@ -513,6 +541,13 @@ function RunBody({
               : `${selection.x_m.toFixed(0)},${selection.y_m.toFixed(0)}`
           }
           selection={selection}
+          runId={
+            run.mission &&
+            run.config.grid_spacing_m === 500 &&
+            !run.id.startsWith('dev-')
+              ? run.id
+              : undefined
+          }
           config={run.config}
           insideRoi={insideRoi}
           onClose={() => setSelection(null)}

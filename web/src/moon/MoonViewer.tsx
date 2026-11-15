@@ -14,9 +14,8 @@ import { parseSunDirection, type Vector3 } from './sun'
 /** Imperative API for panels. Calls made before the Moon has loaded are applied once it is ready. */
 export interface MoonViewerHandle {
   /**
-   * `rangeM` is the distance to the point, `pitchDeg` the camera's tilt (negative
-   * looking down) and `headingDeg` the compass direction it faces. They default to a
-   * whole-site view from above, looking north.
+   * `pitchDeg` is the camera's tilt, negative looking down, and `headingDeg` the
+   * compass direction it faces. Both default to the whole-site view from above.
    */
   flyTo(
     location: LunarLocation,
@@ -29,7 +28,7 @@ export interface MoonViewerHandle {
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
   setSunDirection(direction: unknown): void
   /**
-   * Surface equipment with its line of sight to the Earth. Imperative because a traverse
+   * Surface equipment with the Earth verdict on each unit. Imperative because a drive
    * redraws every frame, which React state must not do.
    */
   setAssets(assets: readonly MoonAsset[]): void
@@ -86,6 +85,7 @@ export default function MoonViewer({
   }>({})
   const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const [overlayError, setOverlayError] = useState<string | null>(null)
   const ready = state.kind === 'ready'
 
   useEffect(() => {
@@ -111,12 +111,6 @@ export default function MoonViewer({
       flyToOverview() {
         sceneRef.current?.flyToOverview()
       },
-      setSunDirection(direction) {
-        if (sceneRef.current) sceneRef.current.setSunDirection(direction)
-        else
-          pending.current.sun =
-            direction === null ? null : parseSunDirection(direction)
-      },
       setAssets(assets) {
         if (sceneRef.current) sceneRef.current.setAssets(assets)
         else pending.current.assets = assets
@@ -126,6 +120,12 @@ export default function MoonViewer({
       },
       releaseFollow() {
         sceneRef.current?.releaseFollow()
+      },
+      setSunDirection(direction) {
+        if (sceneRef.current) sceneRef.current.setSunDirection(direction)
+        else
+          pending.current.sun =
+            direction === null ? null : parseSunDirection(direction)
       },
     }),
     [],
@@ -144,6 +144,7 @@ export default function MoonViewer({
           signal: controller.signal,
           onPick: (location) => callbacks.current.onPick?.(location),
           onMarkerSelect: (id) => callbacks.current.onMarkerSelect?.(id),
+          onOverlayError: setOverlayError,
           onHeadingChange: (heading) => {
             if (compassRef.current)
               compassRef.current.style.transform = `rotate(${-heading}rad)`
@@ -208,6 +209,15 @@ export default function MoonViewer({
           </p>
           <p className="max-w-md text-sm text-neutral-400">{view.message}</p>
         </div>
+      ) : null}
+      {overlayError !== null && view.kind === 'ready' ? (
+        <p
+          role="status"
+          title={overlayError}
+          className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-neutral-900/80 px-3 py-1.5 text-xs text-amber-300"
+        >
+          지형 그림자 데이터를 불러오지 못해 사진으로 표시합니다
+        </p>
       ) : null}
       <button
         type="button"

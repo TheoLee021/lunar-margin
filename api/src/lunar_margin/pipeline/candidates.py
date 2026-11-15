@@ -35,7 +35,7 @@ from lunar_margin.engine.candidates.grid import SitePoints, polar_grid, refine_p
 from lunar_margin.engine.candidates.horizon_table import find_table
 from lunar_margin.engine.candidates.mission import MissionRequest, plan_search
 from lunar_margin.engine.candidates.projection import polar_radius_m
-from lunar_margin.engine.candidates.ranking import RankScores, score_sites
+from lunar_margin.engine.candidates.ranking import RankScores, communication_component, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
 from lunar_margin.engine.ephemeris import load_kernels
@@ -55,6 +55,7 @@ from lunar_margin.pipeline.candidate_schema import (
     Eligibility,
     KernelSource,
     MapMeta,
+    RFMetrics,
     RunInfo,
     Score,
     Selection,
@@ -76,8 +77,12 @@ _REASON_KEYS = (
     "sun_dark_hours_above_max",
     "earth_fraction_below_min",
     "earth_blackout_hours_above_max",
+    "rf_incomplete",
+    "rf_fraction_below_min",
+    "rf_blackout_hours_above_max",
     "horizon_incomplete",
     "terrain_slope_above_max",
+    "terrain_roughness_above_max",
     "terrain_incomplete",
     "no_metrics",
     "not_refined",
@@ -151,7 +156,11 @@ def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettin
         azimuth_step_deg=azimuth_step_deg,
         max_range_m=config.max_range_m,
         observer_height_m=config.observer_height_m,
-        assess_terrain=config.thresholds.max_terrain_slope_degrees is not None,
+        rf=config.rf,
+        assess_terrain=(
+            config.thresholds.max_terrain_slope_degrees is not None
+            or config.thresholds.max_terrain_roughness_m is not None
+        ),
     )
 
 
@@ -225,11 +234,19 @@ def run_search(
     table = find_table(data_dir / TABLES_DIR, table_spec)
     if table is None:
         warnings.append(
-            "수평선 테이블이 없어 지점마다 수평선을 직접 계산했습니다(느림). "
-            "`uv run python -m lunar_margin.pipeline.horizons --download`로 Storage에서 받거나 "
-            "`uv run python -m lunar_margin.pipeline.horizons`로 미리 계산해 두면 "
-            "같은 조건의 이후 탐색이 훨씬 빨라집니다."
+            "전체 수평선 테이블이 없어 지점별 캐시를 재사용하고, 없는 지점은 계산 후 저장합니다. "
+            "새 지점은 느릴 수 있습니다. 관측 높이·DEM·방위 간격·탐색 거리가 같은 다음 탐색은 "
+            "날짜가 달라도 저장된 수평선을 재사용합니다. "
+            "전체 테이블은 `uv run python -m lunar_margin.pipeline.horizons --download` 또는 "
+            "`uv run python -m lunar_margin.pipeline.horizons`로 준비할 수 있습니다. "
+            "3 m 등 기본값 외 높이는 해당 설정의 --config를 추가해야 합니다."
         )
+    cache_totals = [0, 0]
+
+    def cache_usage(hits: int, written: int) -> None:
+        cache_totals[0] += hits
+        cache_totals[1] += written
+
     load_kernels(data_dir / "spice")
     dem = open_dem(dem_pairs)
     workers = config.workers or os.cpu_count() or 1
@@ -285,6 +302,8 @@ def run_search(
                 dem_files=dem_pairs,
                 on_progress=reporter("coarse"),
                 table=table,
+                cache_root=data_dir / "horizon-cache",
+                on_cache=cache_usage,
             )
         )
         coarse_filter = evaluate(
@@ -292,7 +311,12 @@ def run_search(
             config.thresholds,
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
-        coarse_scores = score_sites(coarse_field, config.weights)
+        coarse_scores = score_sites(
+            coarse_field,
+            config.weights,
+            rf=config.rf is not None,
+            duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+        )
         promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
         )
@@ -318,12 +342,21 @@ def run_search(
             dem_files=dem_pairs,
             on_progress=reporter("fine"),
             table=table,
+            cache_root=data_dir / "horizon-cache",
+            on_cache=cache_usage,
         )
     )
+    if sum(cache_totals):
+        log(f"수평선 캐시: 재사용 {cache_totals[0]}, 새로 저장 {cache_totals[1]}")
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
     )
-    fine_scores = score_sites(fine_field, config.weights)
+    fine_scores = score_sites(
+        fine_field,
+        config.weights,
+        rf=config.rf is not None,
+        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+    )
     eligible_f = (fine_filter.status == Status.ELIGIBLE) & ~np.isnan(fine_scores.total)
     fine_region = label_regions(fine, eligible_f)
     selection = select_diverse(
@@ -380,8 +413,8 @@ def run_search(
     field = MetricField.concat(parts_field)
     stage: NDArray[np.int8] = np.concatenate(stage_parts)
     status: NDArray[np.int8] = np.concatenate(status_parts)
-    failed: NDArray[np.uint8] = np.concatenate(failed_parts)
-    skipped: NDArray[np.uint8] = np.concatenate(skipped_parts)
+    failed: NDArray[np.uint16] = np.concatenate(failed_parts)
+    skipped: NDArray[np.uint16] = np.concatenate(skipped_parts)
     scores = RankScores(
         total=np.concatenate([s.total for s in score_parts]),
         sun_component=np.concatenate([s.sun_component for s in score_parts]),
@@ -428,13 +461,25 @@ def run_search(
             "유효 표본이 100%인 지점만 통과합니다. DEM 규모 환경 선별이며 "
             "미세 장애물·발판·지반 안전성은 검증하지 않습니다."
         )
+    if config.thresholds.max_terrain_roughness_m is not None:
+        warnings.append(
+            "거칠기는 400 m 창의 평면 제거 RMS를 250 m 지역에서 집계한 P95입니다. "
+            "DEM 유효 표본 100%만 통과하며 미세 장애물·발판·지반 안전성은 검증하지 않습니다."
+        )
     if counts["missing_all_metrics"]:
         warnings.append(
             f"{counts['missing_all_metrics']}개 지점은 DEM 밖이라 지표를 계산하지 못했습니다."
         )
 
     distributions: dict[str, dict[str, float]] = {}
-    names = ("sun_fraction", "sun_longest_dark_h", "earth_fraction", "earth_longest_blackout_h")
+    names = (
+        "sun_fraction",
+        "sun_longest_dark_h",
+        "earth_fraction",
+        "earth_longest_blackout_h",
+        "rf_fraction",
+        "rf_longest_blackout_h",
+    )
     for name in names:
         values: NDArray[np.float64] = getattr(field, name)[field.computed]
         values = values[~np.isnan(values)]
@@ -536,9 +581,13 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
         y_m=round(float(outcome.y_m[k]), 3),
         grid_spacing_m=spacing,
         terrain=None
-        if outcome.config.thresholds.max_terrain_slope_degrees is None
+        if (
+            outcome.config.thresholds.max_terrain_slope_degrees is None
+            and outcome.config.thresholds.max_terrain_roughness_m is None
+        )
         else TerrainMetrics(
             slope_p95_deg=_json_float(f.terrain_slope_p95_deg[k]),
+            roughness_p95_m=_json_float(f.terrain_roughness_p95_m[k]),
             coverage_fraction=_json_float(f.terrain_coverage_fraction[k]),
             dem_pixel_m=outcome.source.dem.resolution_m,
         ),
@@ -547,6 +596,24 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
             longest_dark_hours=_json_float(f.sun_longest_dark_h[k]),
             windows_per_24h=_json_float(f.sun_windows_per_24h[k]),
             mean_elevation_deg=_json_float(f.sun_mean_elevation_deg[k]),
+        ),
+        rf=None
+        if outcome.config.rf is None
+        else RFMetrics(
+            fraction=_json_float(f.rf_fraction[k]),
+            longest_blackout_hours=_json_float(f.rf_longest_blackout_h[k]),
+            min_link_margin_db=_json_float(f.rf_min_link_margin_db[k]),
+            required_ebn0_db=outcome.config.rf.required_ebn0_db,
+            rx_required_dbw=outcome.config.rf.rx_required_dbw,
+            evaluation_hours=(
+                outcome.config.window.end - outcome.config.window.start
+            ).total_seconds()
+            / 3600,
+            available_hours=_json_float(
+                f.rf_fraction[k]
+                * (outcome.config.window.end - outcome.config.window.start).total_seconds()
+                / 3600
+            ),
         ),
         earth=EarthMetrics(
             fraction=_json_float(f.earth_fraction[k]),
@@ -567,6 +634,17 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
             total=_json_float(sc.total[k]),
             sun_component=_json_float(sc.sun_component[k]),
             earth_component=_json_float(sc.earth_component[k]),
+            communication_basis="nominal_rf" if outcome.config.rf is not None else "earth_los",
+            communication_component=_json_float(
+                communication_component(
+                    f,
+                    rf=outcome.config.rf is not None,
+                    duration_hours=(
+                        outcome.config.window.end - outcome.config.window.start
+                    ).total_seconds()
+                    / 3600,
+                )[k]
+            ),
             components_used=int(sc.components_used[k]),
         ),
         region_id=int(outcome.region_id[k]),
@@ -643,8 +721,12 @@ def write_outputs(outcome: SearchOutcome, out_dir: Path) -> None:
         sun_longest_dark_h=outcome.field.sun_longest_dark_h,
         earth_fraction=outcome.field.earth_fraction,
         earth_longest_blackout_h=outcome.field.earth_longest_blackout_h,
+        rf_fraction=outcome.field.rf_fraction,
+        rf_longest_blackout_h=outcome.field.rf_longest_blackout_h,
+        rf_min_link_margin_db=outcome.field.rf_min_link_margin_db,
         horizon_complete=outcome.field.horizon_complete,
         terrain_slope_p95_deg=outcome.field.terrain_slope_p95_deg,
+        terrain_roughness_p95_m=outcome.field.terrain_roughness_p95_m,
         terrain_coverage_fraction=outcome.field.terrain_coverage_fraction,
     )
 

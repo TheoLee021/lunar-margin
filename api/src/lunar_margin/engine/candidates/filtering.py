@@ -16,8 +16,16 @@ EARTH_BLACKOUT_HIGH = 1 << 3
 HORIZON_INCOMPLETE = 1 << 4
 TERRAIN_SLOPE_HIGH = 1 << 5
 TERRAIN_INCOMPLETE = 1 << 6
+TERRAIN_ROUGHNESS_HIGH = 1 << 7
+
+RF_FRACTION_LOW = 1 << 8
+RF_BLACKOUT_HIGH = 1 << 9
+RF_INCOMPLETE = 1 << 10
 
 _REASONS: tuple[tuple[int, str], ...] = (
+    (RF_INCOMPLETE, "rf_incomplete"),
+    (RF_FRACTION_LOW, "rf_fraction_below_min"),
+    (RF_BLACKOUT_HIGH, "rf_blackout_hours_above_max"),
     (SUN_FRACTION_LOW, "sun_fraction_below_min"),
     (SUN_DARK_HIGH, "sun_dark_hours_above_max"),
     (EARTH_FRACTION_LOW, "earth_fraction_below_min"),
@@ -25,6 +33,7 @@ _REASONS: tuple[tuple[int, str], ...] = (
     (HORIZON_INCOMPLETE, "horizon_incomplete"),
     (TERRAIN_SLOPE_HIGH, "terrain_slope_above_max"),
     (TERRAIN_INCOMPLETE, "terrain_incomplete"),
+    (TERRAIN_ROUGHNESS_HIGH, "terrain_roughness_above_max"),
 )
 
 
@@ -37,8 +46,8 @@ class Status(IntEnum):
 @dataclass(frozen=True)
 class FilterResult:
     status: NDArray[np.int8]
-    failed: NDArray[np.uint8]  # 위반한 조건의 비트 마스크
-    skipped: NDArray[np.uint8]  # 임계값은 있지만 지표가 결측이라 적용하지 못한 조건
+    failed: NDArray[np.uint16]  # 위반한 조건의 비트 마스크
+    skipped: NDArray[np.uint16]  # 임계값은 있지만 지표가 결측이라 적용하지 못한 조건
 
 
 def reason_names(mask: int) -> list[str]:
@@ -53,11 +62,13 @@ def evaluate(
 ) -> FilterResult:
     """min 임계값은 `>=`, max 임계값은 `<=`를 통과한다 (경계값 포함)."""
     n = len(field)
-    failed = np.zeros(n, dtype=np.uint8)
-    skipped = np.zeros(n, dtype=np.uint8)
+    failed = np.zeros(n, dtype=np.uint16)
+    skipped = np.zeros(n, dtype=np.uint16)
     applied_any = np.zeros(n, dtype=np.bool_)
 
     criteria: tuple[tuple[float | None, NDArray[np.float64], int, bool], ...] = (
+        (thresholds.min_rf_fraction, field.rf_fraction, RF_FRACTION_LOW, True),
+        (thresholds.max_rf_blackout_hours, field.rf_longest_blackout_h, RF_BLACKOUT_HIGH, False),
         (thresholds.min_sun_fraction, field.sun_fraction, SUN_FRACTION_LOW, True),
         (thresholds.max_sun_dark_hours, field.sun_longest_dark_h, SUN_DARK_HIGH, False),
         (thresholds.min_earth_fraction, field.earth_fraction, EARTH_FRACTION_LOW, True),
@@ -75,19 +86,26 @@ def evaluate(
         any_threshold = True
         available = ~np.isnan(values)
         skipped[~available] |= bit
+        if bit in (RF_FRACTION_LOW, RF_BLACKOUT_HIGH):
+            failed[~available] |= RF_INCOMPLETE
+            applied_any |= field.computed
         applied_any |= available
         with np.errstate(invalid="ignore"):
             violated = (values < limit) if is_minimum else (values > limit)
         failed[available & violated] |= bit
 
-    if thresholds.max_terrain_slope_degrees is not None:
+    for limit, values, bit in (
+        (thresholds.max_terrain_slope_degrees, field.terrain_slope_p95_deg, TERRAIN_SLOPE_HIGH),
+        (thresholds.max_terrain_roughness_m, field.terrain_roughness_p95_m, TERRAIN_ROUGHNESS_HIGH),
+    ):
+        if limit is None:
+            continue
         any_threshold = True
-        available = np.isfinite(field.terrain_slope_p95_deg)
+        available = np.isfinite(values)
         complete = field.terrain_coverage_fraction >= 0.9999
         failed[~available | ~complete] |= TERRAIN_INCOMPLETE
-        too_steep = field.terrain_slope_p95_deg > thresholds.max_terrain_slope_degrees
-        failed[available & too_steep] |= TERRAIN_SLOPE_HIGH
-        applied_any |= field.computed  # Missing terrain is an explicit failed requirement.
+        failed[available & (values > limit)] |= bit
+        applied_any |= field.computed
 
     if exclude_incomplete_horizon:
         failed[field.computed & ~field.horizon_complete] |= HORIZON_INCOMPLETE
@@ -109,11 +127,14 @@ def constraint_ratio(field: MetricField, thresholds: Thresholds) -> NDArray[np.f
     n = len(field)
     worst = np.full(n, -np.inf)
     criteria: tuple[tuple[float | None, NDArray[np.float64], bool], ...] = (
+        (thresholds.min_rf_fraction, field.rf_fraction, True),
+        (thresholds.max_rf_blackout_hours, field.rf_longest_blackout_h, False),
         (thresholds.min_sun_fraction, field.sun_fraction, True),
         (thresholds.max_sun_dark_hours, field.sun_longest_dark_h, False),
         (thresholds.min_earth_fraction, field.earth_fraction, True),
         (thresholds.max_earth_blackout_hours, field.earth_longest_blackout_h, False),
         (thresholds.max_terrain_slope_degrees, field.terrain_slope_p95_deg, False),
+        (thresholds.max_terrain_roughness_m, field.terrain_roughness_p95_m, False),
     )
     for limit, values, is_minimum in criteria:
         if limit is None:

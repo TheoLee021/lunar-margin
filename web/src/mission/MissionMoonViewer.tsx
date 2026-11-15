@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
+import { gridCellCorners } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
 import {
   COMPANIES,
@@ -14,6 +23,7 @@ import {
 } from './demoEquipment'
 import type { CandidateSite, MissionSelection } from './types'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
+import type { SunDirectionResult } from './useSunDirection'
 
 /**
  * The camera rides behind the moving unit while it drives. A 2.4 m machine is three
@@ -25,50 +35,75 @@ const FOLLOW_PITCH_DEG = -15
 /** Sit behind the machine, looking the way it is going. */
 const FOLLOW_BEHIND_DEG = 180
 
+export interface MissionMoonViewerHandle {
+  focusSite(siteId: string): void
+}
+
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
+  ref,
   selection,
   sites,
   onSelect,
+  sun,
 }: {
+  ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string) => void
+  /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
+  sun: SunDirectionResult
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
+  const [photo, setPhoto] = useState(false)
+  const sunDirection = sun.kind === 'ready' ? sun.direction : null
+  const lit = sunDirection !== null && !photo
+  useEffect(() => {
+    viewer.current?.setSunDirection(lit ? sunDirection : null)
+  }, [lit, sunDirection])
   const markers = useMemo<readonly MoonMarker[]>(
     () =>
       sites.map((site, index) => ({
         id: site.id,
         label: String(index + 1),
         location: { lat: site.latitude, lon: site.longitude },
+        footprint: site.grid ? gridCellCorners(site.grid) : undefined,
       })),
     [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
-  const [companyId, setCompanyId] = useState(DEFAULT_COMPANY_ID)
-  const company = companyById(companyId)
-  const sky = useEquipmentSky(selected, selection, company)
-  const { mobile } = company
+  const focusSite = (site: CandidateSite) =>
+    viewer.current?.flyTo(
+      { lat: site.latitude, lon: site.longitude },
+      site.grid ? site.grid.spacing_m * 20 : undefined,
+    )
+  useImperativeHandle(ref, () => ({
+    focusSite(siteId) {
+      const site = sites.find((candidate) => candidate.id === siteId)
+      if (site) focusSite(site)
+    },
+  }))
+
+  // "Company" already means a delivery provider elsewhere in this app, so the operator
+  // whose equipment stands on the surface is called that instead.
+  const [operatorId, setOperatorId] = useState(DEFAULT_COMPANY_ID)
+  const operator = companyById(operatorId)
+  const sky = useEquipmentSky(selected, selection, operator)
+  const { mobile } = operator
 
   // The drive redraws every frame, so its state lives in a ref and goes straight to
   // Cesium. React only renders the controls and the status line.
-  const traverse = useRef<{
+  const drive = useRef<{
     site: CandidateSite | undefined
-    company: Company
+    operator: Company
     sky: EquipmentSky
     progress: number
-  }>({
-    site: undefined,
-    company,
-    sky: EMPTY_SKY,
-    progress: 0,
-  })
+  }>({ site: undefined, operator, sky: EMPTY_SKY, progress: 0 })
   const frame = useRef(0)
 
   /** Redraws the set and hands back the mobile unit, which is the one that moves. */
   const draw = useCallback(() => {
-    const { site, company: shown, sky: measured, progress } = traverse.current
+    const { site, operator: shown, sky: measured, progress } = drive.current
     if (!site) return undefined
     const assets = buildEquipmentAssets(shown, site, progress, measured)
     viewer.current?.setAssets(assets)
@@ -78,15 +113,15 @@ export function MissionMoonViewer({
   useEffect(() => {
     cancelAnimationFrame(frame.current)
     viewer.current?.releaseFollow()
-    traverse.current = {
+    drive.current = {
       site: selected,
-      company,
+      operator,
       sky: sky.kind === 'ready' ? sky.sky : EMPTY_SKY,
       progress: 0,
     }
     if (!selected) viewer.current?.setAssets([])
     draw()
-  }, [selected, company, sky, draw])
+  }, [selected, operator, sky, draw])
 
   useEffect(
     () => () => {
@@ -99,12 +134,12 @@ export function MissionMoonViewer({
   const runDrive = () => {
     if (!selected || !mobile) return
     cancelAnimationFrame(frame.current)
-    traverse.current.progress = 0
+    drive.current.progress = 0
     const duration = driveDurationMs(mobile)
     const started = performance.now()
     const step = (now: number) => {
       const progress = Math.min(1, (now - started) / duration)
-      traverse.current.progress = progress
+      drive.current.progress = progress
       const unit = draw()
       if (unit)
         viewer.current?.follow(
@@ -119,6 +154,7 @@ export function MissionMoonViewer({
     frame.current = requestAnimationFrame(step)
   }
 
+  const unitCount = operator.statics.length + (mobile ? 1 : 0)
   return (
     <>
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
@@ -126,18 +162,23 @@ export function MissionMoonViewer({
           ref={viewer}
           markers={markers}
           selectedMarkerId={selection.siteId}
-          onMarkerSelect={onSelect}
+          onMarkerSelect={(siteId) => {
+            const site = sites.find((candidate) => candidate.id === siteId)
+            if (!site) return
+            onSelect(siteId)
+            focusSite(site)
+          }}
         />
       </div>
       <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <label className="hud-button flex items-center gap-2">
-            <span className="text-neutral-400">회사</span>
+            <span className="text-neutral-400">운영사</span>
             <select
-              aria-label="장비를 배치할 회사"
+              aria-label="장비를 배치할 운영사"
               className="bg-transparent outline-none"
-              value={companyId}
-              onChange={(event) => setCompanyId(event.target.value)}
+              value={operatorId}
+              onChange={(event) => setOperatorId(event.target.value)}
             >
               {COMPANIES.map((option) => (
                 <option
@@ -153,6 +194,29 @@ export function MissionMoonViewer({
           <button
             type="button"
             className="hud-button"
+            disabled={sun.kind === 'loading'}
+            aria-pressed={lit}
+            title={
+              sun.kind === 'loading'
+                ? '착륙 시각의 태양 방향을 불러오는 중입니다'
+                : sun.kind === 'error'
+                  ? '착륙 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
+                  : '착륙 시각의 태양으로 조명과 지형 그림자를 그립니다'
+            }
+            onClick={() => {
+              if (sun.kind === 'error') sun.retry()
+              else setPhoto((value) => !value)
+            }}
+          >
+            {sun.kind === 'error'
+              ? '햇빛 다시 시도'
+              : lit
+                ? '사진으로 보기'
+                : '착륙 시각 햇빛'}
+          </button>
+          <button
+            type="button"
+            className="hud-button"
             onClick={() => viewer.current?.flyToOverview()}
           >
             위에서 보기
@@ -162,11 +226,7 @@ export function MissionMoonViewer({
             className="hud-button"
             disabled={!selected}
             onClick={() => {
-              if (selected)
-                viewer.current?.flyTo({
-                  lat: selected.latitude,
-                  lon: selected.longitude,
-                })
+              if (selected) focusSite(selected)
             }}
           >
             선택 지점 3D로 보기
@@ -178,7 +238,7 @@ export function MissionMoonViewer({
             title={
               mobile
                 ? undefined
-                : `${company.name}에는 움직이는 장비가 없습니다`
+                : `${operator.name}에는 움직이는 장비가 없습니다`
             }
             onClick={runDrive}
           >
@@ -188,13 +248,12 @@ export function MissionMoonViewer({
         <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
           {sky.kind === 'loading' ? (
             <span role="status">
-              {company.name} 장비 {company.statics.length + (mobile ? 1 : 0)}대
-              · 지점별 지구 가시성 계산 중…
+              {operator.name} 장비 {unitCount}대 · 지점별 지구 가시성 계산 중…
             </span>
           ) : sky.kind === 'error' ? (
             <span role="alert" className="text-red-300">
-              장비 지점 가시성을 불러오지 못했습니다. 다른 후보나 회사를 고르면
-              다시 계산합니다.
+              장비 지점 가시성을 불러오지 못했습니다. 다른 후보나 운영사를
+              고르면 다시 계산합니다.
             </span>
           ) : sky.kind === 'ready' ? (
             <>
@@ -203,8 +262,7 @@ export function MissionMoonViewer({
                   {sky.missing}개 지점 계산 실패 ·{' '}
                 </span>
               ) : null}
-              {company.tagline} · 장비{' '}
-              {company.statics.length + (mobile ? 1 : 0)}대
+              {operator.tagline} · 장비 {unitCount}대
               {mobile
                 ? ` · 주행 ${Math.round(pathLength(mobile.path))} m, 실제 ${mobile.speedMS} m/s를 ${DEMO_SPEED_SCALE}배속으로 재생`
                 : ''}

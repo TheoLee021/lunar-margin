@@ -70,7 +70,7 @@ Click the mission dates to open the HUD-style planner. Its 5×5 price grid cover
 
 The date planner contains date selection, mission conditions, the average-price grid and an illustrative landing-date score chart, with no surface-analysis or trajectory request. The mission timeline sits below the selected candidate’s metrics on the main dashboard and shares their analysis result. “이 일정의 궤도 보기” keeps the selected draft as the shared schedule and navigates in the same app to `/orbit`. The dedicated page provides the two large plots, date inputs and playback. Editing valid dates there updates the shared schedule; “날짜 계획으로 돌아가기” reopens the planner with those dates and the same site/duration. Browser Back/Forward and reload retain the selection through validated `departure`, `arrival`, `duration`, and `site` URL parameters. Closing a planner draft without applying or opening the orbit page still discards that draft. The old `?view=orbit` link remains compatible and is normalized to `/orbit`. Vercel serves `/orbit` through the SPA entry point using `web/vercel.json`. No routing library or storage service is added.
 
-Prices use the eligible-grid model described below. Site ranking and slope filters still operate on example data. The orbit preview calls `GET /trajectory/transfer` when the selected departure or arrival date changes (both dates mean 00:00 UTC). It uses DE440 geometric Moon states, a Lambert initial estimate and numerical Earth/Moon gravity shooting to reach a lunar perilune at 100 km altitude at the requested arrival time. The parking orbit is 200 km with a freely chosen plane/orientation; this is not a Cape Canaveral ascent model or a minimum-Δv optimization. The solver adjusts departure velocity and the arrival-point angle together, requiring zero lunar radial speed and positive radial acceleration at arrival. LOI reduces tangential speed to local circular speed without turning the trajectory, then the model propagates another 14 hours. Solar gravity, nonspherical gravity, finite burns and landing are excluded.
+Prices use the eligible-grid model described below. The dashboard reads the completed 500m search for the selected landing date and duration and shows its first five ranked candidates. A matching run in `run` or `pricing_run` is preferred; otherwise the newest matching saved result is used. Applied search conditions replace the former example filters. No candidate is selected by default, and no point analysis is requested until a candidate is selected. Missing results show an empty state and search link, never example candidates. The orbit preview calls `GET /trajectory/transfer` when the selected departure or arrival date changes (both dates mean 00:00 UTC). It uses DE440 geometric Moon states, a Lambert initial estimate and numerical Earth/Moon gravity shooting to reach a lunar perilune at 100 km altitude at the requested arrival time. The parking orbit is 200 km with a freely chosen plane/orientation; this is not a Cape Canaveral ascent model or a minimum-Δv optimization. The solver adjusts departure velocity and the arrival-point angle together, requiring zero lunar radial speed and positive radial acceleration at arrival. LOI reduces tangential speed to local circular speed without turning the trajectory, then the model propagates another 14 hours. Solar gravity, nonspherical gravity, finite burns and landing are excluded.
 
 Supported inputs: years 1900–2100 and flight times 1–10 days. The solver rejects non-convergence, Earth approaches below 100 km, lunar collisions and arrival position residuals above 50 m or lunar radial speed above 0.01 m/s. The residual measures internal numerical targeting, not independent flight-navigation accuracy. SPICE states are interpolated with a 30-minute cubic Hermite grid for propagation. The last and first 10 minutes around LOI include 5-second samples to resolve the tangent connection. The response supplies 3D J2000 positions in km and elapsed seconds from departure. The left plot projects to J2000 XY; the right plot projects to the incoming lunar orbital plane so the lunar body and capture orbit can be compared. Both plots keep equal axis scales, show units and legends, and stack on mobile.
 
@@ -78,7 +78,13 @@ Requests are debounced and cancelled when dates change; the old path disappears 
 
 Run the backend from this checkout with SciPy installed by `cd api && uv sync`, NASA kernels prepared by `uv run python -m lunar_margin.pipeline.fetch`, and `DATA_DIR` pointing to the downloaded data when using another location. Set `API_PROXY_TARGET` to that backend when starting Vite. The new trajectory endpoint only needs SPICE files, not a DEM. See `docs/api.md` for the request/response contract.
 
-The selected-site panel and unified timeline request `/analysis/illumination` and `/analysis/earth-visibility` from the backend added in #5. Both responses must match the selected coordinates and the surface interval: landing midnight UTC through landing + 7/14/28 days (end exclusive), with 30-minute samples and observer height 0 m. Departure changes do not change surface analysis. The HUD metrics and timeline show the selected candidate and applied schedule. Draft date edits update the timeline only after Apply. Loading, errors and empty results do not fall back to fixtures.
+Dashboard candidates use their saved polar-grid coordinates and spacing to draw 500m × 500m footprints on the Moon tiles. Selecting a footprint highlights it and opens the same candidate metrics and timeline as the list. “선택 지점 3D로 보기” zooms to the terrain surface so the actual cell boundary is visible. The footprint represents the search grid, not certification that every point in it is landable.
+
+The fill and border classify the actual Moon tiles through explicit lunar height volumes (−20km to +20km). They avoid Cesium ground primitives’ Earth-specific approximate height table, which can clip high lunar ridges. These are invisible render volumes, not altitude measurements or raised boxes. Marker updates and viewer teardown release their primitives.
+
+Overlapping candidate labels are grouped by Cesium screen-space clustering into a “후보 N개” badge. Clicking the badge zooms to its members without changing the selected candidate or starting an analysis. Zooming in separates individual labels and grid footprints; zooming out groups them again. Clicking a TOP 5 list row, individual map number or footprint selects that candidate, updates its timeline, and zooms to its grid using the same view as “선택 지점 3D로 보기”. Clicking the same list row again also refocuses the camera. The badge counts only the displayed TOP 5, not every eligible grid in the saved run.
+
+The selected-site panel and unified timeline request `/analysis/illumination` and `/analysis/earth-visibility` from the backend added in #5. Both responses must match the selected coordinates and the surface interval: landing midnight UTC through landing + 7/14/28 days (end exclusive), with 30-minute samples and the saved search’s observer height. Departure changes do not change surface analysis. The HUD metrics and timeline show the selected candidate and applied schedule. Draft date edits update the timeline only after Apply. Loading, errors and empty results do not fall back to fixtures.
 
 The timeline uses server elevations/visibility and exact server windows, with the terrain horizon interpolated at each body's azimuth. There is no extra 2° communication margin. Earth visibility describes terrain clearance, not a radio link budget. All samples remain available to the cursor and plot (at most 1,344 for 28 days).
 
@@ -98,39 +104,56 @@ remain readable and are labeled as not applying slope. Start a new search to app
 the limit; old results are not reused by the new mission cache version.
 This is terrain screening, not certified landing safety.
 
-## Prices from the 500m candidate search
+## Provider prices from the 500m candidate search
 
-Open the mission date planner (`/?planner=1`), or choose “이 임무 조건으로 날짜별
-가격 비교” on a saved candidate search. Choose cargo mass (default 24kg), delivery
-(default surface), and the candidate mission conditions. The five landing-date
-rows show equal-weight means over **all eligible fine 500m samples**, before
-Top-K selection, with priced counts and a modeled fixed-fee range. A date with no
-result shows “미계산”; “미계산 날짜 탐색 · 500m” starts one batch of precision
-searches for the missing dates. Completed runs are reused. Clicking a completed date cell opens its exact saved candidate run (including no-eligible results), preserving departure, landing, duration and run ID in the URL without starting another search. Missing results keep the ordinary draft-date selection behavior;
-10km development results and coarse-only samples are never averaged as 500m data.
+The date planner compares six companies using a planning model. Public company
+rates take priority; missing rates use the existing delivery-mode reference tariff,
+with the modeled $500,000 fixed fee when no fee is published. The UI distinguishes
+public-rate estimates from the common model and lists the assumptions. These are
+not bookable company quotes. Each date combination averages each original eligible
+500m grid's lowest estimated cost, before Top-K selection. Partial grid coverage
+never becomes a full-grid mean.
 
-The price is `F + c*m*F_destination*F_demand`. A 500m-radius native-DEM slope
-neighborhood supplies the destination adjustment. The date's average depends on
-which samples pass that date's search and landing-terrain gates. Each date keeps the same adaptive grids and exact price average as an individual
-precision search. There is no transit surcharge: valid departures for the same landing date show the same
-mean, and transfers outside 3–150 days are unavailable in the price table.
+Choose a tentative departure from Spaceflight Now and Space Launch
+Schedule (including general launches in demo mode), then choose the landing date independently. Month-only or conflicting
+dates cannot be auto-selected. Selecting a launch applies its operator’s model rate to the
+same eligible-grid average; an unavailable operator/delivery rate uses the labeled common
+reference model. Clearing the selection restores the six-company minimum comparison.
+Only published exact departure days have prices and links; selecting a flight enables
+only its scheduled day, and unscheduled departure dates cannot be applied.
+The selected launch ID persists through applying dates and opening candidate searches.
+A compact selector retains date precision and source links without a separate
+launch catalog, company filter, or search panel. Clicking a completed date opens its saved candidate search and carries
+departure, landing, duration, mass and delivery mode. Details display all six companies.
+The strict public-quote API remains available separately and never fills unknown
+quotes with model estimates. See [schedule integration and assumptions](docs/launch-schedule.md).
 
-The pricing API exposes term-level evidence and per-grid details. Missing terrain
-uses a 1.10 fallback marked unknown in the API; the six-persona demand
-model is not connected, so demand is unestimated (1.00). Customer
-equipment slope limits use the candidate search’s 250 m regional DEM slope P95;
-the pricing model’s 500 m terrain gates are separate. Actual flight availability,
-lander capacity and commercial quotes are not verified. The two-digit USD values
-are model estimates, not live fares. Contracts and provenance: [docs/api.md](docs/api.md).
+There is no Top-100 shortcut or company-specific terrain recomputation. The
+calendar assesses mission terms first, reads each landing date’s terrain once only
+when a comparable estimate exists, and compares provider costs with vector
+operations. Saved runs selected as the mission template are reused across search
+hash versions only while their mission conditions match. Missing dates still start
+one batch through `POST /pricing/calculate`; completed dates are excluded.
 
-The price calendar batches up to five dates through `POST /pricing/calculate`,
-sharing terrain-profile reads and worker processes while preserving each date's
-SPICE samples and grid-selection rules. It polls at 250ms and retains standard
-candidate run artifacts for the search screen. Batch calculation requires a
-complete matching precomputed horizon table and reports a clear failure if it is
-missing. The measured local five-date/14-day target is under 15 seconds with that
-table available; server speed and mission length affect runtime.
+See [provider sources, rules and measured timings](docs/provider-pricing.md) and
+[API contracts](docs/api.md). Local synthetic price comparison of six qualified
+providers × 142,642 unchanged grids × five dates took 0.004–0.006 seconds. This
+measures pricing after terrain analysis, not a new NASA search. The batch search
+continues to require its matching precomputed horizon table.
 
 ## 착륙 격자 예약
 
 500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
+
+출발일은 날짜 계획의 **발사 일정에서 출발일 선택**에서 Spaceflight Now와
+Space Launch Schedule의 전체 발사 예정일을 데모 입력으로 고를 수 있습니다. 착륙일은 별도로 직접
+선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
+실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).
+
+Candidate search also accepts an optional **maximum regional roughness (m)**.
+It uses the 250 m regional P95 of 400 m plane-detrended RMS roughness, separate
+from slope in degrees. Leave it blank to disable; enabled terrain constraints
+require complete regional coverage. Run a new search to apply it. Candidate
+tables and details show measured roughness, and excessive roughness appears in
+exclusion reasons. This filters eligibility before ranking, without changing the
+Sun/Earth weighting or certifying landing safety.

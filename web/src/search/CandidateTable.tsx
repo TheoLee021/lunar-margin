@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import { formatPrice } from '../api/pricing'
+import { priceExclusionText } from './priceExclusion'
+import type { CandidatePrices } from './useCandidatePrices'
 import type { Candidate } from '../api/candidates'
 import type { CandidateAvailability } from '../api/reservations'
 import {
   fractionText,
+  hoursText,
   degText,
   scoreText,
   sortCandidates,
@@ -13,6 +17,7 @@ import {
 interface Props {
   candidates: readonly Candidate[]
   reservations: ReadonlyMap<string, CandidateAvailability> | null
+  prices: CandidatePrices
   highlightedId: string | null
   selectedId: string | null
   onHover: (id: string | null) => void
@@ -29,8 +34,11 @@ const COLUMNS: readonly {
   { key: 'lat', label: '위도', align: 'right' },
   { key: 'lon', label: '경도(°E)', align: 'right' },
   { key: 'sun', label: '일조율', align: 'right' },
-  { key: 'earth', label: '지구 가시율', align: 'right' },
+  { key: 'earth', label: '지구 LOS', align: 'right' },
+  { key: 'rf', label: 'RF 통신 가능 비율', align: 'right' },
+  { key: 'rfBlackout', label: 'RF 최장 두절', align: 'right' },
   { key: 'slope', label: '지역 경사 P95', align: 'right' },
+  { key: 'roughness', label: '지역 거칠기 P95', align: 'right' },
   { key: 'score', label: '점수', align: 'right' },
   { key: 'region', label: '영역', align: 'right' },
 ]
@@ -38,6 +46,7 @@ const COLUMNS: readonly {
 export function CandidateTable({
   candidates,
   reservations,
+  prices,
   highlightedId,
   selectedId,
   onHover,
@@ -67,6 +76,15 @@ export function CandidateTable({
   return (
     <div className="max-h-[28rem] overflow-auto rounded-xl border border-white/10">
       <table className="w-full min-w-[40rem] border-collapse text-xs">
+        {prices.status === 'ok' && prices.slopePolicy ? (
+          <caption className="caption-top px-3 py-2 text-left text-xs text-neutral-400">
+            가격 경사 판정: 검색과 동일 ·{' '}
+            {prices.slopePolicy.max_slope_degrees === null
+              ? '경사 필터 미적용'
+              : `${prices.slopePolicy.assessment_radius_m} m 지역 경사 P95 ≤ ${prices.slopePolicy.max_slope_degrees}°`}{' '}
+            · 가격에서 별도 중심 경사 한도를 적용하지 않습니다.
+          </caption>
+        ) : null}
         <thead className="sticky top-0 bg-[#0f1217]/60">
           <tr>
             <th
@@ -76,33 +94,42 @@ export function CandidateTable({
               예약 상태 / 가능 순위
             </th>
             {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                scope="col"
-                aria-sort={
-                  sort.key === col.key
-                    ? sort.dir === 'asc'
-                      ? 'ascending'
-                      : 'descending'
-                    : 'none'
-                }
-                className={`px-3 py-2 font-medium text-neutral-400 ${
-                  col.align === 'right' ? 'text-right' : 'text-left'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggle(col.key)}
-                  className="hover:text-neutral-100"
+              <Fragment key={col.key}>
+                <th
+                  scope="col"
+                  aria-sort={
+                    sort.key === col.key
+                      ? sort.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  className={`px-3 py-2 font-medium text-neutral-400 ${
+                    col.align === 'right' ? 'text-right' : 'text-left'
+                  }`}
                 >
-                  {col.label}
-                  {sort.key === col.key
-                    ? sort.dir === 'asc'
-                      ? ' ▲'
-                      : ' ▼'
-                    : ''}
-                </button>
-              </th>
+                  <button
+                    type="button"
+                    onClick={() => toggle(col.key)}
+                    className="hover:text-neutral-100"
+                  >
+                    {col.label}
+                    {sort.key === col.key
+                      ? sort.dir === 'asc'
+                        ? ' ▲'
+                        : ' ▼'
+                      : ''}
+                  </button>
+                </th>
+                {col.key === 'rank' ? (
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-right font-medium whitespace-nowrap text-neutral-400"
+                  >
+                    가격 (USD)
+                  </th>
+                ) : null}
+              </Fragment>
             ))}
           </tr>
         </thead>
@@ -157,6 +184,9 @@ export function CandidateTable({
                 <td className="px-3 py-1.5 text-right tabular-nums text-neutral-200">
                   {c.rank}
                 </td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap tabular-nums text-amber-300">
+                  <CandidatePriceValue prices={prices} id={c.id} />
+                </td>
                 <td className="px-3 py-1.5 text-left">
                   <button
                     type="button"
@@ -190,7 +220,18 @@ export function CandidateTable({
                   {fractionText(c.earth.fraction)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
+                  {fractionText(c.rf?.fraction ?? null)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {hoursText(c.rf?.longest_blackout_hours ?? null)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
                   {degText(c.terrain?.slope_p95_deg ?? null)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {c.terrain?.roughness_p95_m == null
+                    ? '—'
+                    : `${c.terrain.roughness_p95_m.toFixed(2)} m`}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {scoreText(c.score.total)}
@@ -204,5 +245,53 @@ export function CandidateTable({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function CandidatePriceValue({
+  prices,
+  id,
+}: {
+  prices: CandidatePrices
+  id: string
+}) {
+  if (prices.status === 'loading')
+    return <span className="text-neutral-500">조회 중…</span>
+  if (prices.status === 'error')
+    return <span className="text-neutral-500">조회 실패</span>
+  if (prices.status === 'unavailable')
+    return <span className="text-neutral-500">산정 불가</span>
+  const cell = prices.data.get(id)
+  if (!cell)
+    return (
+      <span
+        className="text-neutral-500"
+        title="가격 산정 대상인 적합 500 m 격자에 포함되지 않습니다"
+      >
+        미산정
+      </span>
+    )
+  if (!cell.price)
+    return (
+      <span className="inline-flex max-w-64 flex-col whitespace-normal text-left text-neutral-400">
+        <span>산정 제외</span>
+        <span className="mt-1 text-xs">{priceExclusionText(cell)}</span>
+      </span>
+    )
+  return (
+    <>
+      <span
+        title={cell.price.adjusted_usd.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        })}
+      >
+        {formatPrice(cell.price.adjusted_usd)}
+      </span>
+      {cell.price.destination_unknown || cell.aim_slope_deg === null ? (
+        <span className="block text-[10px] text-neutral-500">지형 미확인</span>
+      ) : null}
+    </>
   )
 }

@@ -305,3 +305,31 @@ it('labels a slope limit as applied only when the saved run enforced it', () => 
     '10° 이하 (250 m 지역 P95)',
   )
 })
+
+it('sends an explicit roughness limit in meters and rejects invalid input', () => {
+  const parsed = parseMissionForm({
+    ...DEFAULT_MISSION_VALUES,
+    maxRoughnessM: '2.5',
+  })
+  expect(parsed.ok && parsed.request).toHaveProperty(
+    'max_terrain_roughness_m',
+    2.5,
+  )
+  expect(
+    parseMissionForm({ ...DEFAULT_MISSION_VALUES, maxRoughnessM: '-1' }).ok,
+  ).toBe(false)
+})
+
+it('sends and copies the RF fraction threshold when selected', () => {
+  const result = parseMissionForm({
+    ...DEFAULT_MISSION_VALUES,
+    minCommunicationPercent: '80',
+  })
+  expect(result.ok).toBe(true)
+  if (!result.ok) return
+  expect(result.request).toHaveProperty('min_communication_fraction', 0.8)
+  expect(JSON.parse(missionRequestJson(result.request))).toHaveProperty(
+    'min_communication_fraction',
+    0.8,
+  )
+})

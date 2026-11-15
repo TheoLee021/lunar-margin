@@ -1,6 +1,6 @@
 # API 계약 (프론트 ↔ 백엔드)
 
-관리: B. 변경 시 B에게 먼저 공유하고, 기존 응답을 깨지 않게 필드 추가 위주로 바꾼다.
+변경 시 기존 응답을 깨지 않게 필드 추가 위주로 바꾼다.
 백엔드 PR을 먼저 머지한 뒤 프론트 PR을 머지한다. 프론트의 zod 스키마(`web/src/api/`)와 백엔드 pydantic 모델은 이 문서와 일치해야 한다.
 
 ## 공통
@@ -222,7 +222,111 @@
 
 ### `GET /tiles/{layer}/{z}/{x}/{y}.png`
 
-TBD (layer 목록, 타일링 스킴, 투영)
+렌더링용 오버레이. `python -m lunar_margin.pipeline.overlay_tiles`가 수평선 테이블과 DEM으로 `DATA_DIR/tiles/`에 미리 굽는다. 없는 레이어·레벨·타일은 404.
+
+| layer | 내용 |
+| --- | --- |
+| `horizon` | 지점마다 방위각 5° 간격(72개) 지형 수평선 고도. 셰이더의 지형 그림자(cast shadow)용 |
+| `normal` | 지점마다 지역 동쪽·북쪽 경사. 셰이더의 햇빛 조명용. 레벨 0(500 m) 위에 더 촘촘한 레벨 1(160 m), 2(80 m)가 있고, 5 m 지역 DEM이 있는 곳에는 레벨 3(20 m), 4(5 m)가 더 있다 |
+| `normal-wide` | `normal`과 같은 경사를 60°S까지(극에서 약 931 km) 960 m 격자 한 장으로. 85°S 밖도 햇빛으로 그리는 데 쓴다. 60°S까지의 DEM을 받아 구운 서버에만 있다 (없으면 404) |
+
+### `GET /tiles/{layer}/meta.json`
+
+```json
+{
+  "version": 1,
+  "layer": "horizon",
+  "levels": [{ "z": 0, "pixel_size_m": 500.0, "size_px": 607, "center_px": 303, "tile_px": 607, "tiles_per_side": 1 }],
+  "encoding": { "azimuth_step_deg": 5.0, "azimuths": 72, "atlas_cols": 6, "atlas_rows": 3, "offset_deg": -5.0, "step_deg": 0.05 }
+}
+```
+
+- 투영은 남극 입체투영(후보지 레이어와 같음). 레벨 전체 이미지의 픽셀 `(col, row)`는 `x_m = (col - center_px) * pixel_size_m`, `y_m = (center_px - row) * pixel_size_m` (경도 0°가 위쪽, 동쪽이 오른쪽). 격자 한 칸이 한 픽셀이다.
+- 타일 `(x, y)`는 레벨 이미지의 열 `[x*tile_px, (x+1)*tile_px)`, 행 `[y*tile_px, (y+1)*tile_px)`를 덮는다 (`0 <= x, y < tiles_per_side`). 레벨 이미지(`size_px`)를 넘는 마지막 타일의 여백은 데이터 없음이다.
+- 레벨 0은 두 레이어 모두 수평선 테이블 격자 그대로 타일 한 장이다 (500 m, ROI 밖은 데이터 없음). `horizon`은 레벨 0뿐이다.
+- `normal`의 `levels`에는 같은 영역(극에서 `center_px * pixel_size_m`까지)을 더 촘촘히 덮는 레벨이 거친 것부터 이어진다. 한 장으로 받기에는 크므로(80 m 레벨 약 50 MB) 256px 타일로 나누고, 클라이언트는 보는 곳 주변 타일만 받는다. 이 레벨들은 원형 ROI 밖의 정사각형 모서리까지 DEM 값으로 채운다.
+
+  ```json
+  "levels": [
+    { "z": 0, "pixel_size_m": 500.0, "size_px": 607, "center_px": 303, "tile_px": 607, "tiles_per_side": 1 },
+    { "z": 1, "pixel_size_m": 160.0, "size_px": 1895, "center_px": 947, "tile_px": 256, "tiles_per_side": 8 },
+    { "z": 2, "pixel_size_m": 80.0, "size_px": 3789, "center_px": 1894, "tile_px": 256, "tiles_per_side": 15 },
+    { "z": 3, "pixel_size_m": 20.0, "size_px": 15151, "center_px": 7575, "tile_px": 256, "tiles_per_side": 60, "tile_ranges": [[24, 31, 28, 35]] },
+    { "z": 4, "pixel_size_m": 5.0, "size_px": 60601, "center_px": 30300, "tile_px": 256, "tiles_per_side": 237, "tile_ranges": [[98, 124, 113, 139]] }
+  ]
+  ```
+
+- `tile_ranges`가 있는 레벨은 희소 레벨이다: 5 m 지역 DEM(Artemis III 후보 지역의 Shape-from-Shading DEM, [data.md](data.md))이 덮는 곳에만 타일이 있다. 항목 하나가 지역 하나의 타일 범위 `[x0, y0, x1, y1]`(양 끝 포함)이고, 범위 안의 타일은 모두 있으며 밖의 타일은 404다. 범위 안이어도 지역 밖 픽셀은 데이터 없음이므로, 클라이언트는 그런 곳에서 더 거친 레벨을 쓴다. 지역 DEM을 받지 않았으면 이 레벨들은 `levels`에 없다. ROI(85°S) 밖의 지역은 들어가지 않는다.
+- 20 m 레벨의 값은 5 m 간격으로 잰 경사를 픽셀 안에서 평균한 것이다.
+- `normal`의 `encoding`은 `{ "bias": 32768, "scale": 16384 }`.
+- `normal-wide`는 레벨 0 하나뿐이고 타일 한 장이다 (약 14 MB). 픽셀 좌표 규약과 `encoding`, 타일 형식은 `normal`과 같다. 픽셀 값은 240 m 간격으로 잰 경사를 그 픽셀 안에서 평균한 것이고, DEM 밖(정사각형 가장자리)은 데이터 없음이다. `sunlight`는 같은 구역의 햇빛 지도(`GET /sunlight/south-pole-wide.png`) 격자다.
+
+  ```json
+  {
+    "version": 1,
+    "layer": "normal-wide",
+    "levels": [{ "z": 0, "pixel_size_m": 960.0, "size_px": 1941, "center_px": 970, "tile_px": 1941, "tiles_per_side": 1 }],
+    "encoding": { "bias": 32768, "scale": 16384 },
+    "sunlight": { "pixel_size_m": 640.0, "size_px": 2911, "center_px": 1455 }
+  }
+  ```
+
+### `GET /tiles/{layer}/{z}/{x}/{y}.png`
+
+8비트 RGBA PNG.
+
+- `horizon`: `tile_px` 크기 셀 18개를 6열 x 3행으로 배치한 아틀라스 (`6*tile_px` x `3*tile_px`). 셀 `k`(열 `k % 6`, 행 `k // 6`)의 R, G, B, A가 방위각 `4k`, `4k+1`, `4k+2`, `4k+3`번(각 `5°` 간격, 0° = 북, 시계방향)이다. 값 `v = 0`은 데이터 없음, `1..255`는 고도 `offset_deg + v * step_deg`도 (범위 밖은 끝값으로 자름). 값은 수평선 테이블(엔진 `horizon_profile`)의 1° 값을 5°마다 그대로 뽑은 것이다.
+- `normal`: `tile_px` x `tile_px`. R·G가 동쪽 경사, B·A가 북쪽 경사(북 = 위도가 커지는 방향, 즉 남극에서 멀어지는 방향. 수평선 방위각 0°와 같다)의 16비트 값 `u = hi*256 + lo`이고 경사 tan = `(u - bias) / scale`. 네 바이트가 모두 0이면 데이터 없음. 극점(경도 정의 안 됨)은 경도 0°로 본다. 동·북 방향은 픽셀마다 경도에 따라 돌아가므로, 이웃 픽셀 값을 보간할 때는 투영 평면의 공통 축으로 돌린 뒤 섞는다 (`horizon`의 방위각도 같다). 16비트 값이 두 바이트로 나뉘어 있어 GPU 선형 필터링·밉맵에 맡기면 값이 깨진다.
+
+## Sunlight
+
+### `GET /sunlight/sun-direction?time=`
+
+한 시각에 달에서 태양을 향하는 방향. 태양이 멀어서 달 위 어느 지점에서나 같으므로(시차 0.001° 미만) 시각만으로 정해진다. 뷰어는 이 방향으로 조명을 그리고 아래 햇빛 지도를 요청한다.
+
+- `time`: 타임존 포함 ISO 8601. 다른 쿼리 키는 거절한다.
+
+```json
+{ "time": "2027-01-10T00:00:00Z", "x": -0.894677, "y": 0.446459, "z": -0.01511 }
+```
+
+- `time`은 UTC로 바꾼 요청 시각. `x`, `y`, `z`는 `MOON_ME` 단위 벡터(빛 시간·광행차 보정 LT+S, `/analysis/*`의 태양과 같은 계산)를 소수 6자리로 반올림한 것이다. 같은 시각이면 언제나 같은 값이라, 이 값으로 요청한 햇빛 지도도 같은 것이 된다.
+
+오류: `422` 시각이 없거나 타임존이 없음, `503` SPICE 커널 없음.
+
+### `GET /sunlight/south-pole.png?x=&y=&z=`
+
+태양 방향 하나에 대한 남극 햇빛 지도: 각 지점에서 지형에 가리지 않고 보이는 태양 원반의 비율. 뷰어 셰이더의 지형 그림자(cast shadow)에 쓴다. 그림자는 태양 방향마다 달라 미리 구울 수 없으므로 요청이 오면 DEM으로 계산한다 (약 3초, 메모리 약 0.8 GB). 한 번에 하나만 계산하고 최근 결과 8개를 메모리에 둔다. 클라이언트는 `429`를 받으면 `Retry-After`만큼 기다렸다가 몇 번 다시 요청한다.
+
+- `x`, `y`, `z`: 달에서 태양을 향하는 `MOON_ME` 방향. 단위 벡터가 아니어도 된다. 서버는 정규화한 뒤 소수 4자리로 반올림한 방향으로 계산한다. 다른 쿼리 키는 거절한다.
+- 응답은 8비트 RGBA PNG. `R = G = B = round(255 * 비율)` (0 = 완전한 그늘, 255 = 원반 전체가 보임), `A = 255`.
+- 격자는 `normal` 타일에서 영역 전체를 덮는 가장 세밀한 레벨과 같다 (`GET /tiles/normal/meta.json`의 `levels` 중 `tile_ranges`가 없는 마지막 항목: 지금은 80 m, `size_px` x `size_px`, 픽셀 좌표 규약도 같다). 원형 ROI 밖의 정사각형 모서리는 태양 방위에 따라 계산 범위를 벗어날 수 있고 그때는 가장 가까운 값으로 채운다.
+- 계산: 빛이 평행하다고 보고 태양 방위에 나란한 단면마다 지형을 태양 쪽에서 훑는다. 격자 밖 지형도 태양 쪽 200 km까지(320 m 간격) 반영하고 달 곡률을 포함한다. 태양 원반(반지름 0.2665°)을 고도 방향 16개 띠로 나눠 보이는 띠의 넓이를 합하므로 반그림자는 17단계다. 관측 높이는 0 m. `engine/horizon.py`의 수평선과 같은 DEM(80 m, 밖은 120 m)을 쓴다.
+
+오류: `422` 방향이 없거나(영벡터, 성분 누락, 유한하지 않은 값) 수평 성분이 없는 방향(극의 천정), `429` 계산이 밀려 있음(계산 중인 요청 뒤에 4건까지만 줄을 세운다. `Retry-After` 초 뒤에 다시 요청한다. 이미 기억한 방향은 밀려 있어도 바로 돌려준다), `503` DEM 또는 `normal` 타일 없음.
+
+### `GET /sunlight/south-pole-wide.png?x=&y=&z=`
+
+같은 태양 방향의 넓은 햇빛 지도: 60°S까지(극에서 약 931 km)를 640 m 격자로 덮는다. 뷰어가 85°S 밖도 햇빛으로 그릴 때 쓰고, 85°S 안쪽은 위 80 m 지도가 더 세밀하다 (약 4초, 메모리 약 1.2 GB, 응답 약 1.1 MB).
+
+- `x`, `y`, `z`와 응답 형식, 계산 방식은 위 지도와 같다.
+- 격자는 `GET /tiles/normal-wide/meta.json`의 `sunlight` 항목이다 (`size_px` x `size_px`, 픽셀 좌표 규약은 타일과 같다). 정사각형 모서리(극에서 `center_px * pixel_size_m`보다 먼 곳)는 가장 가까운 값으로 채운다.
+- DEM은 위 지도의 DEM(80 m, 밖은 120 m)에, 그 밖을 240 m DEM(`ldem_60s_240m_float`)으로 메운 것이다.
+- 계산 줄과 `429`는 위 지도와 함께 쓴다. 최근 결과 8개를 위 지도와 따로 메모리에 둔다.
+
+오류: `422`·`429`는 위와 같다. `503` 60°S까지의 DEM 또는 `normal-wide` 타일 없음 (`pipeline.fetch --wide`와 `pipeline.overlay_tiles`로 만든다. 이때도 위 지도와 창은 그대로 동작한다. 서버가 떠 있는 동안 데이터를 만들면 다음 요청부터 돌려준다).
+
+### `GET /sunlight/south-pole/{level}/{tile_x}/{tile_y}.png?x=&y=&z=`
+
+위 햇빛 지도의 세밀한 창. 5 m 지역 DEM이 있는 곳은 경사 타일이 20 m·5 m인데 그림자가 80 m면 경계가 뭉툭하므로, 클라이언트가 보는 곳 주변만 그 레벨의 격자로 다시 계산해 80 m 지도 위에 얹는다 (5 m 창 하나에 약 1초).
+
+- `level`: `normal` 타일의 희소 레벨(`GET /tiles/normal/meta.json`의 `levels` 중 `tile_ranges`가 있는 항목: 지금은 20 m, 5 m)의 `z`.
+- `tile_x`, `tile_y`: 창의 왼쪽 위 타일. 창은 그 타일부터 4 x 4 타일이다 (클라이언트가 경사 타일을 모아 쓰는 창과 같다. 5 m 레벨에서 5.12 km). 레벨 이미지 밖으로 나가도 되므로 음수일 수 있다.
+- `x`, `y`, `z`와 응답 형식은 위와 같다. 크기는 `4 * tile_px` 정사각형이고, 픽셀 `(col, row)`는 그 레벨 이미지의 `(tile_x * tile_px + col, tile_y * tile_px + row)`다.
+- 계산: 위와 같은 방식을 그 레벨의 격자 간격으로 한다. 지형은 창에 걸친 5 m 지역 DEM을 위 지도의 DEM 위에 얹은 것이다 (지역 DEM 밖은 80 m DEM 그대로). 창 밖 지형도 태양 쪽 200 km까지 격자 간격의 4배로 반영하므로, 멀리서 오는 그림자는 80 m 지도와 같은 자리에 온다.
+- 계산 줄과 `429`는 위 지도와 함께 쓴다. 최근 창 32개를 메모리에 둔다. 한 번 시작한 계산은 요청이 끊겨도 끝까지 가므로, 클라이언트는 카메라가 멈춘 뒤에 요청한다.
+
+오류: `404` 희소 레벨이 아니거나 창 안에 그 레벨의 타일(`tile_ranges`)이 하나도 없음(그런 곳은 위 지도를 쓴다), `422`·`429`·`503`은 위와 같다.
 
 ### 개발용 빠른 탐색: `POST /candidates/search/dev`
 
@@ -353,15 +457,21 @@ ROI. Coarse-only samples, development (10km) runs, excluded and unevaluated poin
 are not included. A 500m cell is represented by its sample point; this does not
 certify conditions at every location inside that cell.
 
-For each eligible sample, native 80m DEM samples in a projected 500m-radius disk
-are used to derive slopes by centered height differences. `r` is the fraction
-with slope <=10 degrees. The price model adds landing-safety gates: no price if
-r<0.05 or the aim-point slope>10 degrees. These modeled lander limits are separate
-from the optional customer slope constraint enforced by the candidate search
-using the 250 m regional DEM slope P95.
-If terrain is unavailable or any required disk sample is missing, r is unknown:
-use destination multiplier 1.10 and count/label the fallback. A known unsafe aim
-point remains excluded even if r is unknown. Missing values are never zero-filled.
+Price eligibility is exactly the saved search eligibility above, including its
+250 m regional slope P95, 160 m baseline, DEM completeness and configured slope
+limit. Disabling the search slope filter also disables slope exclusion in price
+calculation. There is no extra 10-degree center-slope gate or 5% area gate for a
+saved search. The response includes `slope_policy` (basis `saved_search_eligibility`,
+`max_slope_degrees`, statistic `p95`, `assessment_radius_m:250`, `slope_baseline_m:160`).
+
+The existing 500 m-radius fraction of native 80 m DEM samples with slope ≤10°
+remains a **cost adjustment input only**, not an eligibility criterion. Its value
+may change the modeled price but cannot remove a search-qualified candidate.
+Missing cost terrain still uses the explicit destination multiplier 1.10 fallback.
+Legacy independent point quotes retain their existing policy; selected-candidate
+company comparisons send `source_run_id` and read the same saved fine-grid status.
+Unknown grids or mismatched landing dates return 409 instead of silently applying
+a different terrain policy.
 
 `P = F + c * m * (1 + 0.30 * (1-r)) * F_demand`, with default F=$500,000.
 The six-persona model is not connected, so F_demand=1.00 and demand_unknown=true.
@@ -531,3 +641,189 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 ### POST /reservations/{id}/cancel
 
 운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+
+### 발사 예정일과 모델 예상 비용 (추가)
+
+`GET /pricing/providers/launches` → `{timezone: "UTC", scope: "all_launches_demo", launches, sources}`.
+각 launch는 `{id, provider_id: ProviderId|null, launch_provider: string, lunar_related: boolean, name, departure_date: date|null, label, confirmed: false,
+sources: [{name, url, label}], date_precision, participants: [{provider_id, role}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
+각 source 상태는 `{name, url, fetched_at, stale, error: string|null, scanned_records, scanned_pages, complete}`이다.
+`date_precision`은 day/month/quarter/year/unknown, role은 delivery/launch/partner(본문 관련 언급)다.
+두 소스의 전체 페이지 수집 실패 시 complete=false이며, 회사별 빈 결과를 확정적 부재로 해석하지 않는다.
+10분 동안 응답을 재사용하며 외부 오류 시 확인일이 유지된 마지막 자료를 표시한다.
+
+`POST /pricing/providers/compare`와 `/calendar`의 `estimate?: boolean`은 기본 false다.
+true이면 공개 단가 또는 공통 참조 단가로 예상 비용을 계산한다. `/compare`의
+`minimum_estimate_usd`와 provider의 `minimum_estimate_usd`가 모델 최솟값이다.
+flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
+`estimate_tariff_usd_per_kg`, `estimate_fixed_usd`, `estimate_tariff_source`,
+`estimate_assumptions`가 계산 근거를 전달한다. 기존 `price_usd`, `minimum_usd`는
+완전한 공개 조건을 충족한 견적만 담고 모델값으로 채우지 않는다.
+`/calendar`의 `estimate`는 요청 모드를 반환하며 모델 평균은 cell.status `estimated`,
+`mean_min_usd`에 담긴다. 기존 전체 격자 평균·부분 산정 규칙은 동일하다.
+날짜와 청구 조건의 해석은 [launch-schedule.md](launch-schedule.md)를 참고한다.
+
+데모에서는 목적지·회사로 목록을 제한하지 않습니다. 일반 발사도 분석용 출발일로 선택할 수 있으며 실제 달 배송 가능성을 뜻하지 않습니다.
+
+
+`POST /pricing/providers/calendar`는 `estimate: true`일 때만
+`selected_launch_id?: string|null`을 받는다. `/launches`에서 선택한 실제 ID를 보내면
+캐시된 일정의 **발사사**로 회사 모델을 결정한다. 브라우저가 보낸 회사명·단가를 신뢰하지
+않는다. ID가 없으면 해당 UTC 출발일에 등록된 발사사들의 격자별 최저가 평균 모드다. 존재하지 않는 ID는 409,
+견적 모드에서 ID 지정은 422다. 계산 중 외부 일정 수집을 기다리거나 다시 실행하지 않는다.
+
+선택 시 응답 `selection`은 `{launch_id, launch_name, company_id: ProviderId|null,
+company_name, tariff_usd_per_kg, fixed_usd, billable_mass_kg,
+tariff_basis: public_tariff|common_model, tariff_source, assumptions}`다. 미선택은 null이다.
+해당 배송 방식의 회사 공개 단가를 우선하며 없으면 공통 참조 단가를 사용한다.
+일반 발사에 달 배송 단가를 적용한 데모이므로 회사의 실제 달 운항 기간·화물 수용 여부는
+적용하지 않는다. 기본 전이 3~150일·지형 부적합 판정은 유지한다.
+`mean_min_usd`는 같은 적합 500m 격자 전체의 선택 회사 모델 산술평균이다.
+단일 회사이므로 격자별 최솟값도 그 회사 가격이다. `eligible_provider_ids`는 알려진
+6사 ID만 담으며 ULA 등은 빈 배열이다. 이 경우 `selection.company_name`으로 회사를 구분한다.
+
+### Optional regional roughness filtering
+
+`POST /candidates/search`, `/search/dev` and calendar mission inputs accept
+`max_terrain_roughness_m`: a finite number ≥ 0, or `null`/omitted to disable.
+This is the maximum 95th-percentile roughness in a 250 m radius, not slope in
+degrees. Local roughness is the RMS elevation residual after removing a best-fit
+plane over a 400 m window. The primary LOLA DEM resolution remains 80 m.
+
+Coarse promotion and fine eligibility enforce the limit inclusively. An enabled
+roughness filter requires 100% valid regional coverage; missing terrain never
+passes as zero roughness. Excess roughness yields `terrain_roughness_above_max`;
+incomplete/missing regional terrain yields `terrain_incomplete`.
+
+Candidate `terrain.roughness_p95_m` is additive and nullable for historical runs.
+It is also exported in CSV, `candidates_simple.json`, and `sites.npz` (as
+`terrain_roughness_p95_m`). `/analysis/site-assessment` exposes the same regional
+roughness field. The candidate table/detail and input summary show meters and
+whether the saved run applied the limit. Mission cache version 3 prevents reuse
+of runs that ignored this filter. This hard filter changes which candidates can
+be ranked; it does not introduce an arbitrary roughness score weight.
+
+RF communication changes are tracked separately; this roughness change preserves
+the existing geometric Earth-visibility metric and scoring.
+
+### 후보 상세의 지형 여유각·일조 연속성
+
+PR #43의 지형 여유각 계산과 PR #44의 일조 연속성 계산을 후보 상세에 연결한다.
+기존 API에 다음 선택 필드를 추가하며, 과거 응답에서 필드가 없을 때 프런트는 ‘미제공’으로 표시한다.
+
+- `/analysis/illumination`, `/analysis/earth-visibility`:
+  `series.terrain_clearance_deg`는 표본별 `천체 중심 고도 − 같은 방위각의 지형 수평선 고도` [°].
+  `visible_clearance_p10_deg`는 양의 여유각 표본만의 10백분위수이며, 가시 표본이 없으면 null.
+  새 필드는 계산 정밀도 그대로 제공한다. 기존 고도 배열의 표시용 반올림과 구분한다.
+- `/analysis/site-assessment`:
+  `terrain_clearance.sun_visible_p10_deg`, `earth_visible_p10_deg`로 두 천체의 여유각을 요약한다.
+  `solar_continuity.longest_sun_visible_hours` [h], `visibility_transitions` [회]를 추가한다.
+  마지막 표본은 `min(표본 간격, 요청 종료까지 남은 시간)`으로 집계한다. 예를 들어 10분 구간을
+  30분 간격으로 요청해도 연속 일조는 최대 10분이다. 중간에 차폐가 있으면 연속 구간을 분리하고,
+  시작과 끝의 가시 구간을 이어 붙이지 않는다. 전환 횟수는 실제 인접 표본 사이의 변화만 센다.
+
+후보 선택 시 요약 GET 한 번으로 두 천체의 진단을 가져온다. 상세 진단 기간은 기존 시계열과 같은
+‘임무 기간 전체 또는 시작부터 최대 1년’, 30분 간격이며 화면에 기간·간격·관측 높이를 표시한다.
+선택 변경·닫기 시 요청을 취소하고, 로딩·오류/재시도·미제공·가시 구간 없음·진짜 0을 구분한다.
+기존 시계열 보기 버튼과 분석 종류 탭은 유지한다.
+
+지형 여유각 [°]은 기하학적 LOS 진단이며 RF 링크마진 [dB]이나 신뢰구간·통신 성공률이 아니다.
+P10은 가시 구간에 조건부인 지표이므로 전체 기간의 가시율을 대체하지 않는다. 일조 연속성도
+발전량·배터리 용량·정확한 일출/일몰 시각을 예측하지 않는다.
+
+후보 결과에 PR #47의 선택적 `rf` 객체가 있으면, 저장된 `min_link_margin_db`를 별도 RF 항목에 표시한다.
+해당 객체가 없거나 값이 null이면 ‘미계산’으로 표시하며 각도에서 RF 마진을 계산하지 않는다.
+저장된 RF 값은 원래 탐색 기간의 명목 값이고, LOS 차폐 시에는 차폐 손실을 반영하지 않은 가상 LOS 값이다.
+RF 계산·필터·점수 계산은 아래의 명목 RF 통신 평가 계약을 따른다.
+### 명목 RF 통신 평가 (candidate search)
+
+새 임무 탐색은 지구 중심 방향의 지형 LOS와 RF 링크 예산을 함께 평가한다.
+`earth.*`, 지구 지도 레이어, `/analysis/earth-visibility`는 계속 **기하학적 LOS**다.
+`rf.*`는 별도 지표이며 `LOS && link_margin_db >= target_margin_db`인 시간만 통신 가능하다.
+실제 지상국 위치·가시성·일정, 지구 대기 감쇠, 멀티패스는 모델에 포함되지 않는다.
+
+`POST /candidates/search` 및 날짜별 탐색의 임무 입력에 다음 선택 필드를 추가한다.
+
+- `min_communication_fraction`: null 또는 0~1. RF 통신 가능 비율의 하한. 생략하면 하한 없음.
+- `rf`: 아래 기준값을 갖는 RF 조건 객체. 생략하면 팀에서 제공한 기준값으로 평가한다.
+  부분 객체도 가능하며 생략한 값은 기준값으로 채운다. null은 허용하지 않는다.
+
+| RF 조건 | 기준값 |
+| --- | ---: |
+| frequency_hz | 23170000000 |
+| tx_power_w | 1 |
+| tx_gain_dbi / rx_gain_dbi | 33.2 / 71.1 |
+| tx_system_loss_db / tx_pointing_loss_db | 1 / 0.3 |
+| rx_pointing_loss_db / rx_waveguide_loss_db | 0 / 0 |
+| system_noise_temp_k | 512 |
+| information_rate_bps | 230000 |
+| implementation_loss_db / target_margin_db | 3 / 3 |
+| required_esn0_db / eta_tot | -2.35 / 0.490243 |
+
+주파수·전력·잡음온도·정보율·효율은 양수, 손실·목표 마진은 0 이상이며 모든 값은 유한해야 한다.
+수신 요구전력은 `−228.60 + 10 log10(T) + 10 log10(Rb) + Es/N0 − 10 log10(eta_tot) + 구현 손실` [dBW].
+송수신 이득을 더하고 FSPL 및 시스템/지향 손실을 뺀 수신전력에서 이를 차감해 링크마진을 구한다.
+목표 마진은 판정에 한 번만 사용한다. 385,000 km 기준 링크마진은 15.688618 dB,
+목표 3 dB를 제외한 추가 손실 여유는 12.688618 dB다.
+
+기준 출처: [NASA/TM-20220013310 Fig. 5.33](https://ntrs.nasa.gov/api/citations/20220013310/downloads/TM-20220013310.pdf),
+[ETSI EN 302 307-1 V1.4.1 Table 13](https://www.etsi.org/deliver/etsi_en/302300_302399/30230701/01.04.01_60/en_30230701v010401p.pdf)
+(QPSK 1/4, normal FECFRAME, no pilots). 하드웨어·실제 링크 검증 결과를 뜻하지 않는다.
+
+`max_communication_blackout_hours`는 RF 최장 두절 한도로 적용한다.
+저장 설정에는 `thresholds.min_rf_fraction`, `thresholds.max_rf_blackout_hours`와
+모든 `config.rf` 값이 남는다. 기존 소비자용 `max_earth_blackout_hours`도 같은 한도로
+유지한다(전체 30분 구간인 임무 탐색에서 RF 한도가 이를 포함하므로 추가 탈락은 없다).
+
+각 후보의 선택적 `rf` 객체:
+
+- `fraction`: 구간 길이로 가중한 명목 통신 가능 비율.
+- `longest_blackout_hours`: LOS 차폐와 마진 부족을 합한 최장 연속 두절.
+- `evaluation_hours`, `available_hours`: 정확한 평가 시간과 통신 가능 시간.
+- `min_link_margin_db`: 전체 시점 중 최소 마진. LOS 차폐 시에도 가상 자유공간 LOS 값이며,
+  차폐를 통과하거나 실제 수신 가능한 전력을 뜻하지 않는다.
+- `required_ebn0_db`, `rx_required_dbw`: 사용한 수신 요구 조건.
+
+마지막 표본이 짧으면 남은 시간만 집계한다. 처음과 마지막의 두절을 이어 붙이지 않는다.
+`score.communication_component = (rf.fraction + 1 − rf.longest_blackout_hours / rf.evaluation_hours) / 2`.
+가능 비율과 연속성에 같은 비중을 주고, 기존 balanced/solar/earth 우선순위로 일조 성분과
+가중 평균한다. `score.earth_component`는 계속 원래 LOS 가시율이고,
+`score.communication_basis`가 `nominal_rf`일 때만 새 통신 성분을 점수에 사용한다.
+비율 하한·두절 상한 판정은 점수 계산과 별개이며 경계값을 포함한다.
+
+개별·날짜별 일괄 계산, coarse/fine 승격, 최종 순위와 공간 다양성 선정에 같은 RF 지표를 쓴다.
+JSON/CSV/simple JSON/`sites.npz`에 RF 지표를 보존한다. NPZ 실패/미적용 마스크는 uint16으로 확장한다.
+새 제외 사유는 `rf_fraction_below_min`, `rf_blackout_hours_above_max`, `rf_incomplete`다.
+RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 통과시키지 않는다.
+과거 결과는 `rf=null` 또는 필드 없음, 점수 기준은 `earth_los`다. 새 임무 캐시 버전은 `5-rf-roughness`로
+바뀌어 LOS만 평가한 결과를 재사용하지 않는다. RF 없이 직접 만든 기존 CLI `SearchConfig`는
+계속 LOS 방식으로 평가한다. 프런트 배포 전에 이 추가 API 계약을 백엔드와 함께 검토해야 한다.
+
+메인 대시보드의 TOP 5는 저장된 탐색 결과를 그대로 사용한다. RF로 계산한 실행이면
+`config.rf`의 조건, 최소 RF 가능 비율·최장 RF 두절 한도, 저장된 후보 RF 지표와 점수를 표시한다.
+과거 LOS 실행은 RF 실행으로 다시 해석하지 않는다. 선택 지점의 Earth 시계열과 타임라인은
+기존처럼 LOS를 나타내며, RF 지표는 저장된 탐색 결과임을 별도로 표시한다.
+
+최소 RF 통신 가능 비율 입력은 ‘RF 기준 조건’ 펼침 영역에 둔다. 기본 임무 입력은 기존 2줄 구성을 유지한다. RF와 거칠기 지표를 함께 보존하며, 신규 임무 캐시 버전은 `5-rf-roughness`이다.
+
+모델 날짜표 cell의 `lowest_company_names: string[]`는 각 적합 격자의 최저가 계산에
+기여한 발사사 이름이다. 동률·격자별 다른 최저가 회사는 모두 포함한다. 가격이 없는
+셀은 빈 배열이다. `lowest_launch_id: string|null`는 기여 회사가 하나일 때 해당 공개
+발사편 ID이며, 여러 회사가 기여하면 null이다. 엄격한 공개 견적 모드에서는 이 추가
+모델 필드를 기본 빈 배열/null로 반환한다.
+
+`estimate:true`에서 발사편을 선택하지 않으면 `/launches`의 해당 UTC 출발일에
+등록된 발사사 모델끼리만 비교한다. 선택 시에도 해당 편의 예정일만 허용한다.
+해당 날짜에 발사편이 없거나 날짜가 미정이면 `status: no_launch`와 null 가격을
+반환하며 DEM을 계산하지 않는다. 월·연도를 임의의 출발일로 확장하지 않는다.
+회사당 지형 분석을 반복하지 않고 저장된 목적지 계수에 모델 가격 벡터를 적용한다.
+
+
+### 가격 제외 사유의 표시
+
+후보 표는 가격 API의 `excluded_reason`을 툴팁에만 숨기지 않고 가격 아래에 표시한다.
+과거 응답의 중심 경사 제외는 실제 `aim_slope_deg`와 기존 10° 한도, 저경사 면적 제외는
+`landable_fraction`과 기존 5% 한도를 함께 보여 준다. 가격 조회 실패·미산정과 구분한다.
+회사별 `/pricing/providers/compare`의 선택적 `source_run_id`는 저장 검색의 500 m 세밀 격자를
+식별한다. `terrain_excluded_reason: search_constraints_not_met`이면 그 검색의 제약 미충족이다.
+검색 실행을 전달하지 않은 지도 지점은 독립 가격 모델이며 검색 후보의 판정으로 간주하지 않는다.

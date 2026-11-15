@@ -471,8 +471,15 @@ def test_a_missing_supplementary_dem_is_an_error_like_the_main_one(
         run_search(SMALL, tmp_path, log=lambda _: None)
 
 
-def test_slope_filter_rejects_missing_terrain_instead_of_treating_it_as_flat(
-    data_dir: Path, tmp_path: Path
+@pytest.mark.parametrize(
+    "thresholds",
+    [
+        Thresholds(max_terrain_slope_degrees=10),
+        Thresholds(max_terrain_roughness_m=0),
+    ],
+)
+def test_terrain_filters_reject_missing_terrain_instead_of_treating_it_as_flat(
+    data_dir: Path, tmp_path: Path, thresholds: Thresholds
 ) -> None:
     import numpy as np
 
@@ -502,7 +509,7 @@ CENTER_LATITUDE = -90
             "fallback_dem": None,
             "max_range_m": 500,
             "workers": 1,
-            "thresholds": Thresholds(max_terrain_slope_degrees=10),
+            "thresholds": thresholds,
         }
     )
     heights.tofile(image)
@@ -545,3 +552,305 @@ def test_api_serves_applied_slope_and_terrain_from_a_saved_mission(
     assert body["config"]["thresholds"]["max_terrain_slope_degrees"] == 90
     assert body["candidates"][0]["terrain"]["slope_p95_deg"] > 0
     assert body["candidates"][0]["terrain"]["coverage_fraction"] == 1
+
+
+def test_roughness_limit_filters_candidates_independently_of_slope(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.candidates import run_mission
+
+    for name, limit in (("loose", 1000), ("strict", 0.001)):
+        request = mission(max_terrain_slope_degrees=None, max_terrain_roughness_m=limit)
+        run_mission(request, data_dir, tmp_path / name, base=MISSION_TINY, log=lambda _: None)
+    loose, strict = load(tmp_path / "loose"), load(tmp_path / "strict")
+    assert loose.candidates
+    assert strict.candidates == []
+    assert strict.summary.reasons["terrain_roughness_above_max"] > 0
+    assert all(
+        c.terrain is not None and c.terrain.roughness_p95_m is not None for c in loose.candidates
+    )
+
+
+@pytest.mark.parametrize("limit", [-1, float("inf"), float("nan")])
+def test_invalid_roughness_limits_are_rejected(limit: float) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        mission(max_terrain_roughness_m=limit)
+
+
+def test_rf_mission_keeps_los_and_saves_nominal_communications(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.candidates import run_mission
+
+    run_mission(mission(), data_dir, tmp_path, base=MISSION_TINY, log=lambda _: None)
+    doc = load(tmp_path)
+    assert doc.candidates
+    first = doc.candidates[0].model_dump()
+    rf = first["rf"]
+    assert rf["fraction"] <= first["earth"]["fraction"]
+    assert rf["longest_blackout_hours"] >= first["earth"]["longest_blackout_hours"]
+    assert rf["required_ebn0_db"] == pytest.approx(0.7458859875)
+    assert rf["rx_required_dbw"] == pytest.approx(-144.1441360426)
+    assert rf["evaluation_hours"] == 168
+    assert rf["available_hours"] == pytest.approx(168 * rf["fraction"], abs=0.0001)
+    assert doc.config["rf"] is not None
+    assert first["score"]["communication_basis"] == "nominal_rf"
+
+
+def test_rf_power_changes_qualification_but_not_earth_los(data_dir: Path, tmp_path: Path) -> None:
+    import numpy as np
+
+    from lunar_margin.pipeline.candidates import run_mission
+
+    baseline = mission(mission_duration_days=28, min_communication_fraction=0.01)
+    weak = mission(
+        mission_duration_days=28, min_communication_fraction=0.01, rf={"tx_power_w": 1e-6}
+    )
+    for name, request in (("baseline", baseline), ("weak", weak)):
+        run_mission(request, data_dir, tmp_path / name, base=MISSION_TINY, log=lambda _: None)
+    normal, poor = load(tmp_path / "baseline"), load(tmp_path / "weak")
+    assert normal.candidates
+    assert poor.candidates == []
+    assert poor.summary.reasons["rf_fraction_below_min"] > 0
+    with np.load(tmp_path / "weak" / "sites.npz") as sites:
+        assert np.nanmax(sites["earth_fraction"]) > 0
+        assert np.nanmax(sites["rf_fraction"]) == 0
+
+
+def test_rf_ranking_rewards_both_availability_and_shorter_outages(data_dir: Path) -> None:
+    from dataclasses import replace
+
+    import numpy as np
+
+    from lunar_margin.engine.candidates.field import FieldSettings, MetricField
+    from lunar_margin.engine.candidates.grid import SitePoints
+    from lunar_margin.engine.rf import RFScenario
+
+    def measured(sites: SitePoints, _: FieldSettings) -> MetricField:
+        # Controlled public field provider: identical sun and LOS, different RF continuity.
+        n = len(sites)
+        fraction, outage = np.full(n, 0.75), np.full(n, 72.0)
+        fraction[0], outage[0] = 0.5, 24.0
+        return replace(
+            MetricField.missing(n),
+            computed=np.ones(n, dtype=np.bool_),
+            horizon_complete=np.ones(n, dtype=np.bool_),
+            sun_fraction=np.full(n, 0.5),
+            earth_fraction=np.ones(n),
+            rf_fraction=fraction,
+            rf_longest_blackout_h=outage,
+        )
+
+    config = SMALL.model_copy(
+        update={
+            "coarse_spacing_m": None,
+            "min_separation_m": 0,
+            "top_k": 100,
+            "rf": RFScenario(),
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC), end=datetime(2027, 1, 5, tzinfo=UTC)
+            ),
+        }
+    )
+    result = run_search(config, data_dir, field_provider=measured, log=lambda _: None)
+    best = int(np.flatnonzero(result.rank == 1)[0])
+    assert result.field.rf_fraction[best] == 0.5
+    assert result.field.rf_longest_blackout_h[best] == 24
+    assert result.scores.total[best] == pytest.approx(0.5625)
+    assert np.nanmin(result.scores.total) == pytest.approx(0.5)
+
+
+def test_rf_outage_uses_exact_window_including_partial_last_sample(data_dir: Path) -> None:
+    from lunar_margin.engine.rf import RFScenario
+
+    config = SMALL.model_copy(
+        update={
+            "rf": RFScenario(tx_power_w=1e-6),
+            "coarse_spacing_m": None,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 1, 1, 10, tzinfo=UTC),
+                step_minutes=30,
+            ),
+        }
+    )
+    result = run_search(config, data_dir, log=lambda _: None)
+    assert result.field.rf_longest_blackout_h == pytest.approx(7 / 6)
+    assert result.field.rf_fraction == pytest.approx(0)
+
+
+def test_missing_rf_metrics_cannot_pass_an_enabled_communications_filter(data_dir: Path) -> None:
+    from dataclasses import replace
+
+    import numpy as np
+
+    from lunar_margin.engine.candidates.field import FieldSettings, MetricField
+    from lunar_margin.engine.candidates.grid import SitePoints
+    from lunar_margin.engine.rf import RFScenario
+
+    def incomplete(sites: SitePoints, _: FieldSettings) -> MetricField:
+        n = len(sites)
+        return replace(
+            MetricField.missing(n),
+            computed=np.ones(n, dtype=np.bool_),
+            sun_fraction=np.ones(n),
+            sun_longest_dark_h=np.zeros(n),
+        )
+
+    config = SMALL.model_copy(
+        update={
+            "coarse_spacing_m": None,
+            "rf": RFScenario(),
+            "thresholds": Thresholds(max_sun_dark_hours=24, min_rf_fraction=0.5),
+        }
+    )
+    result = run_search(config, data_dir, field_provider=incomplete, log=lambda _: None)
+    assert result.summary.counts["eligible"] == 0
+    assert result.summary.reasons["rf_incomplete"] > 0
+
+
+def test_search_reuses_saved_3m_horizons_for_another_date(data_dir: Path, tmp_path: Path) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 2,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    first_log: list[str] = []
+    first = run_search(config, root, log=first_log.append)
+    later = config.model_copy(
+        update={
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 3, tzinfo=UTC),
+                end=datetime(2027, 1, 4, tzinfo=UTC),
+                step_minutes=120,
+            )
+        }
+    )
+    next_log: list[str] = []
+    second = run_search(later, root, log=next_log.append)
+    count = first.summary.counts["computed"]
+    assert count > 0
+    assert f"수평선 캐시: 재사용 0, 새로 저장 {count}" in first_log
+    assert f"수평선 캐시: 재사용 {count}, 새로 저장 0" in next_log
+    assert second.summary.counts["computed"] == count
+
+
+def test_completed_horizon_chunks_survive_an_interrupted_search(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "roi": Roi(max_lat_deg=-89.9),
+            "observer_height_m": 3.0,
+            "workers": 1,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+
+    def interrupted(stage: str, done: int, total: int) -> None:
+        if stage == "fine" and done >= 64:
+            raise RuntimeError("interrupted after a completed chunk")
+
+    with pytest.raises(RuntimeError, match="interrupted after"):
+        run_search(config, root, progress=interrupted, log=lambda _: None)
+    messages: list[str] = []
+    result = run_search(config, root, log=messages.append)
+    remaining = result.summary.counts["computed"] - 64
+    assert remaining > 0
+    assert f"수평선 캐시: 재사용 64, 새로 저장 {remaining}" in messages
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"observer_height_m": 0.0},
+        {"max_range_m": 1000.0},
+        {"fine_azimuth_step_deg": 2.0},
+    ],
+)
+def test_horizon_cache_does_not_mix_height_range_or_azimuth_precision(
+    data_dir: Path, tmp_path: Path, changed: dict[str, float]
+) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 1,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    run_search(config, root, log=lambda _: None)
+    messages: list[str] = []
+    result = run_search(config.model_copy(update=changed), root, log=messages.append)
+    count = result.summary.counts["computed"]
+    assert f"수평선 캐시: 재사용 0, 새로 저장 {count}" in messages
+
+
+def test_parallel_search_reuses_overlap_and_adds_new_horizons(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    import numpy as np
+
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 2,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    first = run_search(config, root, log=lambda _: None)
+    larger = config.model_copy(update={"roi": Roi(max_lat_deg=-89.9)})
+    messages: list[str] = []
+    second = run_search(larger, root, log=messages.append)
+    reused, total = first.summary.counts["computed"], second.summary.counts["computed"]
+    assert total > 64
+    assert f"수평선 캐시: 재사용 {reused}, 새로 저장 {total - reused}" in messages
+    warm_log: list[str] = []
+    warm = run_search(larger, root, log=warm_log.append)
+    assert f"수평선 캐시: 재사용 {total}, 새로 저장 0" in warm_log
+    np.testing.assert_array_equal(second.field.sun_fraction, warm.field.sun_fraction)
+    np.testing.assert_array_equal(second.field.earth_fraction, warm.field.earth_fraction)
+    np.testing.assert_array_equal(second.rank, warm.rank)

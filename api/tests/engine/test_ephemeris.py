@@ -1,9 +1,10 @@
-from datetime import UTC, datetime
+import math
+from datetime import UTC, datetime, timedelta, timezone
 
 import numpy as np
 import pytest
 
-from lunar_margin.engine.ephemeris import body_azel, utc_range
+from lunar_margin.engine.ephemeris import body_azel, sun_direction, utc_range
 
 START = datetime(2027, 1, 1, tzinfo=UTC)
 
@@ -147,3 +148,39 @@ def test_concurrent_requests_do_not_corrupt_each_other() -> None:
         results = list(pool.map(work, range(64)))
 
     assert all(results)
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_the_sun_direction_is_where_the_south_pole_sees_the_sun() -> None:
+    # 달에서 태양을 향하는 방향은 지점과 무관하다 (태양이 멀어 시차는 0.001° 미만). 남극에서 본
+    # 방위각·고도로 되짚은 방향과 같아야 한다: 남극의 위쪽은 -Z, 북(경도 0° 쪽)은 +X, 동은 +Y
+    moment = datetime(2027, 1, 10, tzinfo=UTC)
+
+    x, y, z = sun_direction(moment)
+
+    azimuth, elevation = body_azel(
+        "SUN", -90.0, 0.0, utc_range(moment, moment + timedelta(minutes=1), 1)
+    )
+    az, el = math.radians(azimuth[0]), math.radians(elevation[0])
+    assert math.hypot(x, y, z) == pytest.approx(1.0, abs=1e-9)
+    assert x == pytest.approx(math.cos(el) * math.cos(az), abs=1e-4)
+    assert y == pytest.approx(math.cos(el) * math.sin(az), abs=1e-4)
+    assert z == pytest.approx(-math.sin(el), abs=1e-4)
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_the_sun_direction_follows_the_clock_not_the_time_zone() -> None:
+    utc = sun_direction(datetime(2027, 1, 10, tzinfo=UTC))
+    seoul = sun_direction(datetime(2027, 1, 10, 9, tzinfo=timezone(timedelta(hours=9))))
+    an_hour_later = sun_direction(datetime(2027, 1, 10, 1, tzinfo=UTC))
+
+    assert seoul == utc
+    # 태양은 달 하늘을 한 삭망월(29.5일)에 한 바퀴 돈다: 한 시간에 0.51°
+    turned = math.degrees(math.acos(sum(a * b for a, b in zip(utc, an_hour_later, strict=True))))
+    assert turned == pytest.approx(0.51, abs=0.02)
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_the_sun_direction_needs_a_time_zone() -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        sun_direction(datetime(2027, 1, 10))

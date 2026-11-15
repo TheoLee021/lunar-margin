@@ -23,6 +23,18 @@ class EarthMetrics(_Model):
     mean_elevation_deg: float | None
 
 
+class RFMetrics(_Model):
+    """Duration-weighted nominal DTE communication results."""
+
+    fraction: float | None
+    longest_blackout_hours: float | None
+    min_link_margin_db: float | None
+    required_ebn0_db: float
+    rx_required_dbw: float
+    evaluation_hours: float
+    available_hours: float | None
+
+
 class Eligibility(_Model):
     status: Literal["eligible", "excluded", "unevaluated"]
     failed: list[str]  # 위반한 조건
@@ -30,6 +42,8 @@ class Eligibility(_Model):
 
 
 class Score(_Model):
+    communication_component: float | None = None
+    communication_basis: Literal["earth_los", "nominal_rf"] = "earth_los"
     total: float | None
     sun_component: float | None
     earth_component: float | None
@@ -49,6 +63,7 @@ class Selection(_Model):
 
 
 class TerrainMetrics(_Model):
+    roughness_p95_m: float | None = None
     slope_p95_deg: float | None
     coverage_fraction: float | None
     assessment_radius_m: float = 250.0
@@ -67,6 +82,7 @@ class CandidateRecord(_Model):
     y_m: float
     grid_spacing_m: float
     terrain: TerrainMetrics | None = None  # Absent on historical runs or when not requested.
+    rf: RFMetrics | None = None
     sun: SunMetrics
     earth: EarthMetrics
     eligibility: Eligibility

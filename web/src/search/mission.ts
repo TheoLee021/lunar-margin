@@ -9,10 +9,12 @@ import type {
 // 비운 한도와 체크하지 않은 항목은 0 이 아니라 null 이다.
 
 export interface MissionFormValues {
+  minCommunicationPercent?: string
   landingDate: string
   durationDays: string
   maxDarknessHours: string
   maxBlackoutHours: string
+  maxRoughnessM?: string
   slopeEnabled: boolean
   slopeDegrees: string
   priority: Priority
@@ -34,10 +36,12 @@ export const DEFAULT_MISSION_VALUES: MissionFormValues = {
 }
 
 export type MissionField =
+  | 'minCommunicationPercent'
   | 'landingDate'
   | 'durationDays'
   | 'maxDarknessHours'
   | 'maxBlackoutHours'
+  | 'maxRoughnessM'
   | 'slopeDegrees'
   | 'observerHeightM'
 export type MissionErrors = Partial<Record<MissionField, string>>
@@ -119,6 +123,22 @@ export function parseMissionForm(values: MissionFormValues): MissionParse {
     errors.maxBlackoutHours =
       '0 이상의 숫자를 입력하세요 (비워 두면 조건 없음).'
 
+  const roughness = optionalNonNegative(values.maxRoughnessM ?? '')
+  if (
+    roughness === undefined ||
+    (roughness !== null && !Number.isFinite(roughness))
+  )
+    errors.maxRoughnessM = '지역 거칠기는 0 이상의 유한한 숫자(m)여야 합니다.'
+  const minCommunication = optionalNonNegative(
+    values.minCommunicationPercent ?? '',
+  )
+  if (
+    minCommunication === undefined ||
+    (minCommunication !== null &&
+      (!Number.isFinite(minCommunication) || minCommunication > 100))
+  )
+    errors.minCommunicationPercent = '0~100 사이의 비율(%)을 입력하세요.'
+
   let slope: number | null = null
   if (values.slopeEnabled) {
     const text = values.slopeDegrees.trim()
@@ -146,11 +166,15 @@ export function parseMissionForm(values: MissionFormValues): MissionParse {
   return {
     ok: true,
     request: {
+      ...(minCommunication == null
+        ? {}
+        : { min_communication_fraction: minCommunication / 100 }),
       landing_date: values.landingDate.trim(),
       mission_duration_days: duration,
       max_continuous_darkness_hours: darkness,
       max_communication_blackout_hours: blackout,
       max_terrain_slope_degrees: slope,
+      ...(roughness != null ? { max_terrain_roughness_m: roughness } : {}),
       search_region: 'south',
       optimization_priority: values.priority,
       observer_height_m: observer,
@@ -162,12 +186,19 @@ export function parseMissionForm(values: MissionFormValues): MissionParse {
 export function missionRequestJson(request: MissionRequest): string {
   return JSON.stringify(
     {
+      ...(request.rf === undefined ? {} : { rf: request.rf }),
+      ...(request.min_communication_fraction == null
+        ? {}
+        : { min_communication_fraction: request.min_communication_fraction }),
       landing_date: request.landing_date,
       mission_duration_days: request.mission_duration_days,
       max_continuous_darkness_hours: request.max_continuous_darkness_hours,
       max_communication_blackout_hours:
         request.max_communication_blackout_hours,
       max_terrain_slope_degrees: request.max_terrain_slope_degrees,
+      ...(request.max_terrain_roughness_m != null
+        ? { max_terrain_roughness_m: request.max_terrain_roughness_m }
+        : {}),
       search_region: request.search_region,
       optimization_priority: request.optimization_priority,
       observer_height_m: request.observer_height_m,
@@ -229,12 +260,32 @@ function limitText(hours: number | null): string {
 export function missionSummaryItems(
   mission: MissionRequest,
   thresholds?: SearchThresholds,
+  rfApplied = false,
 ): { label: string; value: string }[] {
   const preview = windowPreview(
     mission.landing_date,
     mission.mission_duration_days,
   )
   return [
+    ...(rfApplied && mission.rf
+      ? [
+          {
+            label: '명목 RF 조건',
+            value: `${mission.rf.frequency_hz / 1e9} GHz · ${mission.rf.tx_power_w} W · ${mission.rf.information_rate_bps / 1000} kbps · 목표 ${mission.rf.target_margin_db} dB`,
+          },
+        ]
+      : []),
+    ...(mission.min_communication_fraction == null
+      ? []
+      : [
+          {
+            label: '최소 RF 통신 가능 비율',
+            value:
+              thresholds?.min_rf_fraction === mission.min_communication_fraction
+                ? `${mission.min_communication_fraction * 100}% 이상 (적용됨)`
+                : `${mission.min_communication_fraction * 100}% (적용되지 않음)`,
+          },
+        ]),
     { label: '탐색 영역', value: '달 남극' },
     { label: '착륙 날짜', value: mission.landing_date },
     {
@@ -249,7 +300,10 @@ export function missionSummaryItems(
       value: limitText(mission.max_continuous_darkness_hours),
     },
     {
-      label: '최대 통신 두절',
+      label:
+        thresholds?.max_rf_blackout_hours != null
+          ? '최대 RF 통신 두절'
+          : '최대 통신 두절',
       value: limitText(mission.max_communication_blackout_hours),
     },
     {
@@ -263,8 +317,22 @@ export function missionSummaryItems(
             : `${mission.max_terrain_slope_degrees}° (적용되지 않음)`,
     },
     {
+      label: '최대 지역 거칠기',
+      value:
+        mission.max_terrain_roughness_m == null
+          ? '지정하지 않음'
+          : thresholds?.max_terrain_roughness_m ===
+              mission.max_terrain_roughness_m
+            ? `${mission.max_terrain_roughness_m} m 이하 (250 m 지역 P95)`
+            : `${mission.max_terrain_roughness_m} m (적용되지 않음)`,
+    },
+    {
       label: '최적화 우선순위',
-      value: priorityLabel(mission.optimization_priority),
+      value: rfApplied
+        ? priorityLabel(mission.optimization_priority)
+            .replaceAll('지구 가시성', 'RF 통신')
+            .replaceAll('지구', 'RF 통신')
+        : priorityLabel(mission.optimization_priority),
     },
     {
       label: '관측·장비 높이',

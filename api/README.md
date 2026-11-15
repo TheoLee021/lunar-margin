@@ -13,7 +13,8 @@
 | 일조·지구 가시성 지표 (`engine/metrics.py`) | 완료 |
 | API `GET /analysis/illumination`, `GET /analysis/earth-visibility` | 완료 (`docs/api.md` 계약 반영) |
 | 착륙 후보지 탐색 (남극, 거친→세밀) | 구현 (`docs/candidates.md`) |
-| 오버레이 타일 사전 계산 (`/tiles/...`) | 미착수 |
+| 오버레이 타일 사전 계산 (`/tiles/...`) | 구현 (수평선 500 m, 경사 500·160·80 m + 후보 지역 20·5 m. `docs/api.md` Tiles 절) |
+| 햇빛 지도 `GET /sunlight/south-pole.png` (`engine/sunlight.py`) | 구현 (태양 방향별 80 m 지형 그림자, `docs/api.md` Sunlight 절) |
 | CI에서 SPICE 커널 캐시 | 미착수 (아래 "알려진 한계") |
 
 ## 빠른 시작
@@ -28,7 +29,7 @@ uv run fastapi dev src/lunar_margin/app/main.py  # http://localhost:8000
 curl "localhost:8000/analysis/illumination?lat=-89.45&lon=222&start=2027-01-01T00:00:00Z&end=2027-02-01T00:00:00Z"
 ```
 
-데이터는 `DATA_DIR`(기본 `api/data/`, git 제외)에 저장된다. 배포에서는 Railway Volume 경로로 지정한다.
+데이터는 `DATA_DIR`(기본 `api/data/`, git 제외)에 저장된다. 배포 설정은 아래 "배포 (Railway)".
 데이터가 없으면 분석 API는 `503`과 안내 메시지를 반환한다 (`/health`는 영향 없음).
 
 ```sh
@@ -37,11 +38,45 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 첫 `pytest` 실행은 데이터를 내려받는다(네트워크 필요).
 
+## 배포 (Railway)
+
+이미지에는 NASA 데이터가 들어 있지 않다. **영구 Volume과 `DATA_DIR`이 없으면** 데이터가 컨테이너 임시 디스크에 놓여 배포할 때마다 사라지고,
+분석 API는 `503 NASA data not found`, 전이 궤도 API는 `503 SPICE data missing`을 돌려준다.
+
+1. Volume을 서비스에 붙이고 마운트 경로를 `/data`로 둔다. 데이터가 약 700 MB(DEM 2개, SPICE, 수평선 테이블)라
+   Trial 플랜 한도(0.5 GB)에는 들어가지 않는다. Hobby 플랜에서 5 GB로 둔다 (요금은 실제 사용량 기준).
+2. 환경변수를 설정한다.
+
+   | 변수 | 값 |
+   | --- | --- |
+   | `DATA_DIR` | `/data` |
+   | `CORS_ORIGINS` | `https://lunar-margin.vercel.app` |
+   | `CORS_ORIGIN_REGEX` | Vercel PR Preview 도메인 (`.env.example` 참고) |
+   | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | 팀 Supabase 프로젝트 값 |
+   | `SUPABASE_BUCKET` | `landing-spot` |
+   | `PYTHON_CPU_COUNT` | 서비스의 vCPU 수 (현재 `8`) |
+   | `OPENBLAS_NUM_THREADS` | `1` |
+
+   컨테이너 안의 `os.cpu_count()`는 실제 할당(8 vCPU)이 아니라 호스트 CPU 수(48)를 돌려주고, 프로세스·스레드 한도는 1000이다.
+   마지막 두 변수가 없으면 후보지 탐색이 worker 48개를 띄우고 각자 OpenBLAS 스레드 48개를 만들다 한도에 걸려
+   `[Errno 32] Broken pipe`로 실패한다. 병렬화는 프로세스 단위로 하므로 BLAS 스레드는 1개면 된다.
+
+3. 처음 한 번 NASA 원천 데이터를 Volume에 받는다 (약 510 MB). 이미 있는 파일은 sha256만 확인하고 건너뛴다.
+
+   ```sh
+   railway link                                          # repo에서 한 번, 서비스 선택
+   railway ssh -- python -m lunar_margin.pipeline.fetch
+   ```
+
+4. 재배포한다. 수평선 테이블은 서버가 시작할 때 Storage에서 받는데, 그때 DEM이 없으면 건너뛰기 때문이다.
+
+확인: `railway ssh -- df -h /data`로 용량, `railway ssh -- ls /data/dem /data/spice /data/horizons`로 파일을 본다.
+
 ## 사용하는 NASA 데이터
 
 `uv run python -m lunar_margin.pipeline.fetch`가 `DATA_DIR`(기본 `api/data/`, git 제외)에 합계 약 501 MB를 받는다.
 크기와 sha256을 `manifest.json`에 기록하고, 다시 실행하면 손상된 파일을 검증해 새로 받는다.
-선정은 잠정이며 D 확정 대기다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
+선정은 잠정이며 아직 확정되지 않았다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
 
 | | 지형 데이터: LOLA 남극 DEM | 천체 위치 데이터: SPICE 커널 |
 | --- | --- | --- |
@@ -77,6 +112,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 수평선은 지점과 DEM으로만 정해지고 날짜·제약과 무관해서, 한 번 계산해 `DATA_DIR/horizons/`에 저장해 두고 이후 탐색이 읽는다 (약 210 MB, git 제외).
 `uv run python -m lunar_margin.pipeline.horizons`로 만든다. 자세한 내용은 [docs/candidates.md](../docs/candidates.md) 6a절.
+그다음 `uv run python -m lunar_margin.pipeline.overlay_tiles`가 이 테이블로 렌더링용 그림자·경사 타일(경사는 500 m 한 장 + 160 m·80 m 타일, 약 60 MB)을 `DATA_DIR/tiles/`에 굽는다. `pipeline.fetch --sfs`로 5 m 지역 DEM을 받아 두었으면 그 지역의 20 m·5 m 타일도 함께 굽는다 (`GET /tiles/...`, [docs/api.md](../docs/api.md) Tiles 절). `pipeline.fetch --wide`로 60°S까지의 240 m DEM을 받아 두었으면 넓은 구역의 경사(`normal-wide`, 13 MB)도 굽는다. 그것만 구우려면 `--wide-only`를 붙인다.
 
 만드는 데 20~50분이 걸려서, 한 번 만든 테이블은 Supabase Storage(비공개 버킷)로 공유한다.
 
@@ -85,7 +121,7 @@ uv run python -m lunar_margin.pipeline.horizons --upload     # 만든 테이블�
 uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 Storage에서 받기 (sha256 확인)
 ```
 
-`api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(기본 `horizon-tables`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
+`api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(팀 프로젝트는 `landing-spot`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
 
 **서버를 시작할 때 테이블이 없으면 위 설정이 있는 경우 자동으로 받는다** (백그라운드, 서버는 바로 뜬다). 배포에서는 `DATA_DIR`을 영구 Volume에 두면 다시 받지 않는다. `HORIZON_TABLE_DOWNLOAD_ON_START=false`로 끈다.
 
@@ -103,7 +139,7 @@ uv run python -m lunar_margin.pipeline.candidates --out out/candidates   # map.h
 
 - 거친 격자(2 km)로 먼저 훑고 유망한 영역만 500 m로 세밀화한다. 14코어에서 수 분~십수 분.
 - 수평선이 DEM 밖으로 나가는 지점은 `horizon_complete=false`로 표시한다. 합성 DEM 덕분에 ROI 전체가 DEM 안에 들어와서 이 표시는 거의 나오지 않는다.
-- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 D와 정한다.
+- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 정한다.
 
 ## 구조
 
@@ -147,7 +183,7 @@ src/lunar_margin/
 
 ## 예시 결과 (2027년 1년, 30분 간격)
 
-> 좌표는 **예시용 근사값**이다. 공식 착륙 후보지가 아니며, 데모 후보는 D가 정한다.
+> 좌표는 **예시용 근사값**이다. 공식 착륙 후보지가 아니며, 데모 후보는 아직 정해지지 않았다.
 
 | 지점 (lat, lon) | 일조율 | 최장 암흑(h) | 지구 가시율 | 최장 두절(h) |
 | --- | --- | --- | --- | --- |

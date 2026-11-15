@@ -46,6 +46,7 @@ const EarthMetricsSchema = z.object({
 
 // 후보 중심 250 m 원의 지역 지형. /analysis/site-assessment 도 같은 형태를 쓴다.
 export const TerrainSchema = z.object({
+  roughness_p95_m: z.number().nonnegative().nullable().optional(),
   slope_p95_deg: NullableNumber,
   coverage_fraction: z.number().min(0).max(1).nullable(),
   assessment_radius_m: z.number().positive(),
@@ -56,6 +57,16 @@ export const TerrainSchema = z.object({
 })
 export type Terrain = z.infer<typeof TerrainSchema>
 
+export const RFMetricsSchema = z.object({
+  fraction: NullableNumber,
+  longest_blackout_hours: NullableNumber,
+  min_link_margin_db: NullableNumber,
+  required_ebn0_db: z.number(),
+  rx_required_dbw: z.number(),
+  evaluation_hours: z.number().positive(),
+  available_hours: NullableNumber,
+})
+
 export const CandidateSchema = z.object({
   id: z.string(),
   rank: z.number(),
@@ -65,6 +76,7 @@ export const CandidateSchema = z.object({
   y_m: z.number(),
   grid_spacing_m: z.number(),
   terrain: TerrainSchema.nullable().optional(),
+  rf: RFMetricsSchema.nullable().optional(),
   sun: SunMetricsSchema,
   earth: EarthMetricsSchema,
   eligibility: z.object({
@@ -73,6 +85,8 @@ export const CandidateSchema = z.object({
     not_applied: z.array(z.string()),
   }),
   score: z.object({
+    communication_basis: z.enum(['earth_los', 'nominal_rf']).optional(),
+    communication_component: NullableNumber.optional(),
     total: NullableNumber,
     sun_component: NullableNumber,
     earth_component: NullableNumber,
@@ -90,16 +104,37 @@ export const CandidateSchema = z.object({
 export type Candidate = z.infer<typeof CandidateSchema>
 
 const ThresholdsSchema = z.object({
+  min_rf_fraction: NullableNumber.optional(),
+  max_rf_blackout_hours: NullableNumber.optional(),
   min_sun_fraction: NullableNumber,
   max_sun_dark_hours: NullableNumber,
   min_earth_fraction: NullableNumber,
   max_earth_blackout_hours: NullableNumber,
   max_terrain_slope_degrees: NullableNumber.optional(),
+  max_terrain_roughness_m: z.number().nonnegative().nullable().optional(),
 })
 export type SearchThresholds = z.infer<typeof ThresholdsSchema>
 
+export const RFScenarioSchema = z.object({
+  frequency_hz: z.number().positive(),
+  tx_power_w: z.number().positive(),
+  tx_gain_dbi: z.number(),
+  rx_gain_dbi: z.number(),
+  tx_system_loss_db: z.number().nonnegative(),
+  tx_pointing_loss_db: z.number().nonnegative(),
+  rx_pointing_loss_db: z.number().nonnegative(),
+  rx_waveguide_loss_db: z.number().nonnegative(),
+  system_noise_temp_k: z.number().positive(),
+  information_rate_bps: z.number().positive(),
+  implementation_loss_db: z.number().nonnegative(),
+  target_margin_db: z.number().nonnegative(),
+  required_esn0_db: z.number(),
+  eta_tot: z.number().positive(),
+})
+
 // SearchConfig 전체 중 화면이 쓰는 필드만 검증하고 나머지는 그대로 통과시킨다.
 const ConfigSchema = z.looseObject({
+  rf: RFScenarioSchema.nullable().optional(),
   roi: z.object({ min_lat_deg: z.number(), max_lat_deg: z.number() }),
   grid_spacing_m: z.number(),
   coarse_spacing_m: NullableNumber,
@@ -121,11 +156,14 @@ export const PrioritySchema = z.enum(['balanced', 'solar', 'earth'])
 export type Priority = z.infer<typeof PrioritySchema>
 
 export const MissionRequestSchema = z.object({
+  rf: RFScenarioSchema.optional(),
+  min_communication_fraction: NullableNumber.optional(),
   landing_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   mission_duration_days: z.number().int(),
   max_continuous_darkness_hours: NullableNumber,
   max_communication_blackout_hours: NullableNumber,
   max_terrain_slope_degrees: NullableNumber,
+  max_terrain_roughness_m: z.number().nonnegative().nullable().optional(),
   search_region: z.literal('south'),
   optimization_priority: PrioritySchema,
   observer_height_m: NullableNumber,

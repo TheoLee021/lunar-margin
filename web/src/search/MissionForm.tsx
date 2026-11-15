@@ -137,9 +137,39 @@ export function MissionForm({
     >
       <h2 className="text-lg font-semibold">임무 조건으로 후보지 찾기</h2>
       <p className="mt-2 text-sm text-neutral-400">
-        착륙일부터 임무 종료까지의 일조와 지구 가시성을 평가합니다. 날짜를
-        추천하는 기능은 아닙니다.
+        착륙일부터 임무 종료까지의 일조와 명목 RF 통신을 평가합니다. 지구
+        가시성은 지형 LOS 조건으로 사용합니다. 날짜를 추천하는 기능은 아닙니다.
       </p>
+      <details className="mt-3 text-xs text-neutral-400">
+        <summary className="cursor-pointer">
+          RF 기준 조건 · 23.17 GHz / 1 W / 230 kbps / 목표 마진 3 dB
+        </summary>
+        <p className="mt-2">
+          송신·수신 이득 33.2 / 71.1 dBi · 총 손실 1.3 dB · 잡음온도 512 K ·
+          구현 손실 3 dB · QPSK 1/4 (Es/N0 −2.35 dB, 효율 0.490243). 실제
+          지상국·운용 일정·대기·멀티패스는 반영하지 않습니다.
+        </p>
+        <p className="mt-2">
+          통신 점수 = (RF 가능 비율 + 1 − 최장 두절 / 임무 시간) / 2. 일조와
+          통신은 선택한 우선순위로 가중 평균합니다.
+        </p>
+        <label className="mt-3 flex max-w-xs flex-col gap-1 text-xs text-neutral-300">
+          최소 RF 통신 가능 비율 (%)
+          <input
+            className={inputClass}
+            disabled={submitting || active}
+            type="number"
+            min="0"
+            max="100"
+            step="any"
+            value={values.minCommunicationPercent ?? ''}
+            onChange={(event) =>
+              update('minCommunicationPercent', event.target.value)
+            }
+            placeholder="비우면 조건 없음"
+          />
+        </label>
+      </details>
       <label className="mt-4 flex items-center gap-2 text-sm text-cyan-200">
         <input
           type="checkbox"
@@ -181,12 +211,6 @@ export function MissionForm({
             </label>
           ))}
           <label className="flex flex-col gap-1 text-xs text-neutral-300">
-            탐색 영역
-            <select className={inputClass} value="south" onChange={() => {}}>
-              <option value="south">달 남극 (85°S 이남)</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-neutral-300">
             최적화 우선순위
             <select
               className={inputClass}
@@ -203,7 +227,7 @@ export function MissionForm({
             >
               <option value="balanced">균형</option>
               <option value="solar">일조 우선</option>
-              <option value="earth">지구 가시성 우선</option>
+              <option value="earth">RF 통신 우선</option>
             </select>
           </label>
           <div className="flex flex-col gap-2 text-xs text-neutral-300">
@@ -231,6 +255,22 @@ export function MissionForm({
               지점은 제외합니다. 착륙 안전 인증은 아닙니다.
             </span>
           </div>
+          <label className="flex flex-col gap-2 text-xs text-neutral-300">
+            최대 지역 거칠기 (m)
+            <input
+              aria-label="최대 지역 거칠기"
+              className={inputClass}
+              type="number"
+              min="0"
+              step="any"
+              value={values.maxRoughnessM ?? ''}
+              onChange={(event) => update('maxRoughnessM', event.target.value)}
+            />
+            <span>
+              250 m 지역의 거칠기 P95 · 400 m 창에서 전체 기울기를 제거한
+              RMS입니다. 비우면 거칠기로 필터링하지 않습니다.
+            </span>
+          </label>
           <div className="flex flex-col gap-2 text-xs text-neutral-300">
             <label>
               <input

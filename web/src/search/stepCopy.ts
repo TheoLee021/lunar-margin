@@ -56,6 +56,14 @@ function limitHours(hours: number): string {
 /** 정해진 임계값만 문장으로. 비어 있으면 빈 배열이다. */
 export function thresholdLines(thresholds: SearchThresholds): string[] {
   const lines: string[] = []
+  if (thresholds.min_rf_fraction != null)
+    lines.push(
+      `RF 통신 가능 비율 ${fractionText(thresholds.min_rf_fraction)} 이상`,
+    )
+  if (thresholds.max_rf_blackout_hours != null)
+    lines.push(
+      `RF 최장 두절 ${limitHours(thresholds.max_rf_blackout_hours)} 이하`,
+    )
   if (thresholds.min_sun_fraction !== null)
     lines.push(`일조율 ${fractionText(thresholds.min_sun_fraction)} 이상`)
   if (thresholds.max_sun_dark_hours !== null)
@@ -64,13 +72,20 @@ export function thresholdLines(thresholds: SearchThresholds): string[] {
     lines.push(
       `지구 가시율 ${fractionText(thresholds.min_earth_fraction)} 이상`,
     )
-  if (thresholds.max_earth_blackout_hours !== null)
+  if (
+    thresholds.max_earth_blackout_hours !== null &&
+    thresholds.max_rf_blackout_hours == null
+  )
     lines.push(
       `최장 통신 두절 ${limitHours(thresholds.max_earth_blackout_hours)} 이하`,
     )
   if (thresholds.max_terrain_slope_degrees != null)
     lines.push(
       `250 m 지역 경사 P95 ${thresholds.max_terrain_slope_degrees}° 이하 (DEM 표본 100%)`,
+    )
+  if (thresholds.max_terrain_roughness_m != null)
+    lines.push(
+      `250 m 지역 거칠기 P95 ${thresholds.max_terrain_roughness_m} m 이하 (DEM 표본 100%)`,
     )
   return lines
 }
@@ -128,7 +143,7 @@ export function stepContent(
       const sampled = count(c, 'coarse_sampled')
       return {
         title: '2. 유망한 곳만 세밀화',
-        what: `조건을 통과한 거친 점은 점수(일조율과 지구 가시율의 가중 평균) 순으로, 조건 미달인 점은 한도에 가까운 순으로 검토합니다. 좁은 유망 지점을 놓치지 않도록 미달 지점도 포함해 상위 ${Math.round(config.refine_fraction * 100)}%를 고르고, 그 주변만 ${grid} 간격으로 다시 계산하기로 합니다. 지도의 주황색이 다시 계산할 영역입니다.`,
+        what: `조건을 통과한 거친 점은 점수(일조율과 ${config.rf ? 'RF 가능 비율·최장 두절로 계산한 통신 성분' : '지구 가시율'}의 가중 평균) 순으로, 조건 미달인 점은 한도에 가까운 순으로 검토합니다. 좁은 유망 지점을 놓치지 않도록 미달 지점도 포함해 상위 ${Math.round(config.refine_fraction * 100)}%를 고르고, 그 주변만 ${grid} 간격으로 다시 계산하기로 합니다. 지도의 주황색이 다시 계산할 영역입니다.`,
         why: '가능성이 낮은 곳에 계산 시간을 쓰지 않고, 유망한 곳에 집중해서 후보 위치를 더 정확하게 찾기 위해서입니다.',
         numbers: [
           { label: '세밀화로 고른 거친 점', value: countText(promoted) },
@@ -172,7 +187,7 @@ export function stepContent(
           lines.length === 0
             ? '임계값이 아직 정해지지 않아 계산에 성공한 모든 점이 적격입니다. 초록이 적격, 빨강이 제외, 회색이 판정 불가입니다. 분포를 보고 임계값을 정하면 이 단계에서 걸러집니다.'
             : `다음 조건을 모두 만족하는 점만 적격입니다: ${lines.join(', ')}. 초록이 적격, 빨강이 제외, 회색이 판정 불가입니다.`,
-        why: '조건은 "반드시 지켜야 하는 것"이고 점수는 "높을수록 좋은 것"이라 따로 다룹니다. 지형 경사 조건은 DEM 표본이 불완전하거나 값을 계산하지 못하면 제외합니다. 다른 결측 지표는 0으로 치지 않고 적용하지 못한 조건으로 기록합니다.',
+        why: '조건은 "반드시 지켜야 하는 것"이고 점수는 "높을수록 좋은 것"이라 따로 다룹니다. 지형 경사·거칠기 조건은 DEM 표본이 불완전하거나 값을 계산하지 못하면 제외합니다. 다른 결측 지표는 0으로 치지 않고 적용하지 못한 조건으로 기록합니다.',
         numbers: [
           { label: '적격', value: countText(count(c, 'eligible')) },
           { label: '제외', value: countText(count(c, 'excluded')) },
@@ -203,7 +218,9 @@ export function stepContent(
           { label: '최소 간격', value: spacingText(config.min_separation_m) },
           { label: '후보 수 한도(Top-K)', value: `${config.top_k}개` },
           {
-            label: '점수 가중치(일조 : 지구)',
+            label: config.rf
+              ? '점수 가중치(일조 : RF 통신)'
+              : '점수 가중치(일조 : 지구)',
             value: `${config.weights.sun} : ${config.weights.earth}`,
           },
         ],

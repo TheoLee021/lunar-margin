@@ -158,3 +158,27 @@ def test_fetch_all_rejects_unknown_dem_names(tmp_path: Path) -> None:
         fetch_all(tmp_path, dem="nope")
     with pytest.raises(ValueError, match="unknown DEM"):
         fetch_all(tmp_path, fallback_dem="nope")
+
+
+def test_fetch_wide_downloads_the_dem_that_reaches_60_degrees_south(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.fetch import fetch_wide
+
+    calls = _recorded_fetch(monkeypatch)
+
+    fetch_wide(tmp_path)
+
+    assert calls == [("ldem_60s_240m_float.img", "dem"), ("ldem_60s_240m_float.lbl", "dem")]
+
+
+def test_fetch_all_does_not_download_the_wide_dem(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.fetch import fetch_all
+
+    calls = _recorded_fetch(monkeypatch)
+
+    fetch_all(tmp_path)
+
+    assert not any("60s_240m" in name for name, _ in calls)

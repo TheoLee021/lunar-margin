@@ -5,7 +5,12 @@ import {
   getJson,
   type RequestOptions,
 } from './client'
-import { MissionRequestSchema, runPath } from './candidates'
+import {
+  MissionRequestSchema,
+  runPath,
+  fetchRunStatus,
+  type RunStatus,
+} from './candidates'
 
 export const DeliverySchema = z.enum(['orbit', 'surface', 'rover_delivery'])
 export type Delivery = z.infer<typeof DeliverySchema>
@@ -55,6 +60,16 @@ export const RunPricesSchema = z
     landing_date: z.iso.date(),
     mission_duration_days: z.number().int().positive(),
     grid_spacing_m: z.literal(500),
+    slope_policy: z
+      .object({
+        basis: z.literal('saved_search_eligibility'),
+        max_slope_degrees: z.number().positive().max(90).nullable(),
+        statistic: z.literal('p95'),
+        assessment_radius_m: z.number().positive(),
+        slope_baseline_m: z.number().positive(),
+      })
+      .nullable()
+      .optional(),
     counts: Counts,
     mean: PriceSchema.nullable(),
     cells: z.array(
@@ -133,31 +148,97 @@ const CalendarStartedSchema = z.object({
   cached: z.boolean(),
 })
 
+const BusyCalendarSchema = z.object({
+  detail: z.object({
+    message: z.string(),
+    running_run_id: z.string().regex(/^[A-Za-z0-9_-]{1,120}$/),
+  }),
+})
+
+function waitForWorker(signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
+      resolve()
+    }, 1000)
+    if (signal?.aborted) abort()
+    else signal?.addEventListener('abort', abort, { once: true })
+  })
+}
+
+/** Preserve the requested dates while an unrelated worker holds the search lock. */
 export async function startCalendar(
   input: CalendarInput,
-  { baseUrl = DEFAULT_BASE_URL, fetchFn = fetch, signal }: RequestOptions = {},
-) {
-  const response = await fetchFn(`${baseUrl}/pricing/calculate`, {
-    method: 'POST',
+  {
+    baseUrl = DEFAULT_BASE_URL,
+    fetchFn = fetch,
     signal,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(CalendarInputSchema.parse(input)),
-  })
-  if (!response.ok)
-    throw new ApiError(
-      `날짜별 일괄 계산을 시작하지 못했습니다 (${response.status}). ${await response.text()}`,
-      response.status,
-    )
-  const result = CalendarStartedSchema.parse(await response.json())
-  if (
-    result.run_ids.length !== input.landing_dates.length ||
-    new Set(result.run_ids).size !== result.run_ids.length
-  )
-    throw new ApiError(
-      '일괄 계산 응답의 날짜 개수가 요청과 일치하지 않습니다.',
-      response.status,
-    )
-  return result
+    onBusy,
+  }: RequestOptions & {
+    onBusy?: (status: RunStatus | null) => void
+  } = {},
+) {
+  const body = JSON.stringify(CalendarInputSchema.parse(input))
+  try {
+    while (true) {
+      signal?.throwIfAborted()
+      const response = await fetchFn(`${baseUrl}/pricing/calculate`, {
+        method: 'POST',
+        signal,
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+      if (response.status === 409) {
+        const busy = BusyCalendarSchema.safeParse(
+          await response.json().catch(() => null),
+        )
+        if (!busy.success)
+          throw new ApiError(
+            '다른 탐색의 대기 상태를 확인하지 못했습니다.',
+            409,
+          )
+        const runId = busy.data.detail.running_run_id
+        while (true) {
+          const status = await fetchRunStatus(runId, {
+            baseUrl,
+            fetchFn,
+            signal,
+          })
+          if (status.run_id !== runId)
+            throw new ApiError(
+              '대기 중인 탐색 응답이 요청과 일치하지 않습니다.',
+              200,
+            )
+          if (status.state !== 'running' && status.state !== 'queued') break
+          onBusy?.(status)
+          await waitForWorker(signal)
+        }
+        onBusy?.(null)
+        continue
+      }
+      if (!response.ok)
+        throw new ApiError(
+          `날짜별 일괄 계산을 시작하지 못했습니다 (${response.status}). ${await response.text()}`,
+          response.status,
+        )
+      const result = CalendarStartedSchema.parse(await response.json())
+      if (
+        result.run_ids.length !== input.landing_dates.length ||
+        new Set(result.run_ids).size !== result.run_ids.length
+      )
+        throw new ApiError(
+          '일괄 계산 응답의 날짜 개수가 요청과 일치하지 않습니다.',
+          response.status,
+        )
+      return result
+    }
+  } finally {
+    onBusy?.(null)
+  }
 }
 
 export async function fetchCalendar(
@@ -198,18 +279,21 @@ export async function fetchCalendar(
   return result
 }
 
-export function fetchGridPrices(
+export async function fetchGridPrices(
   runId: string,
   mass: number,
   delivery: Delivery,
   options?: RequestOptions,
 ) {
   runPath(runId) // Validate the identifier using the shared contract.
-  return getJson(
+  const result = await getJson(
     `/pricing/runs/${runId}?mass_kg=${mass}&delivery=${delivery}&include_cells=true`,
     RunPricesSchema,
     options,
   )
+  if (result.run_id !== runId)
+    throw new ApiError('가격 응답의 탐색 실행이 요청과 일치하지 않습니다.', 200)
+  return result
 }
 
 export function formatPrice(usd: number): string {

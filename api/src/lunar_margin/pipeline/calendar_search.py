@@ -42,7 +42,17 @@ def run_search_batch(
         raise ValueError("batch requires matching terrain and grid configuration")
     table = find_table(data_dir / TABLES_DIR, table_spec_for(base, data_dir))
     if table is None:
-        raise ValueError("Download the matching horizon table before calculating five dates")
+        log("전체 수평선 테이블 없음: 날짜별로 탐색하며 지점별 수평선 캐시를 공유합니다.")
+        return [
+            run_search(
+                config,
+                data_dir,
+                log=log,
+                progress=progress,
+                extra_warnings=None if extra_warnings is None else extra_warnings[i],
+            )
+            for i, config in enumerate(configs)
+        ]
     pairs = resolve_dems(base, data_dir).pairs
     dem = open_dem(pairs)
     load_kernels(data_dir / "spice")
@@ -73,7 +83,12 @@ def run_search_batch(
                 config.thresholds,
                 exclude_incomplete_horizon=config.exclude_incomplete_horizon,
             )
-            scores = score_sites(field, config.weights)
+            scores = score_sites(
+                field,
+                config.weights,
+                rf=config.rf is not None,
+                duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+            )
             promoted = promotion_mask(
                 field, filtered, scores, config.thresholds, config.refine_fraction
             )

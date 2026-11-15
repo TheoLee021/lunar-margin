@@ -126,3 +126,95 @@ def test_dem_gap_near_the_site_is_reported_as_partial_coverage(
     terrain = response.json()["terrain"]
     assert 0.0 < terrain["coverage_fraction"] < 1.0
     assert terrain["slope_p95_deg"] is not None
+
+
+def test_solar_continuity_caps_a_partial_sample_to_the_requested_window() -> None:
+    from datetime import timedelta
+
+    def daylight(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
+        count = math.ceil((query.end - query.start).total_seconds() / (query.step_minutes * 60))
+        return SiteAnalysis(
+            metrics=VisibilityMetrics(1.0, 0.0, 1.0, 1.0),
+            horizon=HorizonProfile(np.array([0.0, 180.0]), np.array([0.0, 0.0])),
+            times=[query.start + timedelta(minutes=i * query.step_minutes) for i in range(count)],
+            body_azimuth_deg=np.zeros(count),
+            body_elevation_deg=np.ones(count),
+            visible=np.ones(count, dtype=np.bool_),
+            step_minutes=query.step_minutes,
+        )
+
+    app = create_app(Settings())
+    app.dependency_overrides[get_analyzer] = lambda: daylight
+    app.dependency_overrides[get_dem] = lambda: make_dem(np.zeros((N, N)))
+    response = TestClient(app).get(
+        "/analysis/site-assessment",
+        params={
+            **PARAMS,
+            "end": "2027-01-01T00:10:00Z",
+            "step_minutes": 30,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["solar_continuity"] == {
+        "longest_sun_visible_hours": pytest.approx(1 / 6),
+        "visibility_transitions": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("pattern", "duration", "longest", "transitions"),
+    [
+        ("DVVV", 100, 70 / 60, 1),
+        ("VVDV", 100, 1.0, 2),
+        ("DDDD", 100, 0.0, 0),
+        ("VVVV", 100, 100 / 60, 0),
+        ("VDVD", 120, 0.5, 3),
+    ],
+)
+def test_solar_continuity_counts_partial_runs_and_transitions(
+    pattern: str, duration: int, longest: float, transitions: int
+) -> None:
+    from datetime import timedelta
+
+    def measured(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
+        mask = np.array([c == "V" for c in pattern], dtype=np.bool_)
+        return SiteAnalysis(
+            metrics=METRICS[kind],
+            horizon=HorizonProfile(np.array([0.0, 180.0]), np.zeros(2)),
+            times=[query.start + timedelta(minutes=i * 30) for i in range(len(mask))],
+            body_azimuth_deg=np.zeros(len(mask)),
+            body_elevation_deg=np.where(mask, 1.0, -1.0),
+            visible=mask,
+            step_minutes=30,
+        )
+
+    app = create_app(Settings())
+    app.dependency_overrides[get_analyzer] = lambda: measured
+    app.dependency_overrides[get_dem] = lambda: make_dem(np.zeros((N, N)))
+    end = datetime(2027, 1, 1, tzinfo=UTC) + timedelta(minutes=duration)
+    response = TestClient(app).get(
+        "/analysis/site-assessment",
+        params={
+            **PARAMS,
+            "end": end.isoformat(),
+            "step_minutes": 30,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["solar_continuity"] == {
+        "longest_sun_visible_hours": pytest.approx(longest),
+        "visibility_transitions": transitions,
+    }
+
+
+def test_candidate_summary_includes_separate_sun_and_earth_clearance(
+    client_for: Callable[[PolarDem], TestClient],
+) -> None:
+    client = client_for(make_dem(np.zeros((N, N))))
+    response = client.get("/analysis/site-assessment", params=PARAMS)
+    assert response.status_code == 200
+    # This fixture's elevations are below its terrain horizon.
+    assert response.json()["terrain_clearance"] == {
+        "sun_visible_p10_deg": None,
+        "earth_visible_p10_deg": None,
+    }

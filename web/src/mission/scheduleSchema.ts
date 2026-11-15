@@ -3,6 +3,11 @@ import { z } from 'zod'
 export const DateSchema = z.iso.date()
 export const ScheduleSchema = z
   .object({
+    launchId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,160}$/)
+      .nullable()
+      .optional(),
     departure: DateSchema,
     landing: DateSchema,
     duration: z.union([z.literal(7), z.literal(14), z.literal(28)]),
