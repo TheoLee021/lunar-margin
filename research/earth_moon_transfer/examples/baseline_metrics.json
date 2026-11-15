@@ -1,0 +1,56 @@
+{
+  "model": "Earth-centered 3D gravity: Earth + inclined circular Moon + indirect term",
+  "reference_epoch": "Day 0 (phase is optimized; NOT a real calendar epoch)",
+  "parking_orbit_altitude_km": 200,
+  "perilune_target_altitude_km": 100,
+  "perilune_actual_altitude_km": 100.0000000002633,
+  "lunar_phase_at_departure_deg": 108.3409972782723,
+  "travel_time_days": 5.287571555886554,
+  "moon_model_period_days": 27.28460580199865,
+  "tli_delta_v_km_s": 3.1313451651000497,
+  "loi_delta_v_km_s": 0.8183334106798605,
+  "total_impulsive_delta_v_km_s": 3.9496785757799104,
+  "lunar_relative_speed_before_loi_km_s": 2.4518375360674476,
+  "lunar_circular_speed_after_loi_km_s": 1.633504125387587,
+  "post_loi_min_altitude_km": 99.97110308179504,
+  "post_loi_max_altitude_km": 100.05748926254228,
+  "ideal_lunar_circular_period_hours": 1.9631832682719716,
+  "earth_only_energy_relative_error": 6.291417469636356e-11,
+  "not_included": [
+    "real Moon ephemeris",
+    "solar gravity",
+    "Earth J2",
+    "Moon mascons",
+    "true launch date / launch site",
+    "finite burns",
+    "polar orbit targeting",
+    "full B-plane targeting",
+    "navigation margins"
+  ],
+  "parking_trade": [
+    {
+      "earth_parking_altitude_km": 200,
+      "transfer_time_days": 5.2876,
+      "lunar_phase_deg": 108.341,
+      "tli_dv_km_s": 3.13135,
+      "loi_dv_km_s": 0.81833,
+      "total_dv_km_s": 3.94968
+    },
+    {
+      "earth_parking_altitude_km": 400,
+      "transfer_time_days": 5.2921,
+      "lunar_phase_deg": 108.28229,
+      "tli_dv_km_s": 3.08205,
+      "loi_dv_km_s": 0.81739,
+      "total_dv_km_s": 3.89944
+    },
+    {
+      "earth_parking_altitude_km": 800,
+      "transfer_time_days": 5.301,
+      "lunar_phase_deg": 108.1651,
+      "tli_dv_km_s": 2.98961,
+      "loi_dv_km_s": 0.81554,
+      "total_dv_km_s": 3.80515
+    }
+  ]
+}
