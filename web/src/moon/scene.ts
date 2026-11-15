@@ -102,6 +102,16 @@ const FILL_GONE_DEG = 3
 const SUN_RADIUS_DEG = 0.2665
 const OVERLAY_FADE_M = 10_000
 const WIDE_FADE_M = 300_000
+// The tiles have holes at their coarser levels: triangles that are missing, through which black
+// space shows as sharp wedges, plain to see on sunlit ground. So back faces are drawn too: through a
+// hole the inside of the Moon's far side is seen, and the shader lights that pixel as the point of
+// the reference sphere in front of it, the ground that should be there. The lighting depends only on
+// where on the Moon a pixel is, so the patch matches its surroundings (displaced a little when seen
+// at a slant, by the height of the ground). Nearly all back faces lie hidden behind the near side
+// but are shaded all the same, so a patch gets the cheap parts of the lighting only: the wide zone's
+// slopes and sunlight map, and where there is no wide zone HOLE_GREY by day and night.
+// HOLE_GREY is the base colour that PHOTO_EXPOSURE brings to the photo's median.
+const HOLE_GREY = 0.056
 // Finer normal levels reach the shader as one window of tiles each, around the point the camera
 // looks at (normalWindows.ts). The shader has this many window slots, used for the finest levels.
 // A level is used where one of its texels covers at least FINE_FULL_PX screen pixels and fades out
@@ -375,12 +385,21 @@ function createMoonShader(): CustomShader {
     }
 
     void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+      vec3 p = fsInput.attributes.positionWC;
+      // Seen from behind: the far side through a hole in the near side (see HOLE_GREY).
+      bool hole = !gl_FrontFacing;
+      if (hole) {
+        vec3 ray = normalize(p - czm_viewerPositionWC);
+        float along = dot(czm_viewerPositionWC, ray);
+        float reach = along * along - dot(czm_viewerPositionWC, czm_viewerPositionWC) + MOON_RADIUS_M * MOON_RADIUS_M;
+        if (reach > 0.0) p = czm_viewerPositionWC - (along + sqrt(reach)) * ray;
+        material.diffuse = vec3(${HOLE_GREY.toFixed(3)});
+      }
       vec3 photo = material.diffuse * ${PHOTO_EXPOSURE.toFixed(2)} / (1.0 + material.diffuse * ${(PHOTO_EXPOSURE - 1).toFixed(2)});
       material.diffuse = photo;
       if (u_sunLit < 0.5) return;
       vec3 sun = normalize(u_sunDirectionWC);
 
-      vec3 p = fsInput.attributes.positionWC;
       vec3 up = normalize(p);
       // Day and night on the photo: night begins where the Sun's upper limb sets on a smooth sphere.
       float sunSin = dot(sun, up);
@@ -417,7 +436,7 @@ function createMoonShader(): CustomShader {
       float total = 0.0;
       float horizonSum = 0.0;
       vec2 slopeSum = vec2(0.0);
-      if (inner > 0.0) {
+      if (inner > 0.0 && !hole) {
         vec2 pixel = vec2(center + xy.x / pixelSize, center - xy.y / pixelSize);
         vec2 base = floor(pixel);
         vec2 f = pixel - base;
@@ -450,12 +469,14 @@ function createMoonShader(): CustomShader {
         wideUse > 0.0 ? wideSlope.xy / wideSlope.z : vec2(0.0),
         innerUse > 0.0 ? slopeSum / total : vec2(0.0),
         top);
+      if (!hole) {
 ${fineSlots
   .map(
     (slot) =>
-      `      slope = withFineWindow(slope, u_fine${slot}, u_fineGrid${slot}, u_fineSize${slot}, xy, footprint);`,
+      `        slope = withFineWindow(slope, u_fine${slot}, u_fineGrid${slot}, u_fineSize${slot}, xy, footprint);`,
   )
   .join('\n')}
+      }
       vec2 eastNorth = localFromPlane(slope, dir);
       vec3 normalWC = normalize(up - eastNorth.x * east - eastNorth.y * north);
       // Cast shadows of the wide zone: its sunlight map, and until that has arrived only the Sun
@@ -481,12 +502,14 @@ ${fineSlots
         }
         visible = mix(visible, innerVisible, top);
       }
+      if (!hole) {
 ${sunWindowSlots
   .map(
     (slot) =>
-      `      visible = withSunlightWindow(visible, u_sunWindow${slot}, u_sunWindowGrid${slot}, u_sunWindowSize${slot}, xy, footprint, dxyDx, dxyDy);`,
+      `        visible = withSunlightWindow(visible, u_sunWindow${slot}, u_sunWindowGrid${slot}, u_sunWindowSize${slot}, xy, footprint, dxyDx, dxyDy);`,
   )
   .join('\n')}
+      }
 
       float mu0 = max(dot(normalWC, sun), 0.0);
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
@@ -730,6 +753,8 @@ export async function createMoonScene(
     const tileset = await Cesium3DTileset.fromIonAssetId(CESIUM_MOON_ASSET_ID)
     options.signal.throwIfAborted()
     tileset.customShader = moonShader
+    // Back faces fill the holes of the tiles: see HOLE_GREY.
+    tileset.backFaceCulling = false
     viewer.scene.primitives.add(tileset)
   } catch (error) {
     viewer.destroy()
@@ -799,9 +824,13 @@ export async function createMoonScene(
     options.onHeadingChange(camera.heading)
   })
 
+  const towardsPick = new Cartesian3()
   const pickSurface = (windowPosition: Cartesian2): Cartesian3 | undefined => {
     const position = scene.pickPosition(windowPosition)
-    return position && Number.isFinite(position.x) ? position : undefined
+    if (!position || !Number.isFinite(position.x)) return undefined
+    // Through a hole of the tiles the pick lands on the inside of the far side: not a place to pick.
+    Cartesian3.subtract(position, camera.positionWC, towardsPick)
+    return Cartesian3.dot(towardsPick, position) > 0 ? undefined : position
   }
 
   // Fly so the camera keeps its heading and pitch, looking at `target` from `range` metres.
