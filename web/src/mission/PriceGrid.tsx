@@ -5,15 +5,11 @@ import {
   type MissionRequest,
   type RunSummary,
 } from '../api/candidates'
-import {
-  formatPrice,
-  isTransitPossible,
-  type CalendarInput,
-  type Delivery,
-} from '../api/pricing'
+import { formatPrice, isTransitPossible, type Delivery } from '../api/pricing'
+import type { ProviderCalendarInput } from '../api/providerPricing'
 import { dayOf, iso, short } from './missionDates'
 import type { Schedule } from './types'
-import { usePriceCalendar } from './usePriceCalendar'
+import { useProviderCalendar } from './useProviderCalendar'
 
 const DEFAULT_MISSION: MissionRequest = {
   landing_date: '2027-01-10',
@@ -31,7 +27,11 @@ const DELIVERY_LABELS: Record<Delivery, string> = {
   rover_delivery: '로버 배송',
 }
 const STATE_LABELS = {
-  ready: '계산 완료',
+  quoted: '계산 완료',
+  no_published_quote: '공개 견적 없음',
+  search_required: '미계산',
+  partial_coverage: '견적 일부',
+  invalid_transit: '전이 불가',
   no_eligible: '적합 격자 없음',
   not_computed: '미계산',
   running: '탐색 중',
@@ -119,12 +119,14 @@ export function PriceGrid({
     (black === null || (Number.isFinite(black) && black >= 0))
   const sourceReady =
     source === '' || (sourceState.id === source && !sourceState.error)
-  const input: CalendarInput | null =
+  const input: ProviderCalendarInput | null =
     valid && sourceReady
       ? {
           mass_kg: massNumber,
           delivery,
           landing_dates: landings.map(iso),
+          departure_dates: departures.map(iso),
+          source_run_id: source || null,
           mission: {
             ...mission,
             landing_date: iso(landings[0]!),
@@ -134,20 +136,15 @@ export function PriceGrid({
           },
         }
       : null
-  const calendar = usePriceCalendar(input)
+  const calendar = useProviderCalendar(input)
   const data = calendar.data
   const prices =
-    data?.dates
-      .filter(
-        (row) =>
-          row.state === 'ready' &&
-          departures.some((d) => isTransitPossible(iso(d), row.landing_date)),
-      )
-      .map((row) => row.pricing!.mean!.adjusted_usd) ?? []
+    data?.cells.flatMap((cell) =>
+      cell.mean_min_usd === null ? [] : [cell.mean_min_usd],
+    ) ?? []
   const minimum = Math.min(...prices)
   const hasMissing =
-    data?.dates.some((row) => !['ready', 'no_eligible'].includes(row.state)) ??
-    true
+    data?.dates.some((row) => row.state !== 'completed') ?? true
   function candidateHref(departure: number, landing: number, runId: string) {
     const url = new URL(window.location.href)
     url.pathname = '/'
@@ -157,6 +154,8 @@ export function PriceGrid({
     url.searchParams.set('arrival', iso(landing))
     url.searchParams.set('duration', String(draft.duration))
     url.searchParams.set('run', runId)
+    url.searchParams.set('mass_kg', String(massNumber))
+    url.searchParams.set('delivery', delivery)
     return `${url.pathname}${url.search}`
   }
   return (
@@ -293,6 +292,10 @@ export function PriceGrid({
         </p>
       ) : null}
       {calendar.calculating ? <p role="status">날짜별 가격 계산 중…</p> : null}
+      <p className="mb-3 text-xs text-neutral-400">
+        6개 회사의 공개 일정·조건 비교 · 각 500m 적합 격자의 최저가를 평균 ·
+        미정 항목 제외
+      </p>
       <div className="grid-scroll">
         <table className="cost-grid" aria-label="출발일과 착륙일별 평균 가격">
           <thead>
@@ -317,11 +320,10 @@ export function PriceGrid({
           <tbody>
             {landings.map((l) => {
               const row = data?.dates.find((r) => r.landing_date === iso(l))
-              const mean = row?.pricing?.mean
               return (
                 <tr key={l}>
                   <th scope="row">
-                    {row?.state === 'ready' || row?.state === 'no_eligible' ? (
+                    {row?.state === 'completed' ? (
                       <a
                         href={candidateHref(
                           isTransitPossible(draft.departure, iso(l))
@@ -340,38 +342,44 @@ export function PriceGrid({
                   </th>
                   {departures.map((d) => {
                     const possible = isTransitPossible(iso(d), iso(l))
-                    const label = row
-                      ? STATE_LABELS[row.state]
+                    const offer = data?.cells.find(
+                      (cell) =>
+                        cell.landing_date === iso(l) &&
+                        cell.departure_date === iso(d),
+                    )
+                    const mean = offer?.mean_min_usd ?? null
+                    const label = offer
+                      ? STATE_LABELS[offer.status]
                       : calendar.loading
                         ? '불러오는 중'
                         : '미계산'
                     const selected =
                       dayOf(draft.departure) === d && dayOf(draft.landing) === l
                     const className =
-                      mean && mean.adjusted_usd <= minimum * 1.05
+                      mean !== null && mean <= minimum * 1.05
                         ? 'low-cost'
                         : undefined
-                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean ? `평균 ${formatPrice(mean.adjusted_usd)}` : label}`
-                    const completed =
-                      row?.state === 'ready' || row?.state === 'no_eligible'
+                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `최저가 평균 ${formatPrice(mean)}` : label}`
+                    const completed = row?.state === 'completed'
                     const content = (
                       <>
-                        <span>
-                          {mean ? formatPrice(mean.adjusted_usd) : label}
-                        </span>
-                        {mean ? (
+                        <span>{mean !== null ? formatPrice(mean) : label}</span>
+                        {mean !== null ? (
                           <>
                             <small>
-                              {formatPrice(mean.range_low_usd)}–
-                              {formatPrice(mean.range_high_usd)}
-                            </small>
-                            <small>
-                              {row!.pricing!.counts.priced.toLocaleString()}개
-                              격자 평균 · {l - d}일 비행
+                              {offer!.quoted_grid_count.toLocaleString()}개 격자
+                              최저가 평균 · {l - d}일 비행
+                              {offer!.terrain_unknown_count
+                                ? ' · 지형 미산정 포함'
+                                : ''}
                             </small>
                           </>
                         ) : (
-                          <small>{row?.message ?? `${l - d}일 비행`}</small>
+                          <small>
+                            {offer?.status === 'partial_coverage'
+                              ? `견적 ${offer.quoted_grid_count}/${offer.eligible_grid_count}개 격자`
+                              : (row?.message ?? `${l - d}일 비행`)}
+                          </small>
                         )}
                       </>
                     )

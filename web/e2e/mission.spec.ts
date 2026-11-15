@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { providerCalendarFixture } from './provider-pricing-fixture.js'
 
 type Analysis = {
   metrics: { visible_fraction: number; longest_dark_hours: number }
@@ -27,24 +28,18 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const earth: Analysis = await earthResponse.json()
   const degree = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`
   // This workflow edits drafts; completed date links have a separate navigation scenario.
-  await page.route('**/api/pricing/calendar', (route) => {
-    const input = route.request().postDataJSON() as { landing_dates: string[] }
-    return route.fulfill({
-      json: {
-        mass_kg: 24,
-        delivery: 'surface',
-        tariff_usd_per_kg: 1200000,
-        evidence: [],
-        dates: input.landing_dates.map((landing_date) => ({
-          landing_date,
-          run_id: `m-${landing_date}`,
-          state: 'not_computed',
-          message: null,
-          pricing: null,
-        })),
-      },
-    })
-  })
+  await page.route('**/api/pricing/providers/calendar', (route) =>
+    route.fulfill({
+      json: providerCalendarFixture(route.request().postDataJSON(), (date) => ({
+        run_id: `m-${date}`,
+        state: 'not_computed',
+        status: 'search_required',
+        mean: null,
+        eligible: null,
+        priced: 0,
+      })),
+    }),
+  )
   await page.goto('/')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',

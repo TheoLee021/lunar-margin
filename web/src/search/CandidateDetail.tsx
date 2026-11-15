@@ -14,6 +14,7 @@ import {
   scoreText,
 } from './derive'
 import { thresholdsFor } from './stepCopy'
+import { ProviderComparison } from './ProviderComparison'
 
 export type Selection =
   | { kind: 'candidate'; candidate: Candidate }
@@ -132,6 +133,20 @@ export function CandidateDetail({
           가시성을 바로 계산해서 볼 수 있습니다.
         </p>
       )}
+
+      <ProviderComparison
+        x_m={
+          selection.kind === 'candidate'
+            ? selection.candidate.x_m
+            : selection.x_m
+        }
+        y_m={
+          selection.kind === 'candidate'
+            ? selection.candidate.y_m
+            : selection.y_m
+        }
+        landingDate={config.window.start.slice(0, 10)}
+      />
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center gap-3">
