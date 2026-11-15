@@ -10,6 +10,7 @@ from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.candidates import router as candidates_router
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.site_assessment import router as site_assessment_router
+from lunar_margin.app.landing_grid import router as landing_grid_router
 from lunar_margin.app.trajectory import router as trajectory_router
 from lunar_margin.pipeline.table_prefetch import start_prefetch
 
@@ -37,6 +38,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     app.include_router(analysis_router)
     app.include_router(site_assessment_router)
+    app.include_router(landing_grid_router)
     app.include_router(candidates_router)
     app.include_router(trajectory_router)
 
