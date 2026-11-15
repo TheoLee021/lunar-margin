@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  horizonsReferenceUrl,
-  MOON_TREK_URL,
-  siteCoordinates,
-} from './referenceLinks'
+import { horizonsReferenceUrl, siteCoordinates } from './referenceLinks'
 
-describe('NASA reference links', () => {
+describe('JPL Horizons reference links', () => {
   const site = { latitude: -89.7, longitude: 222.4, landing: '2027-01-10' }
 
   it('builds a lunar-surface Horizons Sun ephemeris for the selected day', () => {
@@ -14,7 +10,9 @@ describe('NASA reference links', () => {
     expect(url.pathname).toBe('/api/horizons.api')
     expect(url.searchParams.get('CENTER')).toBe("'coord@301'")
     expect(url.searchParams.get('COMMAND')).toBe("'10'")
-    expect(url.searchParams.get('SITE_COORD')).toBe("'222.400000,-89.700000,0'")
+    expect(url.searchParams.get('SITE_COORD')).toBe(
+      "'222.400000,-89.700000,0'",
+    )
     expect(url.searchParams.get('STOP_TIME')).toBe("'2027-01-11'")
     expect(url.searchParams.get('QUANTITIES')).toBe("'4'")
   })
@@ -24,7 +22,9 @@ describe('NASA reference links', () => {
       horizonsReferenceUrl({ ...site, longitude: -137.6 }, 'earth'),
     )
     expect(url.searchParams.get('COMMAND')).toBe("'399'")
-    expect(url.searchParams.get('SITE_COORD')).toBe("'222.400000,-89.700000,0'")
+    expect(url.searchParams.get('SITE_COORD')).toBe(
+      "'222.400000,-89.700000,0'",
+    )
     expect(url.searchParams.get('START_TIME')).toBe("'2027-01-10'")
   })
 
@@ -44,8 +44,7 @@ describe('NASA reference links', () => {
     ).toThrow('Invalid lunar site')
   })
 
-  it('exposes stable Moon Trek entry and readable coordinates', () => {
-    expect(MOON_TREK_URL).toBe('https://trek.nasa.gov/moon/')
+  it('prints normalized lunar coordinates for reference', () => {
     expect(siteCoordinates({ latitude: -89.7, longitude: -137.6 })).toBe(
       'Latitude: -89.70000°, Longitude: 222.40000° E',
     )
