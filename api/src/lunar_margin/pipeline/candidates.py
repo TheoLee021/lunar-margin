@@ -145,7 +145,7 @@ def _hashes(directory: Path, names: list[str]) -> dict[str, str]:
     return {name: str(entries.get(name, {}).get("sha256", "")) for name in names}
 
 
-def _field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettings:
+def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettings:
     return FieldSettings(
         window=config.window,
         azimuth_step_deg=azimuth_step_deg,
@@ -155,7 +155,7 @@ def _field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSetti
     )
 
 
-def _promotion_mask(
+def promotion_mask(
     field: MetricField,
     filtered: FilterResult,
     scores: RankScores,
@@ -213,6 +213,7 @@ def run_search(
     log: Callable[[str], None] = print,
     progress: ProgressFn | None = None,
     extra_warnings: list[str] | None = None,
+    field_provider: Callable[[SitePoints, FieldSettings], MetricField] | None = None,
 ) -> SearchOutcome:
     started = time.perf_counter()
     selection = resolve_dems(config, data_dir)
@@ -273,14 +274,18 @@ def run_search(
         assert config.coarse_spacing_m is not None
         coarse = polar_grid(config.roi, config.coarse_spacing_m)
         log(f"[1/2] 거친 격자 {config.coarse_spacing_m:g} m: {len(coarse):,}개 지점 계산")
-        coarse_field = compute_field(
-            dem,
-            coarse,
-            _field_settings(config, config.coarse_azimuth_step_deg),
-            workers=workers,
-            dem_files=dem_pairs,
-            on_progress=reporter("coarse"),
-            table=table,
+        coarse_field = (
+            field_provider(coarse, field_settings(config, config.coarse_azimuth_step_deg))
+            if field_provider
+            else compute_field(
+                dem,
+                coarse,
+                field_settings(config, config.coarse_azimuth_step_deg),
+                workers=workers,
+                dem_files=dem_pairs,
+                on_progress=reporter("coarse"),
+                table=table,
+            )
         )
         coarse_filter = evaluate(
             coarse_field,
@@ -288,7 +293,7 @@ def run_search(
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
         coarse_scores = score_sites(coarse_field, config.weights)
-        promoted = _promotion_mask(
+        promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
         )
         fine = refine_points(coarse, promoted, config.roi, config.grid_spacing_m)
@@ -302,14 +307,18 @@ def run_search(
         )
 
     log(f"[2/2] 세밀 격자 {config.grid_spacing_m:g} m: {len(fine):,}개 지점 계산")
-    fine_field = compute_field(
-        dem,
-        fine,
-        _field_settings(config, config.fine_azimuth_step_deg),
-        workers=workers,
-        dem_files=dem_pairs,
-        on_progress=reporter("fine"),
-        table=table,
+    fine_field = (
+        field_provider(fine, field_settings(config, config.fine_azimuth_step_deg))
+        if field_provider
+        else compute_field(
+            dem,
+            fine,
+            field_settings(config, config.fine_azimuth_step_deg),
+            workers=workers,
+            dem_files=dem_pairs,
+            on_progress=reporter("fine"),
+            table=table,
+        )
     )
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon

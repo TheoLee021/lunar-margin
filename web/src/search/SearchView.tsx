@@ -108,6 +108,9 @@ function RunPicker({
           onChange={(event) => onChange(event.target.value)}
           className="min-w-48 rounded-md border border-white/15 bg-[#0f1217]/60 px-3 py-2 text-sm text-neutral-100"
         >
+          {value && !current ? (
+            <option value={value}>선택한 탐색 · {value}</option>
+          ) : null}
           {runs.map((run) => (
             <option key={run.id} value={run.id}>
               {run.id} · 후보 {run.selected}개
@@ -141,16 +144,37 @@ export default function SearchView({
         durationDays: String(schedule.duration),
       }
     : DEFAULT_MISSION_VALUES
-  const [completed, setCompleted] = useState<string | null>(null)
+  const [requestedRunId] = useState(() =>
+    new URLSearchParams(window.location.search).get('run'),
+  )
+  const [completed, setCompleted] = useState<string | null>(requestedRunId)
   const [revision, setRevision] = useState(0)
   const onComplete = useCallback((id: string) => {
     setCompleted(id)
     setRevision((value) => value + 1)
   }, [])
+  const form = (
+    <MissionForm initialValues={initialValues} onComplete={onComplete} />
+  )
+  const results = <SavedRuns key={revision} initialRunId={completed} />
   return (
     <div className="flex flex-col gap-6">
-      <MissionForm initialValues={initialValues} onComplete={onComplete} />
-      <SavedRuns key={revision} initialRunId={completed} />
+      {requestedRunId !== null ? (
+        <>
+          {results}
+          <details className="hud-panel p-4">
+            <summary className="cursor-pointer text-sm text-neutral-300">
+              다른 임무 조건으로 탐색
+            </summary>
+            <div className="mt-4">{form}</div>
+          </details>
+        </>
+      ) : (
+        <>
+          {form}
+          {results}
+        </>
+      )}
     </div>
   )
 }
@@ -159,9 +183,9 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
   const { state: runs, reload: reloadRuns } = useRuns()
   const [picked, setPicked] = useState<string | null>(initialRunId)
 
-  if (runs.status === 'loading')
+  if (picked === null && runs.status === 'loading')
     return <Spinner text="탐색 결과 목록을 불러오는 중…" />
-  if (runs.status === 'error')
+  if (picked === null && runs.status === 'error')
     return (
       <ErrorBox
         title="탐색 결과 목록을 불러오지 못했습니다"
@@ -169,12 +193,11 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
         onRetry={reloadRuns}
       />
     )
-  if (runs.data.length === 0) return <EmptyRuns />
+  if (picked === null && runs.status === 'ok' && runs.data.length === 0)
+    return <EmptyRuns />
 
   const runId =
-    picked !== null && runs.data.some((run) => run.id === picked)
-      ? picked
-      : (runs.data[0]?.id ?? null)
+    picked ?? (runs.status === 'ok' ? (runs.data[0]?.id ?? null) : null)
   if (runId === null) return <EmptyRuns />
 
   return (
@@ -190,7 +213,19 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
             보거나 재생해 보세요.
           </p>
         </div>
-        <RunPicker runs={runs.data} value={runId} onChange={setPicked} />
+        {runs.status === 'ok' ? (
+          <RunPicker runs={runs.data} value={runId} onChange={setPicked} />
+        ) : runs.status === 'loading' ? (
+          <p role="status" className="text-xs text-neutral-400">
+            탐색 결과 목록을 불러오는 중…
+          </p>
+        ) : (
+          <ErrorBox
+            title="탐색 결과 목록을 불러오지 못했습니다"
+            message={runs.message}
+            onRetry={reloadRuns}
+          />
+        )}
       </header>
       <RunScreen key={runId} runId={runId} />
     </div>
@@ -321,6 +356,14 @@ function RunBody({ run }: { run: RunDetail }) {
             )}
           </dl>
         </section>
+      ) : null}
+      {run.mission ? (
+        <a
+          className="hud-button self-start"
+          href={`/?planner=1&pricing_run=${encodeURIComponent(run.id)}&arrival=${run.mission.landing_date}&departure=${new Date(Date.parse(run.mission.landing_date) - 4 * 86400000).toISOString().slice(0, 10)}&duration=${run.mission.mission_duration_days}`}
+        >
+          이 임무 조건으로 날짜별 가격 비교
+        </a>
       ) : null}
       {run.summary.warnings.length > 0 ? (
         <ul

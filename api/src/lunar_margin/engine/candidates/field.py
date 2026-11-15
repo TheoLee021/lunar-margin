@@ -14,7 +14,7 @@ from lunar_margin.engine.candidates.grid import SitePoints
 from lunar_margin.engine.candidates.horizon_table import HorizonTable
 from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
-from lunar_margin.engine.horizon import horizon_profile
+from lunar_margin.engine.horizon import HorizonProfile, horizon_profile
 from lunar_margin.engine.metrics import summarize, visibility_series
 from lunar_margin.engine.site_characteristics import characterize_region
 
@@ -79,7 +79,7 @@ class FieldSettings:
 
 
 @dataclass(frozen=True)
-class _Context:
+class FieldContext:
     dem: Dem
     table: HorizonTable | None
     sun_vectors: NDArray[np.float64]
@@ -89,10 +89,10 @@ class _Context:
 
 # 한 지점이 돌려주는 값의 열 순서 (MetricField의 필드 순서와 같다)
 _COLUMNS = 13
-_NAN_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan)
+MISSING_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan)
 
 
-def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
+def _site_row(ctx: FieldContext, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
     s = ctx.settings
     if ctx.table is not None and row >= 0:
         horizon = ctx.table.profile(row)  # 사전 계산한 수평선: 다시 계산하지 않는다
@@ -107,7 +107,14 @@ def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[
                 max_range_m=s.max_range_m,
             )
         except ValueError:  # DEM 밖이거나 유효한 표본이 없는 지점: 결측으로 남긴다
-            return _NAN_ROW
+            return MISSING_ROW
+    return _profile_row(ctx, lat_deg, lon_deg, horizon)
+
+
+def _profile_row(
+    ctx: FieldContext, lat_deg: float, lon_deg: float, horizon: HorizonProfile
+) -> tuple[float, ...]:
+    s = ctx.settings
     values: list[float] = []
     for vectors in (ctx.sun_vectors, ctx.earth_vectors):
         azimuth, elevation = topocentric_azel(vectors, lat_deg, lon_deg, s.observer_height_m)
@@ -121,22 +128,26 @@ def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[
             mean_el,
         ]
     values += [float(horizon.elevation_deg.max()), float(horizon.complete), 1.0]
-    slope, coverage = math.nan, math.nan
-    if s.assess_terrain:
-        # The wider fallback DEM is for horizon rays, not regional landing terrain.
-        terrain_dem = ctx.dem.primary if isinstance(ctx.dem, CompositeDem) else ctx.dem
-        try:
-            region = characterize_region(terrain_dem, lat_deg, lon_deg)
-            slope = region.slope_p95_deg if region.slope_p95_deg is not None else math.nan
-            coverage = region.coverage_fraction
-        except ValueError:
-            coverage = 0.0
-    values += [slope, coverage]
+    values += (
+        terrain_metrics(ctx.dem, lat_deg, lon_deg) if s.assess_terrain else (math.nan, math.nan)
+    )
     return tuple(values)
 
 
+def terrain_metrics(dem: Dem, lat_deg: float, lon_deg: float) -> tuple[float, float]:
+    """Regional ground terrain, independent of the analysis date or observer height."""
+    # The wider fallback DEM is for horizon rays, not regional landing terrain.
+    terrain_dem = dem.primary if isinstance(dem, CompositeDem) else dem
+    try:
+        region = characterize_region(terrain_dem, lat_deg, lon_deg)
+    except ValueError:
+        return math.nan, 0.0
+    slope = region.slope_p95_deg if region.slope_p95_deg is not None else math.nan
+    return slope, region.coverage_fraction
+
+
 def _chunk_rows(
-    ctx: _Context,
+    ctx: FieldContext,
     lat: NDArray[np.float64],
     lon: NDArray[np.float64],
     table_rows: NDArray[np.int64],
@@ -148,7 +159,7 @@ def _chunk_rows(
     return np.array(rows, dtype=np.float64).reshape(len(rows), _COLUMNS)
 
 
-_worker_ctx: _Context | None = None
+_worker_ctx: FieldContext | None = None
 
 
 def _init_worker(
@@ -160,7 +171,7 @@ def _init_worker(
 ) -> None:
     global _worker_ctx
     table = HorizonTable.open(Path(table_dir)) if table_dir is not None else None
-    _worker_ctx = _Context(open_dem(dem_pairs), table, sun_vectors, earth_vectors, settings)
+    _worker_ctx = FieldContext(open_dem(dem_pairs), table, sun_vectors, earth_vectors, settings)
 
 
 def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
@@ -214,7 +225,7 @@ def compute_field(
     slices = list(_chunks(n, chunk_size))
     table_rows = table.rows_for(sites) if table is not None else np.full(n, -1, dtype=np.int64)
     if workers <= 1 or n <= chunk_size:
-        ctx = _Context(dem, table, sun, earth, settings)
+        ctx = FieldContext(dem, table, sun, earth, settings)
         for sl in slices:
             matrix[sl] = _chunk_rows(ctx, sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl])
             if on_progress is not None:
@@ -233,6 +244,10 @@ def compute_field(
                 if on_progress is not None:
                     on_progress(sl.stop, n)
 
+    return field_from_matrix(matrix)
+
+
+def field_from_matrix(matrix: NDArray[np.float64]) -> MetricField:
     return MetricField(
         sun_fraction=matrix[:, 0],
         sun_longest_dark_h=matrix[:, 1],

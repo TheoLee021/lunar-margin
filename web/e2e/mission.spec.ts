@@ -26,6 +26,25 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const sun: Analysis = await sunResponse.json()
   const earth: Analysis = await earthResponse.json()
   const degree = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`
+  // This workflow edits drafts; completed date links have a separate navigation scenario.
+  await page.route('**/api/pricing/calendar', (route) => {
+    const input = route.request().postDataJSON() as { landing_dates: string[] }
+    return route.fulfill({
+      json: {
+        mass_kg: 24,
+        delivery: 'surface',
+        tariff_usd_per_kg: 1200000,
+        evidence: [],
+        dates: input.landing_dates.map((landing_date) => ({
+          landing_date,
+          run_id: `m-${landing_date}`,
+          state: 'not_computed',
+          message: null,
+          pricing: null,
+        })),
+      },
+    })
+  })
   await page.goto('/')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
@@ -120,7 +139,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
     .getByLabel('기준 착륙일 · UTC', { exact: true })
     .fill('2027-01-10')
   const grid = dialog.getByRole('table', {
-    name: '출발일과 착륙일별 예시 비용',
+    name: '출발일과 착륙일별 평균 가격',
   })
   await expect(grid.locator('tbody tr')).toHaveCount(5)
   await expect(grid.locator('thead th')).toHaveCount(6)
