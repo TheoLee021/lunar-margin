@@ -56,6 +56,7 @@ export default function MoonViewer({
   }>({})
   const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const [overlayError, setOverlayError] = useState<string | null>(null)
   const ready = state.kind === 'ready'
 
   useEffect(() => {
@@ -103,6 +104,7 @@ export default function MoonViewer({
           signal: controller.signal,
           onPick: (location) => callbacks.current.onPick?.(location),
           onMarkerSelect: (id) => callbacks.current.onMarkerSelect?.(id),
+          onOverlayError: setOverlayError,
           onHeadingChange: (heading) => {
             if (compassRef.current)
               compassRef.current.style.transform = `rotate(${-heading}rad)`
@@ -165,6 +167,15 @@ export default function MoonViewer({
           </p>
           <p className="max-w-md text-sm text-neutral-400">{view.message}</p>
         </div>
+      ) : null}
+      {overlayError !== null && view.kind === 'ready' ? (
+        <p
+          role="status"
+          title={overlayError}
+          className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-neutral-900/80 px-3 py-1.5 text-xs text-amber-300"
+        >
+          지형 그림자 데이터를 불러오지 못해 사진으로 표시합니다
+        </p>
       ) : null}
       <button
         type="button"

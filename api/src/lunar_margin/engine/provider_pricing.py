@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from lunar_margin.engine.candidates.projection import polar_xy_to_lonlat
 from lunar_margin.engine.ephemeris import MOON_RADIUS_M
-from lunar_margin.engine.pricing import Delivery
+from lunar_margin.engine.pricing import FIXED_LOW, TARIFF_SOURCE, TARIFFS, Delivery
 
 ProviderId = Literal[
     "blue_origin", "ispace_us", "spacex", "lockheed_martin", "northrop_grumman", "voyager"
@@ -122,6 +122,7 @@ class Catalog(Model):
 
 
 class QuoteContext(Model):
+    estimate: bool = False
     departure_date: date
     landing_date: date
     mass_kg: float = Field(gt=0, le=1_000_000)
@@ -142,6 +143,12 @@ class FlightOffer(Model):
     available_payload_kg: float | None
     issues: list[Issue]
     sources: list[Source]
+    estimate_usd: float | None = None
+    estimate_basis: Literal["public_tariff", "common_model"] | None = None
+    estimate_assumptions: list[str] = Field(default_factory=list)
+    estimate_tariff_usd_per_kg: float | None = None
+    estimate_fixed_usd: float | None = None
+    estimate_tariff_source: Source | None = None
     price_usd: float | None = None
     price_grade: Literal["modeled_from_published_terms"] | None = None
 
@@ -153,6 +160,7 @@ class ProviderOffer(Model):
     issues: list[Issue]
     flights: list[FlightOffer]
     minimum_usd: float | None = None
+    minimum_estimate_usd: float | None = None
 
 
 @lru_cache(maxsize=1)
@@ -215,6 +223,26 @@ def billable_mass(pricing: PublishedPricing, mass_kg: float) -> float:
     return float(units * Decimal(str(step)))
 
 
+def estimated_billable_mass(
+    pricing: PublishedPricing | None, mass_kg: float
+) -> tuple[float, list[str]]:
+    """Retain each known billing rule and disclose assumptions for missing components."""
+    if pricing is None:
+        return mass_kg, ["최소 청구량·청구 단위 미확인 · 입력 질량 비례 가정"]
+    assumptions: list[str] = []
+    if pricing.minimum_billable_kg is None:
+        assumptions.append("최소 청구량 미확인 · 입력 질량을 하한으로 가정")
+    if pricing.billing_increment_kg is None:
+        assumptions.append("청구 단위 미확인 · 추가 올림 없음 가정")
+    modeled = pricing.model_copy(
+        update={
+            "minimum_billable_kg": pricing.minimum_billable_kg or 0.0,
+            "billing_increment_kg": pricing.billing_increment_kg or 0.0,
+        }
+    )
+    return billable_mass(modeled, mass_kg), assumptions
+
+
 def assess_catalog(catalog: Catalog, context: QuoteContext) -> list[ProviderOffer]:
     return [
         ProviderOffer(
@@ -269,6 +297,73 @@ def destination_mask(
     return distance <= destination.radius_m
 
 
+def estimate_catalog(catalog: Catalog, context: QuoteContext) -> Catalog:
+    """No published mission still permits an explicitly labeled planning model."""
+    if not context.estimate:
+        return catalog
+    providers = [
+        provider
+        if provider.flights
+        else provider.model_copy(
+            update={
+                "flights": [
+                    Flight(
+                        id=f"model-{provider.id}",
+                        name="공통 비용 모델 · 운항편 미확인",
+                        departure=Schedule(label="발사 일정 미정"),
+                        arrival=Schedule(label="사용자가 선택한 착륙일"),
+                        sources=[provider.source],
+                    )
+                ]
+            }
+        )
+        for provider in catalog.providers
+    ]
+    return catalog.model_copy(update={"providers": providers})
+
+
+def estimate_blocked(flight: Flight, context: QuoteContext) -> bool:
+    # Unknown terms are disclosed assumptions, known incompatibilities remain exclusions.
+    hard: set[Issue] = {
+        "transit_out_of_range",
+        "outside_schedule",
+        "delivery_unserved",
+        "capacity_exceeded",
+    }
+    if hard.intersection(flight_issues(flight, context)):
+        return True
+    for schedule, value in (
+        (flight.departure, context.departure_date),
+        (flight.arrival, context.landing_date),
+    ):
+        if schedule.precision in ("year", "month", "day", "window") and (
+            (schedule.start is not None and value < schedule.start)
+            or (schedule.end is not None and value > schedule.end)
+        ):
+            return True
+    return False
+
+
+def estimate_terms(flight: Flight, context: QuoteContext) -> tuple[float, float, float, list[str]]:
+    pricing = flight.pricing
+    tariff = pricing.usd_per_kg if pricing else TARIFFS[context.delivery]
+    fixed = pricing.fixed_usd if pricing and pricing.fixed_usd is not None else FIXED_LOW
+    assumptions = [
+        "실제 운항·예약 가능 여부 미확인",
+        "착륙일은 사용자가 선택한 분석 시점",
+        "경합도 미산정 1.00 적용",
+    ]
+    if pricing is None:
+        assumptions.append("회사 단가 미공개 · 기존 배송 방식별 공통 참조 단가 사용")
+    if pricing is None or pricing.fixed_usd is None:
+        assumptions.append("고정비 $500,000 모델값 적용")
+    mass, billing_assumptions = estimated_billable_mass(pricing, context.mass_kg)
+    assumptions.extend(billing_assumptions)
+    if flight.destination is None:
+        assumptions.append("이 위치의 배송 가능 여부 미확인")
+    return tariff, fixed, mass, assumptions
+
+
 def minimum_grid_prices(
     catalog: Catalog,
     context: QuoteContext,
@@ -289,8 +384,17 @@ def minimum_grid_prices(
     ):
         raise ValueError("finite, equally sized grid vectors and destination factors required")
     minimum = np.full(x_m.shape, np.inf, dtype=np.float64)
-    for provider in catalog.providers:
+    for provider in estimate_catalog(catalog, context).providers:
         for flight in provider.flights:
+            if context.estimate:
+                if estimate_blocked(flight, context):
+                    continue
+                tariff, fixed, mass, _ = estimate_terms(flight, context)
+                costs = fixed + tariff * mass * destination_multipliers
+                if flight.destination is not None:
+                    costs = np.where(destination_mask(flight.destination, x_m, y_m), costs, np.inf)
+                np.minimum(minimum, costs, out=minimum)
+                continue
             pricing = flight.pricing
             destination = flight.destination
             if (
@@ -320,6 +424,7 @@ def compare_grid(
     destination_multiplier: float,
     terrain_excluded: bool = False,
 ) -> list[ProviderOffer]:
+    catalog = estimate_catalog(catalog, context)
     offers = assess_catalog(catalog, context)
     for offer_index, (provider, offer) in enumerate(zip(catalog.providers, offers, strict=True)):
         updated: list[FlightOffer] = []
@@ -341,9 +446,38 @@ def compare_grid(
                     * billable_mass(pricing, context.mass_kg)
                     * destination_multiplier
                 )
+            estimate: float | None = None
+            basis: Literal["public_tariff", "common_model"] | None = None
+            assumptions: list[str] = []
+            tariff: float | None = None
+            fixed: float | None = None
+            tariff_source: Source | None = None
+            if (
+                context.estimate
+                and not terrain_excluded
+                and "destination_unserved" not in issues
+                and not estimate_blocked(flight, context)
+            ):
+                tariff, fixed, mass, assumptions = estimate_terms(flight, context)
+                estimate = fixed + tariff * mass * destination_multiplier
+                basis = "public_tariff" if pricing else "common_model"
+                tariff_source = (
+                    pricing.source
+                    if pricing
+                    else Source(
+                        title="공통 참조 단가 · Astrobotic PUG (회사별 견적 아님)",
+                        url=HttpUrl(TARIFF_SOURCE),
+                    )
+                )
             updated.append(
                 flight_offer.model_copy(
                     update={
+                        "estimate_usd": estimate,
+                        "estimate_basis": basis,
+                        "estimate_assumptions": assumptions,
+                        "estimate_tariff_usd_per_kg": tariff,
+                        "estimate_fixed_usd": fixed,
+                        "estimate_tariff_source": tariff_source,
                         "issues": issues,
                         "price_usd": price,
                         "price_grade": "modeled_from_published_terms"
@@ -356,6 +490,9 @@ def compare_grid(
         offers[offer_index] = offer.model_copy(
             update={
                 "flights": updated,
+                "minimum_estimate_usd": min(
+                    (f.estimate_usd for f in updated if f.estimate_usd is not None), default=None
+                ),
                 "minimum_usd": min(values) if values else None,
             }
         )

@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { providerCalendarFixture } from './provider-pricing-fixture.js'
 import { z } from 'zod'
+import { mockScheduledDepartures } from './launch-fixture.js'
+
+test.beforeEach(async ({ page }) => {
+  await mockScheduledDepartures(page)
+})
 
 test('missing landing dates launch one batch and display all five results', async ({
   page,
@@ -8,66 +14,25 @@ test('missing landing dates launch one batch and display all five results', asyn
   const launched: string[] = []
   let batchCalls = 0
   let calendarPolls = 0
-  const flat = {
-    baseline_usd: 29_300_000,
-    transport_usd: 28_800_000,
-    destination_adjustment_usd: 0,
-    demand_adjustment_usd: 0,
-    fixed_usd: 500_000,
-    adjusted_usd: 29_300_000,
-    range_low_usd: 29_300_000,
-    range_high_usd: 33_800_000,
-    destination_multiplier: 1,
-    demand_multiplier: 1,
-    destination_unknown: false,
-    demand_unknown: true,
-    grade: 'modeled',
-  }
   await page.route('**/api/candidates/runs', (route) =>
     route.fulfill({ json: { runs: [] } }),
   )
-  await page.route('**/api/pricing/calendar', (route) => {
+  await page.route('**/api/pricing/providers/calendar', (route) => {
     if (launched.length && ++calendarPolls > 1)
       launched.forEach((date) => completed.add(date))
-    const request = route.request().postDataJSON() as {
-      landing_dates: string[]
-    }
     return route.fulfill({
-      json: {
-        mass_kg: 24,
-        delivery: 'surface',
-        tariff_usd_per_kg: 1_200_000,
-        evidence: [],
-        dates: request.landing_dates.map((date) => ({
-          landing_date: date,
-          run_id: `m-${date}`,
-          state: completed.has(date)
-            ? 'ready'
-            : launched.length
-              ? 'running'
-              : 'not_computed',
-          message: null,
-          pricing: completed.has(date)
-            ? {
-                run_id: `m-${date}`,
-                landing_date: date,
-                mission_duration_days: 14,
-                grid_spacing_m: 500,
-                counts: {
-                  fine: 1,
-                  eligible: 1,
-                  priced: 1,
-                  terrain_excluded: 0,
-                  terrain_unknown: 0,
-                  unevaluated: 0,
-                  coarse_ignored: 0,
-                },
-                mean: flat,
-                cells: [],
-              }
-            : null,
-        })),
-      },
+      json: providerCalendarFixture(route.request().postDataJSON(), (date) => ({
+        run_id: `m-${date}`,
+        state: completed.has(date)
+          ? 'completed'
+          : launched.length
+            ? 'running'
+            : 'not_computed',
+        status: completed.has(date) ? 'quoted' : 'search_required',
+        mean: completed.has(date) ? 29300000 : null,
+        eligible: completed.has(date) ? 1 : null,
+        priced: completed.has(date) ? 1 : 0,
+      })),
     })
   })
   await page.route('**/api/pricing/calculate', (route) => {
@@ -137,103 +102,26 @@ test('date prices open the saved candidate run without recalculating', async ({
   await page.route('**/api/candidates/runs', (route) =>
     route.fulfill({ json: { runs: [] } }),
   )
-  const price = (kind: 'flat' | 'half' | 'mean', mass = 24) => {
-    const values =
-      mass === 24
-        ? {
-            flat: [29_300_000, 0],
-            half: [33_620_000, 4_320_000],
-            mean: [31_460_000, 2_160_000],
-          }
-        : {
-            flat: [58_100_000, 0],
-            half: [66_740_000, 8_640_000],
-            mean: [62_420_000, 4_320_000],
-          }
-    const [adjusted, destination] = values[kind]!
-    return {
-      baseline_usd: mass === 24 ? 29_300_000 : 58_100_000,
-      transport_usd: mass === 24 ? 28_800_000 : 57_600_000,
-      destination_adjustment_usd: destination,
-      demand_adjustment_usd: 0,
-      fixed_usd: 500_000,
-      adjusted_usd: adjusted,
-      range_low_usd: adjusted,
-      range_high_usd: adjusted! + 4_500_000,
-      destination_multiplier:
-        kind === 'flat' ? 1 : kind === 'half' ? 1.15 : 1.075,
-      demand_multiplier: 1,
-      destination_unknown: false,
-      demand_unknown: true,
-      grade: 'modeled',
-    }
-  }
-  const counts = {
-    fine: 5,
-    eligible: 3,
-    priced: 2,
-    terrain_excluded: 1,
-    terrain_unknown: 0,
-    unevaluated: 0,
-    coarse_ignored: 1,
-  }
-  await page.route('**/api/pricing/calendar', async (route) => {
-    const request = route.request().postDataJSON() as {
-      mass_kg: number
-      delivery: string
-      landing_dates: string[]
-      mission: { mission_duration_days: number }
-    }
-    if (request.mass_kg === 13)
+  await page.route('**/api/pricing/providers/calendar', async (route) => {
+    const input = route.request().postDataJSON() as { mass_kg: number }
+    if (input.mass_kg === 13)
       return route.fulfill({
         status: 503,
         json: { detail: 'Pricing unavailable' },
       })
-    await route.fulfill({
-      json: {
-        mass_kg: request.mass_kg,
-        delivery: request.delivery,
-        tariff_usd_per_kg: 1_200_000,
-        evidence: [
-          {
-            term: 'F',
-            value: '500000',
-            grade: 'modeled',
-            source: null,
-            note: '고정비 근거 없음',
-          },
-        ],
-        dates: request.landing_dates.map((date) => {
-          const ready = date === '2027-01-10',
-            empty = date === '2027-01-11'
-          return {
-            landing_date: date,
-            run_id: 'm-price-test',
-            state: ready ? 'ready' : empty ? 'no_eligible' : 'not_computed',
-            message: null,
-            pricing:
-              ready || empty
-                ? {
-                    run_id: 'm-price-test',
-                    landing_date: date,
-                    mission_duration_days:
-                      request.mission.mission_duration_days,
-                    grid_spacing_m: 500,
-                    counts: ready
-                      ? counts
-                      : {
-                          ...counts,
-                          eligible: 0,
-                          priced: 0,
-                          terrain_excluded: 0,
-                        },
-                    mean: ready ? price('mean', request.mass_kg) : null,
-                    cells: [],
-                  }
-                : null,
-          }
-        }),
-      },
+    return route.fulfill({
+      json: providerCalendarFixture(input, (date) => {
+        const ready = date === '2027-01-10',
+          empty = date === '2027-01-11'
+        return {
+          run_id: ready ? 'm-price-test' : `m-${date}`,
+          state: ready || empty ? 'completed' : 'not_computed',
+          status: ready ? 'quoted' : empty ? 'no_eligible' : 'search_required',
+          mean: ready ? (input.mass_kg === 24 ? 31460000 : 62420000) : null,
+          eligible: ready ? 2 : empty ? 0 : null,
+          priced: ready ? 2 : 0,
+        }
+      }),
     })
   })
   await page.goto('/?planner=1')
@@ -249,7 +137,7 @@ test('date prices open the saved candidate run without recalculating', async ({
   )
   await expect(row.locator('td').getByRole('link').nth(1)).toContainText('$31M')
   await expect(row.locator('td').getByRole('link').first()).toContainText(
-    '2개 격자 평균',
+    'Blue Origin',
   )
   await expect(grid.getByText('적합 격자 없음').first()).toBeVisible()
   await expect(grid.getByText('전이 3~150일').first()).toBeVisible()
@@ -434,4 +322,83 @@ test('candidate ranks show per-grid prices and recover from a price-only failure
   await expect(row(2)).toContainText('미산정')
   await expect(region).toContainText('24 kg · 표면 하역')
   expect(requests).toBe(failedRequests + 1)
+})
+
+test('a busy search waits and automatically starts the missing dates when the worker is free', async ({
+  page,
+}) => {
+  let released = false
+  let batchCalls = 0
+  let launched = false
+  let statusCalls = 0
+  await page.route('**/api/candidates/runs', (route) =>
+    route.fulfill({ json: { runs: [] } }),
+  )
+  await page.route('**/api/pricing/providers/calendar', (route) =>
+    route.fulfill({
+      json: providerCalendarFixture(route.request().postDataJSON(), (date) => ({
+        run_id: `m-${date}`,
+        state: launched ? 'completed' : 'not_computed',
+        status: launched ? 'quoted' : 'search_required',
+        mean: launched ? 29300000 : null,
+        eligible: launched ? 1 : null,
+        priced: launched ? 1 : 0,
+      })),
+    }),
+  )
+  await page.route('**/api/candidates/runs/m-busy/status', (route) => {
+    statusCalls++
+    return route.fulfill({
+      json: {
+        run_id: 'm-busy',
+        state: released ? 'done' : 'running',
+        stage: 'fine',
+        done: 2,
+        total: 10,
+        error: null,
+        started_at: null,
+        updated_at: '2026-11-15T09:00:00Z',
+      },
+    })
+  })
+  await page.route('**/api/pricing/calculate', (route) => {
+    batchCalls++
+    if (!released)
+      return route.fulfill({
+        status: 409,
+        json: {
+          detail: {
+            message: 'another search is running',
+            running_run_id: 'm-busy',
+          },
+        },
+      })
+    launched = true
+    const input = route.request().postDataJSON() as { landing_dates: string[] }
+    return route.fulfill({
+      status: 202,
+      json: {
+        run_ids: input.landing_dates.map((date) => `m-${date}`),
+        state: 'queued',
+        cached: false,
+      },
+    })
+  })
+  await page.goto('/?planner=1')
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
+  await expect(
+    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+  ).toBeVisible()
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+  expect(batchCalls).toBe(1)
+  expect(statusCalls).toBeGreaterThan(0)
+  released = true
+  await expect(
+    dialog.getByRole('table').getByText('$29M', { exact: true }),
+  ).toHaveCount(19)
+  expect(batchCalls).toBe(2)
+  await expect(
+    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+  ).toHaveCount(0)
 })

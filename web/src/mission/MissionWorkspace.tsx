@@ -9,6 +9,7 @@ import {
 } from './MissionMoonViewer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { useDashboardRun } from './useDashboardRun'
+import { useSunDirection } from './useSunDirection'
 
 export function MissionWorkspace({
   selection,
@@ -42,6 +43,8 @@ export function MissionWorkspace({
   searchUrl.searchParams.delete('planner')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
+  // The Sun at landing (00:00 UTC) lights the Moon whether or not a candidate is selected.
+  const sun = useSunDirection(selection.landing)
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -49,6 +52,7 @@ export function MissionWorkspace({
         selection={selection}
         sites={sites}
         onSelect={onSelect}
+        sun={sun}
       />
       <header className="pointer-events-none absolute left-4 top-4 flex max-w-[60%] flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold uppercase tracking-wide">

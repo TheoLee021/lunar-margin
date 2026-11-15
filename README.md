@@ -104,43 +104,51 @@ remain readable and are labeled as not applying slope. Start a new search to app
 the limit; old results are not reused by the new mission cache version.
 This is terrain screening, not certified landing safety.
 
-## Prices from the 500m candidate search
+## Provider prices from the 500m candidate search
 
-Open the mission date planner (`/?planner=1`), or choose “이 임무 조건으로 날짜별
-가격 비교” on a saved candidate search. Choose cargo mass (default 24kg), delivery
-(default surface), and the candidate mission conditions. The five landing-date
-rows show equal-weight means over **all eligible fine 500m samples**, before
-Top-K selection, with priced counts and a modeled fixed-fee range. A date with no
-result shows “미계산”; “미계산 날짜 탐색 · 500m” starts one batch of precision
-searches for the missing dates. Completed runs are reused. Clicking a completed date cell opens its exact saved candidate run (including no-eligible results), preserving departure, landing, duration and run ID in the URL without starting another search. Missing results keep the ordinary draft-date selection behavior;
-10km development results and coarse-only samples are never averaged as 500m data.
+The date planner compares six companies using a planning model. Public company
+rates take priority; missing rates use the existing delivery-mode reference tariff,
+with the modeled $500,000 fixed fee when no fee is published. The UI distinguishes
+public-rate estimates from the common model and lists the assumptions. These are
+not bookable company quotes. Each date combination averages each original eligible
+500m grid's lowest estimated cost, before Top-K selection. Partial grid coverage
+never becomes a full-grid mean.
 
-The price is `F + c*m*F_destination*F_demand`. A 500m-radius native-DEM slope
-neighborhood supplies the destination adjustment. The date's average depends on
-which samples pass that date's search and landing-terrain gates. Each date keeps the same adaptive grids and exact price average as an individual
-precision search. There is no transit surcharge: valid departures for the same landing date show the same
-mean, and transfers outside 3–150 days are unavailable in the price table.
+Choose a tentative departure from Spaceflight Now and Space Launch
+Schedule (including general launches in demo mode), then choose the landing date independently. Month-only or conflicting
+dates cannot be auto-selected. Selecting a launch applies its operator’s model rate to the
+same eligible-grid average; an unavailable operator/delivery rate uses the labeled common
+reference model. Clearing the selection restores the six-company minimum comparison.
+Only published exact departure days have prices and links; selecting a flight enables
+only its scheduled day, and unscheduled departure dates cannot be applied.
+The selected launch ID persists through applying dates and opening candidate searches.
+A compact selector retains date precision and source links without a separate
+launch catalog, company filter, or search panel. Clicking a completed date opens its saved candidate search and carries
+departure, landing, duration, mass and delivery mode. Details display all six companies.
+The strict public-quote API remains available separately and never fills unknown
+quotes with model estimates. See [schedule integration and assumptions](docs/launch-schedule.md).
 
-The pricing API exposes term-level evidence and per-grid details. Missing terrain
-uses a 1.10 fallback marked unknown in the API; the six-persona demand
-model is not connected, so demand is unestimated (1.00). Customer
-equipment slope limits use the candidate search’s 250 m regional DEM slope P95;
-the pricing model’s 500 m terrain gates are separate. Actual flight availability,
-lander capacity and commercial quotes are not verified. The two-digit USD values
-are model estimates, not live fares. Contracts and provenance: [docs/api.md](docs/api.md).
+There is no Top-100 shortcut or company-specific terrain recomputation. The
+calendar assesses mission terms first, reads each landing date’s terrain once only
+when a comparable estimate exists, and compares provider costs with vector
+operations. Saved runs selected as the mission template are reused across search
+hash versions only while their mission conditions match. Missing dates still start
+one batch through `POST /pricing/calculate`; completed dates are excluded.
 
-The price calendar batches up to five dates through `POST /pricing/calculate`,
-sharing terrain-profile reads and worker processes while preserving each date's
-SPICE samples and grid-selection rules. It polls at 250ms and retains standard
-candidate run artifacts for the search screen. Batch calculation requires a
-complete matching precomputed horizon table and reports a clear failure if it is
-missing. The measured local five-date/14-day target is under 15 seconds with that
-table available; server speed and mission length affect runtime.
+See [provider sources, rules and measured timings](docs/provider-pricing.md) and
+[API contracts](docs/api.md). Local synthetic price comparison of six qualified
+providers × 142,642 unchanged grids × five dates took 0.004–0.006 seconds. This
+measures pricing after terrain analysis, not a new NASA search. The batch search
+continues to require its matching precomputed horizon table.
 
 ## 착륙 격자 예약
 
 500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
 
+출발일은 날짜 계획의 **발사 일정에서 출발일 선택**에서 Spaceflight Now와
+Space Launch Schedule의 전체 발사 예정일을 데모 입력으로 고를 수 있습니다. 착륙일은 별도로 직접
+선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
+실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).
 
 Candidate search also accepts an optional **maximum regional roughness (m)**.
 It uses the 250 m regional P95 of 400 m plane-detrended RMS roughness, separate
