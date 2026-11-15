@@ -44,9 +44,12 @@ describe('Requirement margins', () => {
   })
 
   it('uses RF values for an RF-configured run', () => {
-    const withRf = { ...config, rf: {} }
-    withRf.thresholds.min_rf_fraction = 0.8
-    const rows = requirementMargins(candidate, withRf as SearchConfig)
+    const withRf = {
+      ...config,
+      rf: {} as NonNullable<SearchConfig['rf']>,
+      thresholds: { ...config.thresholds, min_rf_fraction: 0.8 },
+    } as SearchConfig
+    const rows = requirementMargins(candidate, withRf)
     const comm = rows.find((row) => row.key === 'communication-fraction')
     expect(comm?.margin).toBe(0)
   })
