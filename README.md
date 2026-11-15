@@ -83,3 +83,7 @@ The timeline uses server elevations/visibility and exact server windows, with th
 Run a backend containing #5 and the SPICE concurrency fix before exercising this frontend. Download NASA data once from `api/` with `uv run python -m lunar_margin.pipeline.fetch`; DEM and kernels stay outside the frontend and Git. `API_PROXY_TARGET` selects the local API; `VITE_API_URL` selects the deployed API. The API client, response schema and shared analysis helpers are reused from #6 without replacing its analysis page.
 
 Candidate search UI: choose **후보지 탐색**, enter a mission, and optionally enable the development search (20 km → 10 km). Requires the candidate search backend. See [docs/candidates.md](docs/candidates.md).
+
+## 착륙 격자 예약
+
+500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.

@@ -1,0 +1,20 @@
+name: lunar-margin-reservations
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lunar_margin
+      POSTGRES_PASSWORD: lunar_margin
+      POSTGRES_DB: lunar_margin
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - reservation-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lunar_margin -d lunar_margin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  reservation-data:

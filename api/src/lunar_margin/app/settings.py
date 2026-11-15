@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,9 @@ class Settings(BaseSettings):
 
     # NASA 원천 데이터(DEM, SPICE 커널) 저장 위치. 배포에서는 Railway Volume 마운트 경로
     data_dir: Path = Path("data")
+
+    reservation_database_url: SecretStr | None = None
+    reservation_admin_token: SecretStr | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

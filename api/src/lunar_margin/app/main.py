@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.candidates import router as candidates_router
+from lunar_margin.app.reservations import router as reservations_router
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.trajectory import router as trajectory_router
 
@@ -22,12 +23,13 @@ def create_app(settings: Settings) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_origin_regex=settings.cors_origin_regex or None,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
 
     app.include_router(analysis_router)
     app.include_router(candidates_router)
+    app.include_router(reservations_router)
     app.include_router(trajectory_router)
 
     @app.get("/health")
