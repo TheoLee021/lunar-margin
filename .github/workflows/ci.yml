@@ -50,6 +50,15 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run ruff check .
+      - name: Preview Ruff-formatted API files
+        run: |
+          uv run ruff format .
+          for p in src/lunar_margin/engine/access_diagnostics.py src/lunar_margin/engine/landing_grid.py src/lunar_margin/app/landing_grid.py src/lunar_margin/app/site_assessment.py src/lunar_margin/app/main.py tests/engine/test_landing_grid.py tests/test_landing_grid_api.py; do
+            echo "@@RUFF_BEGIN:$p"
+            base64 -w0 "$p"
+            echo
+            echo "@@RUFF_END:$p"
+          done
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run pytest
