@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { providerCalendarFixture } from './provider-pricing-fixture.js'
+import { z } from 'zod'
 
 test('missing landing dates launch one batch and display all five results', async ({
   page,
@@ -185,4 +186,135 @@ test('date prices open the saved candidate run without recalculating', async ({
   await expect(page.getByTestId('search-error')).toContainText('404')
   await expect(page.getByRole('tab', { name: /1 \/ 6/ })).toHaveCount(0)
   expect(recalculations).toBe(0)
+})
+
+test('candidate ranks show per-grid prices and recover from a price-only failure', async ({
+  page,
+  request,
+}) => {
+  const fixtureResponse = await request.get(
+    'http://localhost:8765/candidates/runs/synthetic',
+  )
+  expect(fixtureResponse.ok()).toBe(true)
+  const fixture = z
+    .object({
+      candidates: z
+        .array(
+          z.object({
+            id: z.string(),
+            rank: z.number(),
+            x_m: z.number(),
+            y_m: z.number(),
+          }),
+        )
+        .min(3),
+    })
+    .parse(await fixtureResponse.json())
+  const selected = [...fixture.candidates]
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 3)
+  expect(selected).toHaveLength(3)
+  await page.route('**/api/candidates/**', (route) =>
+    route.continue({
+      url: route
+        .request()
+        .url()
+        .replace(/^https?:\/\/[^/]+\/api/, 'http://localhost:8765'),
+    }),
+  )
+  let requests = 0
+  let servePrices = false
+  let release: () => void = () => {}
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const price = {
+    baseline_usd: 29300000,
+    transport_usd: 28800000,
+    destination_adjustment_usd: 0,
+    demand_adjustment_usd: 0,
+    fixed_usd: 500000,
+    adjusted_usd: 29300000,
+    range_low_usd: 29300000,
+    range_high_usd: 33800000,
+    destination_multiplier: 1,
+    demand_multiplier: 1,
+    destination_unknown: false,
+    demand_unknown: true,
+    grade: 'modeled',
+  }
+  await page.route('**/api/pricing/runs/synthetic?**', async (route) => {
+    requests++
+    const query = new URL(route.request().url()).searchParams
+    expect(query.get('mass_kg')).toBe('24')
+    expect(query.get('delivery')).toBe('surface')
+    expect(query.get('include_cells')).toBe('true')
+    if (!servePrices) {
+      await pending
+      await route.fulfill({
+        status: 503,
+        json: { detail: 'temporary price failure' },
+      })
+      return
+    }
+    const cell = (index: number) => ({
+      id: selected[index]!.id,
+      x_m: selected[index]!.x_m,
+      y_m: selected[index]!.y_m,
+      landable_fraction: 1,
+      aim_slope_deg: 0,
+    })
+    await route.fulfill({
+      json: {
+        run_id: 'synthetic',
+        landing_date: '2027-01-10',
+        mission_duration_days: 14,
+        grid_spacing_m: 500,
+        counts: {
+          fine: 3,
+          eligible: 2,
+          priced: 1,
+          terrain_excluded: 1,
+          terrain_unknown: 0,
+          unevaluated: 0,
+          coarse_ignored: 0,
+        },
+        mean: price,
+        // Reverse the price records: each amount must follow its grid ID, not its row index.
+        cells: [
+          {
+            ...cell(1),
+            price: null,
+            excluded_reason: 'aim_point_slope_above_10_deg',
+          },
+          { ...cell(0), price, excluded_reason: null },
+        ],
+      },
+    })
+  })
+  await page.goto('/?view=search&run=synthetic')
+  const region = page.getByRole('region', { name: '후보 목록', exact: true })
+  const row = (index: number) =>
+    region.getByRole('row').filter({
+      has: page.getByRole('button', {
+        name: selected[index]!.id,
+        exact: true,
+      }),
+    })
+  await expect(
+    region.getByRole('columnheader', { name: '가격 (USD)', exact: true }),
+  ).toBeVisible()
+  await expect(row(0)).toContainText('조회 중')
+  release()
+  await expect(row(0)).toContainText('조회 실패')
+  const failedRequests = requests
+  servePrices = true
+  await region
+    .getByRole('button', { name: '가격 다시 불러오기', exact: true })
+    .click()
+  await expect(row(0)).toContainText('$29M')
+  await expect(row(1)).toContainText('산정 제외')
+  await expect(row(2)).toContainText('미산정')
+  await expect(region).toContainText('24 kg · 표면 하역')
+  expect(requests).toBe(failedRequests + 1)
 })

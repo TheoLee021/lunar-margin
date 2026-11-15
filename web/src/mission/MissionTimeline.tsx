@@ -14,10 +14,12 @@ export function MissionTimeline({
   timeline: tl,
   duration,
   hour,
+  observerHeightM = 0,
 }: {
   timeline: Timeline
   duration: number
   hour: number
+  observerHeightM?: number
 }) {
   const [inspection, setInspection] = useState<number | null>(null)
   const patternId = useId()
@@ -285,9 +287,10 @@ export function MissionTimeline({
       </div>
       <p className="hint">
         {tl.start.slice(0, 10)} → {tl.end.slice(0, 10)} UTC · {tl.stepMinutes}분
-        간격 · 관측 높이 0 m. 실선은 천체 중심 고도, 점선은 그 방위각의 지형
-        지평선입니다. 색 막대는 서버의 가시 구간입니다. 그래프나 슬라이더로 실제
-        표본 시각을 확인하세요. 지구 가시성은 통신 품질을 뜻하지 않습니다.
+        간격 · 관측 높이 {observerHeightM} m. 실선은 천체 중심 고도, 점선은 그
+        방위각의 지형 지평선입니다. 색 막대는 서버의 가시 구간입니다. 그래프나
+        슬라이더로 실제 표본 시각을 확인하세요. 지구 가시성은 통신 품질을 뜻하지
+        않습니다.
       </p>
     </>
   )

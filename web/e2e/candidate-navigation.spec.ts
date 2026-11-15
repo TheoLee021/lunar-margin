@@ -1,8 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { mockDashboardRuns } from './dashboard-fixture.js'
 
 test('returning from candidate search keeps the selected mission site', async ({
   page,
+  request,
 }) => {
+  await mockDashboardRuns(page, request)
   await page.goto('/')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   await rail.getByRole('button', { name: /후보 2/ }).click()
