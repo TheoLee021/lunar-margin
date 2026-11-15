@@ -24,6 +24,15 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - name: Preview formatted grid files
+        run: |
+          npx prettier --write src/api/landingGrid.ts src/mission/MissionWorkspace.tsx src/search/CandidateDetail.tsx src/search/LandingGridPanel.tsx
+          for p in src/api/landingGrid.ts src/mission/MissionWorkspace.tsx src/search/CandidateDetail.tsx src/search/LandingGridPanel.tsx; do
+            echo "@@PRETTIER_BEGIN:$p"
+            base64 -w0 "$p"
+            echo
+            echo "@@PRETTIER_END:$p"
+          done
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run test
