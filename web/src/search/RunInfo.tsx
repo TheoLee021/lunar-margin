@@ -59,7 +59,7 @@ export function RunInfo({ run }: { run: RunDetail }) {
         />
         <Item
           label="점수 가중치"
-          value={`일조 ${config.weights.sun} : 지구 ${config.weights.earth}`}
+          value={`일조 ${config.weights.sun} : ${config.rf ? 'RF 통신' : '지구'} ${config.weights.earth}`}
         />
         <Item
           label="필수 조건(임계값)"

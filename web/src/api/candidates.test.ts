@@ -261,3 +261,26 @@ it('preserves a saved RF margin separately from geometric diagnostics', () => {
   })
   expect(parsed).toHaveProperty('rf.min_link_margin_db', 15.688618)
 })
+
+it('preserves nominal RF metrics independently of geometric Earth visibility', () => {
+  const parsed = CandidateSchema.parse({
+    ...candidate,
+    rf: {
+      fraction: 0.25,
+      longest_blackout_hours: 6,
+      min_link_margin_db: 2,
+      required_ebn0_db: 0.7458859875,
+      rx_required_dbw: -144.1441360426,
+      evaluation_hours: 24,
+      available_hours: 6,
+    },
+    score: {
+      ...candidate.score,
+      communication_basis: 'nominal_rf',
+      communication_component: 0.5,
+    },
+  })
+  expect(parsed).toHaveProperty('rf.fraction', 0.25)
+  expect(parsed).toHaveProperty('earth.fraction', null)
+  expect(parsed).toHaveProperty('score.communication_basis', 'nominal_rf')
+})

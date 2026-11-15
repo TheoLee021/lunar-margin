@@ -6,6 +6,8 @@ from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from lunar_margin.engine.rf import RFScenario
+
 # de440s.bsp가 덮는 기간 (약 1849-12-26 ~ 2150-01-22)
 EPHEMERIS_START = datetime(1850, 1, 1, tzinfo=UTC)
 EPHEMERIS_END = datetime(2150, 1, 1, tzinfo=UTC)
@@ -33,6 +35,8 @@ class Roi(_Frozen):
 class Thresholds(_Frozen):
     """필수 적격 조건. None이면 그 조건은 적용하지 않는다. 경계값은 포함(>=, <=)한다."""
 
+    min_rf_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_rf_blackout_hours: float | None = Field(default=None, ge=0.0)
     min_sun_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
     max_sun_dark_hours: float | None = Field(default=None, ge=0.0)
     min_earth_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -78,6 +82,7 @@ class AnalysisWindow(_Frozen):
 
 
 class SearchConfig(_Frozen):
+    rf: RFScenario | None = None  # Legacy CLI runs retain geometric scoring.
     roi: Roi = Roi()
     grid_spacing_m: float = Field(default=500.0, gt=0.0)
     # 거친 단계 간격. None이면 한 단계로 전부 계산한다. grid_spacing_m의 정수배여야 한다

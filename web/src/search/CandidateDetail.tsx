@@ -277,6 +277,39 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
 
       <div className="flex flex-col gap-4 text-xs">
         <div>
+          <h4 className="mb-1 font-semibold text-sky-300">명목 RF 통신</h4>
+          {candidate.rf ? (
+            <>
+              <dl>
+                <Row
+                  label="RF 통신 가능 비율"
+                  value={fractionText(candidate.rf.fraction)}
+                />
+                <Row
+                  label="최장 연속 두절"
+                  value={hoursText(candidate.rf.longest_blackout_hours)}
+                />
+                <Row
+                  label="통신 가능 시간"
+                  value={hoursText(candidate.rf.available_hours)}
+                />
+                <Row
+                  label="평가 시간"
+                  value={hoursText(candidate.rf.evaluation_hours)}
+                />
+              </dl>
+              <p className="mt-1 text-neutral-400">
+                LOS 차폐 시 통신 불가. 마진은 차폐 손실을 제외한 가상 LOS
+                값입니다. 실제 지상국·일정·대기·멀티패스는 반영하지 않습니다.
+              </p>
+            </>
+          ) : (
+            <p className="text-neutral-400">
+              이 실행은 RF를 평가하지 않았습니다.
+            </p>
+          )}
+        </div>
+        <div>
           <h4 className="mb-1 font-semibold text-neutral-200">지역 지형</h4>
           {candidate.terrain ? (
             <>
@@ -318,7 +351,21 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
           <dl>
             <Row label="종합 점수" value={scoreText(score.total)} />
             <Row label="일조 성분" value={scoreText(score.sun_component)} />
-            <Row label="지구 성분" value={scoreText(score.earth_component)} />
+            <Row
+              label="지구 LOS 성분"
+              value={scoreText(score.earth_component)}
+            />
+            {score.communication_basis === 'nominal_rf' ? (
+              <>
+                <Row
+                  label="RF 통신 점수 성분"
+                  value={scoreText(score.communication_component ?? null)}
+                />
+                <p className="mt-1 text-neutral-400">
+                  통신 성분 = (RF 가능 비율 + 1 − 최장 두절 / 평가 시간) / 2
+                </p>
+              </>
+            ) : null}
           </dl>
           {score.components_used < 2 ? (
             <p className="mt-1 text-neutral-500">

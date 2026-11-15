@@ -24,7 +24,7 @@ class EarthMetrics(_Model):
 
 
 class RFMetrics(_Model):
-    """Read saved nominal RF results from PR #47; no RF evaluation is added here."""
+    """Duration-weighted nominal DTE communication results."""
 
     fraction: float | None
     longest_blackout_hours: float | None

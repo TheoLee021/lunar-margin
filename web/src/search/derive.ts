@@ -139,10 +139,13 @@ export function funnelSteps(
 }
 
 const REASON_LABELS: Readonly<Record<string, string>> = {
+  rf_incomplete: 'RF 통신 지표를 계산하지 못함',
+  rf_fraction_below_min: 'RF 통신 가능 비율이 최소 기준보다 낮음',
+  rf_blackout_hours_above_max: 'RF 최장 두절이 허용 시간보다 김',
   sun_fraction_below_min: '일조율이 최소 기준보다 낮음',
   sun_dark_hours_above_max: '최장 암흑이 허용 시간보다 김',
   earth_fraction_below_min: '지구 가시율이 최소 기준보다 낮음',
-  earth_blackout_hours_above_max: '최장 통신 두절이 허용 시간보다 김',
+  earth_blackout_hours_above_max: '최장 지구 LOS 차폐가 허용 시간보다 김',
   horizon_incomplete: '수평선이 높이 지도 밖으로 나가 제외',
   terrain_slope_above_max: '250 m 지역 경사 P95가 허용 경사보다 큼',
   terrain_incomplete: '지역 지형 자료가 불완전하여 판정 불가',
@@ -302,6 +305,8 @@ export type SortKey =
   | 'sun'
   | 'earth'
   | 'roughness'
+  | 'rf'
+  | 'rfBlackout'
   | 'slope'
   | 'score'
   | 'region'
@@ -323,6 +328,10 @@ function sortValue(candidate: Candidate, key: SortKey): number | string | null {
       return candidate.earth.fraction
     case 'roughness':
       return candidate.terrain?.roughness_p95_m ?? null
+    case 'rf':
+      return candidate.rf?.fraction ?? null
+    case 'rfBlackout':
+      return candidate.rf?.longest_blackout_hours ?? null
     case 'slope':
       return candidate.terrain?.slope_p95_deg ?? null
     case 'score':

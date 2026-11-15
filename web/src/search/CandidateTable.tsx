@@ -5,6 +5,7 @@ import type { Candidate } from '../api/candidates'
 import type { CandidateAvailability } from '../api/reservations'
 import {
   fractionText,
+  hoursText,
   degText,
   scoreText,
   sortCandidates,
@@ -32,7 +33,9 @@ const COLUMNS: readonly {
   { key: 'lat', label: '위도', align: 'right' },
   { key: 'lon', label: '경도(°E)', align: 'right' },
   { key: 'sun', label: '일조율', align: 'right' },
-  { key: 'earth', label: '지구 가시율', align: 'right' },
+  { key: 'earth', label: '지구 LOS', align: 'right' },
+  { key: 'rf', label: 'RF 통신 가능 비율', align: 'right' },
+  { key: 'rfBlackout', label: 'RF 최장 두절', align: 'right' },
   { key: 'slope', label: '지역 경사 P95', align: 'right' },
   { key: 'roughness', label: '지역 거칠기 P95', align: 'right' },
   { key: 'score', label: '점수', align: 'right' },
@@ -205,6 +208,12 @@ export function CandidateTable({
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-sky-300">
                   {fractionText(c.earth.fraction)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {fractionText(c.rf?.fraction ?? null)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {hoursText(c.rf?.longest_blackout_hours ?? null)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {degText(c.terrain?.slope_p95_deg ?? null)}

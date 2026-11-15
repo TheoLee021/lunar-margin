@@ -16,6 +16,7 @@ from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
 from lunar_margin.engine.horizon import HorizonProfile, horizon_profile
 from lunar_margin.engine.metrics import summarize, visibility_series
+from lunar_margin.engine.rf import RFScenario, summarize_rf
 from lunar_margin.engine.site_characteristics import characterize_region
 
 
@@ -37,6 +38,10 @@ class MetricField:
     terrain_coverage_fraction: NDArray[np.float64]
     terrain_roughness_p95_m: NDArray[np.float64]
 
+    rf_fraction: NDArray[np.float64]
+    rf_longest_blackout_h: NDArray[np.float64]
+    rf_min_link_margin_db: NDArray[np.float64]
+
     def __len__(self) -> int:
         return int(self.computed.shape[0])
 
@@ -45,6 +50,9 @@ class MetricField:
         """n개 지점 모두 결측인 장. 테스트와 부분 채우기용."""
         nan = np.full(n, np.nan)
         return cls(
+            rf_fraction=nan.copy(),
+            rf_longest_blackout_h=nan.copy(),
+            rf_min_link_margin_db=nan.copy(),
             sun_fraction=nan.copy(),
             sun_longest_dark_h=nan.copy(),
             sun_windows_per_24h=nan.copy(),
@@ -78,6 +86,7 @@ class FieldSettings:
     max_range_m: float
     observer_height_m: float
     assess_terrain: bool = False
+    rf: RFScenario | None = None
 
 
 @dataclass(frozen=True)
@@ -90,8 +99,8 @@ class FieldContext:
 
 
 # 한 지점이 돌려주는 값의 열 순서 (MetricField의 필드 순서와 같다)
-_COLUMNS = 14
-MISSING_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan, math.nan)
+_COLUMNS = 17
+MISSING_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan,) * 6
 
 
 def _site_row(ctx: FieldContext, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
@@ -134,6 +143,13 @@ def _profile_row(
         terrain_metrics(ctx.dem, lat_deg, lon_deg)
         if s.assess_terrain
         else (math.nan, math.nan, math.nan)
+    )
+    values += (
+        summarize_rf(
+            s.rf, ctx.earth_vectors, visible, s.window, lat_deg, lon_deg, s.observer_height_m
+        )
+        if s.rf is not None
+        else (math.nan,) * 3
     )
     return tuple(values)
 
@@ -254,6 +270,9 @@ def compute_field(
 
 def field_from_matrix(matrix: NDArray[np.float64]) -> MetricField:
     return MetricField(
+        rf_fraction=matrix[:, 14],
+        rf_longest_blackout_h=matrix[:, 15],
+        rf_min_link_margin_db=matrix[:, 16],
         sun_fraction=matrix[:, 0],
         sun_longest_dark_h=matrix[:, 1],
         sun_windows_per_24h=matrix[:, 2],
