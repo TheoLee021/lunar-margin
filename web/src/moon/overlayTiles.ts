@@ -46,10 +46,29 @@ export const NormalMetaSchema = z.object({
   encoding: z.object({ bias: z.number(), scale: z.number().positive() }),
 })
 
+/**
+ * The slopes out to 60°S in one image, for lighting the ground beyond the 85°S overlay. Only servers
+ * that hold the DEM for that area have this layer.
+ */
+export const NormalWideMetaSchema = z.object({
+  version: z.literal(1),
+  layer: z.literal('normal-wide'),
+  levels: z.array(LevelSchema).min(1),
+  encoding: z.object({ bias: z.number(), scale: z.number().positive() }),
+  /** Grid of the sunlight map of the same area (docs/api.md, Sunlight). */
+  sunlight: z.object({
+    pixel_size_m: z.number().positive(),
+    size_px: z.number().int().positive(),
+    center_px: z.number().int().nonnegative(),
+  }),
+})
+
 /** One level of a layer: its pixel grid and how it is cut into tiles (docs/api.md, Tiles). */
 export type TileLevel = z.infer<typeof LevelSchema>
 export type HorizonMeta = z.infer<typeof HorizonMetaSchema>
 export type NormalMeta = z.infer<typeof NormalMetaSchema>
+export type NormalWideMeta = z.infer<typeof NormalWideMetaSchema>
+type Layer = 'horizon' | 'normal' | 'normal-wide'
 
 export interface RgbaImage {
   width: number
@@ -119,7 +138,7 @@ async function fetchOk(url: string, signal: AbortSignal): Promise<Response> {
 
 /** Fetches and decodes one tile of a layer. */
 export async function fetchTile(
-  layer: 'horizon' | 'normal',
+  layer: Layer,
   tile: { z: number; x: number; y: number },
   baseUrl: string,
   signal: AbortSignal,
@@ -132,7 +151,7 @@ export async function fetchTile(
 }
 
 async function loadLayer<T>(
-  layer: 'horizon' | 'normal',
+  layer: Layer,
   schema: z.ZodType<T>,
   baseUrl: string,
   signal: AbortSignal,
@@ -165,4 +184,19 @@ export async function loadTerrainOverlays(
   )
     throw new Error('overlay tile sizes do not match their meta')
   return { horizon, normal }
+}
+
+/**
+ * Fetches and validates the meta of the wide normal layer. Its single tile is fetched with
+ * fetchTile; the meta comes first so that the sunlight map of the area can be asked for meanwhile.
+ */
+export async function loadWideMeta(
+  signal: AbortSignal,
+  baseUrl: string = DEFAULT_BASE_URL,
+): Promise<NormalWideMeta> {
+  const response = await fetchOk(
+    `${baseUrl}/tiles/normal-wide/meta.json`,
+    signal,
+  )
+  return NormalWideMetaSchema.parse(await response.json())
 }

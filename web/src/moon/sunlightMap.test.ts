@@ -4,6 +4,7 @@ import {
   loadSunlightMap,
   sunlightMapUrl,
   sunlightWindowUrl,
+  wideSunlightMapUrl,
 } from './sunlightMap'
 
 describe('sunlightMapUrl', () => {
@@ -13,6 +14,21 @@ describe('sunlightMapUrl', () => {
     )
 
     expect(url.pathname).toBe('/base/sunlight/south-pole.png')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      x: '0.6',
+      y: '-0.8',
+      z: '0.0125',
+    })
+  })
+})
+
+describe('wideSunlightMapUrl', () => {
+  it('asks for the map that reaches 60°S for the same Sun direction', () => {
+    const url = new URL(
+      wideSunlightMapUrl('https://api.example/base', [0.6, -0.8, 0.0125]),
+    )
+
+    expect(url.pathname).toBe('/base/sunlight/south-pole-wide.png')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       x: '0.6',
       y: '-0.8',
@@ -99,6 +115,34 @@ describe('loadSunlightMap', () => {
     })
 
     expect(urls).toEqual(['/api/sunlight/south-pole/4/87/105.png?x=1&y=0&z=0'])
+  })
+
+  it('fetches the wide map from its own address, waiting while the server is busy', async () => {
+    const responses = [busy(), ok()]
+    const urls: string[] = []
+    const waits: number[] = []
+
+    const map = await loadSunlightMap(
+      [1, 0, 0],
+      '/api',
+      new AbortController().signal,
+      {
+        wide: true,
+        fetchFn: (url) => {
+          urls.push(String(url))
+          return Promise.resolve(responses.shift()!)
+        },
+        wait: (ms) => {
+          waits.push(ms)
+          return Promise.resolve()
+        },
+      },
+    )
+
+    const address = '/api/sunlight/south-pole-wide.png?x=1&y=0&z=0'
+    expect(urls).toEqual([address, address])
+    expect(waits).toEqual([7000])
+    expect(Array.from(map.data)).toEqual([10, 200, 1, 0])
   })
 
   it('gives up when the server stays busy', async () => {
