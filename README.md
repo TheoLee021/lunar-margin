@@ -19,6 +19,7 @@ A body counts as visible when its elevation is above the terrain horizon in its 
 Derived data (generated locally, not downloaded, not in git): `uv run python -m lunar_margin.pipeline.horizons` precomputes the terrain horizon of every search-grid site into `DATA_DIR/horizons/` (about 210 MB, roughly 20 minutes on 12 cores).
 Horizons depend only on the site and the DEM, not on dates or mission limits, so later searches read them instead of recomputing.
 To share a table instead of recomputing it on every machine, `pipeline.horizons --upload` puts it in a private Supabase Storage bucket (split into 32 MiB parts with a sha256 manifest) and `pipeline.horizons --download` fetches and verifies it. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_BUCKET` in `api/.env`; the service-role key stays on the backend or a local script, never in the frontend.
+When those variables are set and the table is missing, the API server downloads it in a background thread at startup (it does not wait; set `HORIZON_TABLE_DOWNLOAD_ON_START=false` to disable). In a deployment keep `DATA_DIR` on a persistent volume so it is not downloaded on every deploy.
 
 Sources, versions, and file list: [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
 

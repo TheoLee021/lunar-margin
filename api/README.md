@@ -87,6 +87,8 @@ uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 Sto
 
 `api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(기본 `horizon-tables`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
 
+**서버를 시작할 때 테이블이 없으면 위 설정이 있는 경우 자동으로 받는다** (백그라운드, 서버는 바로 뜬다). 배포에서는 `DATA_DIR`을 영구 Volume에 두면 다시 받지 않는다. `HORIZON_TABLE_DOWNLOAD_ON_START=false`로 끈다.
+
 두 데이터는 이렇게 합쳐진다: 천체의 고도가 그 방향의 지형 수평선보다 높으면 "보인다"고 판정하고,
 이 판정을 시간별로 쌓아 일조율·최장 암흑 시간·지구 가시율 같은 지표를 만든다 (자세한 방법은 아래 "계산 방법").
 

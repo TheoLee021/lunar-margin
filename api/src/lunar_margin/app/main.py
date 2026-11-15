@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI
@@ -8,6 +10,7 @@ from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.candidates import router as candidates_router
 from lunar_margin.app.settings import Settings
 from lunar_margin.app.trajectory import router as trajectory_router
+from lunar_margin.pipeline.table_prefetch import start_prefetch
 
 
 class Health(BaseModel):
@@ -15,7 +18,12 @@ class Health(BaseModel):
 
 
 def create_app(settings: Settings) -> FastAPI:
-    app = FastAPI(title="Lunar Margin API")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        start_prefetch(settings)  # 백그라운드로 시작하고 기다리지 않는다
+        yield
+
+    app = FastAPI(title="Lunar Margin API", lifespan=lifespan)
     app.state.settings = settings
 
     app.add_middleware(

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
     supabase_bucket: str = "horizon-tables"
+    # 서버 시작 시 수평선 테이블이 없으면 Storage에서 백그라운드로 받는다 (Storage 설정이 있을 때만)
+    horizon_table_download_on_start: bool = True
 
     # NASA 원천 데이터(DEM, SPICE 커널) 저장 위치. 배포에서는 Railway Volume 마운트 경로
     data_dir: Path = Path("data")
