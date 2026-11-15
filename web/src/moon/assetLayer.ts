@@ -87,9 +87,15 @@ const NEAR_BODY = new DistanceDisplayCondition(0, BODY_VISIBLE_WITHIN_M)
  */
 const BADGE_RANGE = new DistanceDisplayCondition(0, 50_000)
 
-/** The mast that carries the line of sight, drawn so its height is visible, not implied. */
+/**
+ * The mast that carries the line of sight, drawn so its height is visible rather than
+ * implied. A unit with a model of its own already has one, and a second would stand
+ * straight through the body, so only plain shapes get it.
+ */
 const MAST_RADIUS_M = 0.12
 const MAST_MIN_M = 1
+const wantsMast = (asset: MoonAsset): boolean =>
+  !asset.model && asset.observerHeightM >= MAST_MIN_M
 
 const MAST_COLOR = Color.fromCssColorString('#94a3b8')
 const BODY_COLOR = Color.fromCssColorString('#cbd5e1').withAlpha(0.95)
@@ -276,7 +282,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
 
     const mast = viewer.entities.add({
       position: new CallbackPositionProperty(() => live.mast, false),
-      show: asset.observerHeightM >= MAST_MIN_M,
+      show: wantsMast(asset),
       cylinder: {
         length: asset.observerHeightM,
         topRadius: MAST_RADIUS_M,
@@ -307,7 +313,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       entities.mast.cylinder.length = new ConstantProperty(
         asset.observerHeightM,
       )
-    entities.mast.show = asset.observerHeightM >= MAST_MIN_M
+    entities.mast.show = wantsMast(asset)
 
     const positions = sightPositions(asset, ground)
     sight.positions = positions

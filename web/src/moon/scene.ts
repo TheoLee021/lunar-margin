@@ -15,6 +15,7 @@ import {
   Matrix4,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  Transforms,
   UniformType,
   Viewer,
 } from 'cesium'
@@ -92,8 +93,10 @@ export interface MoonScene {
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
   /**
-   * Lock the camera onto a point and hold it there, for following something that moves.
-   * Call `releaseFollow` to hand control back to the user.
+   * Ride along with something that moves. The camera stays in the moving point's own
+   * frame, so dragging and zooming still work; once the viewer has been still for a
+   * few seconds it settles back to `rangeM`, `pitchDeg` and `headingDeg`.
+   * Call `releaseFollow` to hand control back entirely.
    */
   follow(
     location: LunarLocation,
@@ -188,6 +191,16 @@ export async function createMoonScene(
 
   const markers = createMarkerLayer(viewer)
   const assets = createAssetLayer(viewer)
+
+  // How long the camera leaves a viewer's own framing alone before resuming the chase.
+  const HANDS_OFF_MS = 3000
+  let lastInputAt = 0
+  const noteInput = () => {
+    lastInputAt = performance.now()
+  }
+  const canvas = scene.canvas
+  canvas.addEventListener('wheel', noteInput, { passive: true })
+  canvas.addEventListener('pointerdown', noteInput, { passive: true })
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
@@ -263,8 +276,17 @@ export async function createMoonScene(
         0,
         Ellipsoid.MOON,
       )
+      const target = scene.clampToHeight(onEllipsoid) ?? onEllipsoid
+      if (performance.now() - lastInputAt < HANDS_OFF_MS) {
+        // Hands on the controls: carry the frame along with the target and leave
+        // the distance and angle exactly as the viewer set them.
+        camera.lookAtTransform(
+          Transforms.eastNorthUpToFixedFrame(target, Ellipsoid.MOON),
+        )
+        return
+      }
       camera.lookAt(
-        scene.clampToHeight(onEllipsoid) ?? onEllipsoid,
+        target,
         new HeadingPitchRange(
           CesiumMath.toRadians(headingDeg),
           CesiumMath.toRadians(pitchDeg),
@@ -295,6 +317,8 @@ export async function createMoonScene(
       )
     },
     destroy() {
+      canvas.removeEventListener('wheel', noteInput)
+      canvas.removeEventListener('pointerdown', noteInput)
       removePreRender()
       removePostRender()
       handler.destroy()
