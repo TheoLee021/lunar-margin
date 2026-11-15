@@ -53,6 +53,29 @@
 - `series`: 시간 배열과 같은 길이의 배열들. `visible` = `body_elevation_deg > horizon(body_azimuth_deg)`.
 - `windows`, `dark_periods`: `visible` 연속 구간(`end` 미포함). 기간 경계에서 잘린 구간도 포함.
 
+### `GET /analysis/site-assessment`
+
+여러 후보 지점을 같은 기간으로 비교할 때 쓰는 요약. 쿼리는 위 두 엔드포인트와 같다. 시계열·수평선 없이 지표와 지형만 돌려준다.
+
+```json
+{
+  "lat": -89.7, "lon": 130.0,
+  "start": "2027-01-01T00:00:00Z", "end": "2027-02-01T00:00:00Z", "step_minutes": 30,
+  "observer_height_m": 0,
+  "sun": { "visible_fraction": 0.42, "longest_dark_hours": 96.5, "windows_per_24h": 0.9, "mean_elevation_deg": 0.8 },
+  "earth": { "visible_fraction": 0.88, "longest_dark_hours": 40.0, "windows_per_24h": 0.07, "mean_elevation_deg": 4.1 },
+  "terrain": {
+    "slope_p95_deg": 6.1, "coverage_fraction": 1.0,
+    "assessment_radius_m": 250, "slope_baseline_m": 160, "roughness_window_m": 400,
+    "dem_pixel_m": 80, "landing_safety_status": "UNVERIFIED"
+  }
+}
+```
+
+- `sun`, `earth`: 같은 쿼리로 `illumination`, `earth-visibility`를 부른 응답의 `metrics`와 같은 값.
+- `terrain`: 후보 탐색 결과의 `terrain`과 같은 형태·계산(후보 중심 250 m 원의 DEM 경사 P95, 80 m 주 DEM). 판정은 하지 않는다. DEM 결측으로 `coverage_fraction < 1`이어도 그대로 돌려주며, 결측을 통과로 해석하지 않는 것은 호출하는 쪽의 몫이다. `slope_p95_deg`는 유효 표본이 없으면 `null`.
+- 지점이 DEM 밖이면 422.
+
 ## 후보지 탐색 결과 (`/candidates`)
 
 남극 후보지 탐색은 오래 걸려서(수 분~십수 분) CLI(`python -m lunar_margin.pipeline.candidates`)가 한 번 돌려 `DATA_DIR/candidates/{run_id}/`에 결과를 쓰고, API는 그 결과를 읽어서 돌려준다. 화면은 이 결과로 **탐색 과정**(거친 격자 -> 세밀화 -> 필터 -> 연결 영역 -> 선정)을 단계별로 재생한다. 설계는 `docs/candidates.md`.
