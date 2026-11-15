@@ -17,6 +17,13 @@ MU_M = 4.902800066e12
 R_M = 1_737_400.0
 OMEGA = 2 * math.pi / (27.321661 * 86400.0)
 G0 = 9.80665
+PathStatus = Literal[
+    "REFERENCE_FEASIBLE",
+    "TERRAIN_COLLISION",
+    "TERRAIN_UNKNOWN",
+    "ENGINE_LIMIT",
+    "FUEL_LIMIT",
+]
 
 
 class Terrain(Protocol):
@@ -72,13 +79,7 @@ class FlightSample:
 
 @dataclass(frozen=True)
 class PathResult:
-    status: Literal[
-        "REFERENCE_FEASIBLE",
-        "TERRAIN_COLLISION",
-        "TERRAIN_UNKNOWN",
-        "ENGINE_LIMIT",
-        "FUEL_LIMIT",
-    ]
+    status: PathStatus
     duration_s: float
     loft_m: float
     propellant_kg: float | None
@@ -261,7 +262,7 @@ def evaluate_reference(
     low = float(np.min(thrust))
 
     if not np.isfinite(dense_agl).all():
-        status: PathResult.__annotations__["status"] = "TERRAIN_UNKNOWN"
+        status: PathStatus = "TERRAIN_UNKNOWN"
     elif np.any(dense_agl[:-1] < -0.001) or dense_agl[-1] < -0.001:
         status = "TERRAIN_COLLISION"
     elif np.any((dense_t[:-1] < duration_s - 30) & (dense_agl[:-1] < clearance_m)):
