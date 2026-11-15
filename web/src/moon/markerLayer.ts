@@ -31,6 +31,7 @@ const SELECTED_LABEL_BACKGROUND = Color.fromCssColorString('#5aaee3')
 export interface MarkerLayer {
   setMarkers(markers: readonly MoonMarker[]): void
   setSelected(id: string | null): void
+  setCompared(ids: readonly string[]): void
   /** The marker id under a `scene.pick` result, if the pick hit one of ours. */
   markerIdOf(picked: unknown): string | undefined
   /** Cluster members at their terrain anchors, for zooming without changing selection. */
@@ -68,14 +69,17 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
     for (const footprint of footprints.values()) footprint.update()
   })
   let selectedId: string | null = null
+  let comparedIds: readonly string[] = []
 
   const paintSelection = () => {
     for (const [id, entity] of entities) {
       if (!entity.label) continue
-      const color = id === selectedId ? SELECTED_LABEL_BACKGROUND : POINT_COLOR
-      footprints.get(id)?.setStyle(color, id === selectedId ? 0.45 : 0.25)
+      const color = comparedIds.includes(id)
+        ? Color.fromCssColorString(comparedIds[0] === id ? '#5dd5ce' : '#f2b96b')
+        : id === selectedId ? SELECTED_LABEL_BACKGROUND : POINT_COLOR
+      footprints.get(id)?.setStyle(color, id === selectedId || comparedIds.includes(id) ? 0.45 : 0.25)
       entity.label.backgroundColor = new ConstantProperty(
-        id === selectedId ? SELECTED_LABEL_BACKGROUND : LABEL_BACKGROUND,
+        comparedIds.includes(id) ? color : id === selectedId ? SELECTED_LABEL_BACKGROUND : LABEL_BACKGROUND,
       )
     }
   }
@@ -163,6 +167,10 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
     },
     setSelected(id) {
       selectedId = id
+      paintSelection()
+    },
+    setCompared(ids) {
+      comparedIds = [...ids]
       paintSelection()
     },
     markerIdOf(picked) {
