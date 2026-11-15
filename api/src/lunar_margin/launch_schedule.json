@@ -1,0 +1,57 @@
+{
+  "timezone": "UTC",
+  "launches": [
+    {
+      "id": "griffin-1",
+      "provider_id": "voyager",
+      "name": "Griffin Mission One · Falcon Heavy",
+      "departure_date": "2027-01-06",
+      "label": "Wed • Jan 6th, 2027 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "NET January 2027"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/",
+          "label": "Wed • Jan 6th, 2027"
+        }
+      ]
+    },
+    {
+      "id": "blue-moon-pathfinder",
+      "provider_id": "blue_origin",
+      "name": "Blue Moon Pathfinder · New Glenn",
+      "departure_date": null,
+      "label": "March, 2027 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-moon-pathfinder/",
+          "label": "March, 2027"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "name": "Spaceflight Now",
+      "url": "https://spaceflightnow.com/launch-schedule/",
+      "fetched_at": "2026-11-15T08:11:52.475083+00:00"
+    },
+    {
+      "name": "Space Launch Schedule",
+      "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/",
+      "fetched_at": "2026-11-15T08:11:52.687237+00:00"
+    },
+    {
+      "name": "Space Launch Schedule",
+      "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-moon-pathfinder/",
+      "fetched_at": "2026-11-15T08:11:52.787575+00:00"
+    }
+  ]
+}

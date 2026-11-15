@@ -531,3 +531,22 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 ### POST /reservations/{id}/cancel
 
 운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+
+### 발사 예정일과 모델 예상 비용 (추가)
+
+`GET /pricing/providers/launches` → `{timezone: "UTC", launches, sources}`.
+각 launch는 `{id, provider_id, name, departure_date: date|null, label, confirmed: false,
+sources: [{name, url, label}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
+각 source 상태는 `{name, url, fetched_at, stale, error: string|null}`이다.
+10분 동안 응답을 재사용하며 외부 오류 시 확인일이 유지된 마지막 자료를 표시한다.
+
+`POST /pricing/providers/compare`와 `/calendar`의 `estimate?: boolean`은 기본 false다.
+true이면 공개 단가 또는 공통 참조 단가로 예상 비용을 계산한다. `/compare`의
+`minimum_estimate_usd`와 provider의 `minimum_estimate_usd`가 모델 최솟값이다.
+flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
+`estimate_tariff_usd_per_kg`, `estimate_fixed_usd`, `estimate_tariff_source`,
+`estimate_assumptions`가 계산 근거를 전달한다. 기존 `price_usd`, `minimum_usd`는
+완전한 공개 조건을 충족한 견적만 담고 모델값으로 채우지 않는다.
+`/calendar`의 `estimate`는 요청 모드를 반환하며 모델 평균은 cell.status `estimated`,
+`mean_min_usd`에 담긴다. 기존 전체 격자 평균·부분 산정 규칙은 동일하다.
+날짜와 청구 조건의 해석은 [launch-schedule.md](launch-schedule.md)를 참고한다.
