@@ -30,6 +30,7 @@ function site(
       windows_per_24h: 0.5,
       mean_elevation_deg: 4,
     },
+    solar_continuity: { longest_sun_visible_hours: 48, visibility_transitions: 5 },
     terrain: {
       slope_p95_deg: 3.5,
       coverage_fraction: 1,
