@@ -1,10 +1,9 @@
 {
-  "timezone": "UTC",
   "launches": [
     {
       "id": "griffin-1",
       "provider_id": "voyager",
-      "name": "Griffin Mission One · Falcon Heavy",
+      "name": "Griffin Mission One",
       "departure_date": "2027-01-06",
       "label": "Wed • Jan 6th, 2027 · NET/TBD",
       "confirmed": false,
@@ -19,39 +18,251 @@
           "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/",
           "label": "Wed • Jan 6th, 2027"
         }
-      ]
+      ],
+      "participants": [
+        {
+          "provider_id": "voyager",
+          "role": "delivery"
+        },
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "artemis-iii",
+      "provider_id": "blue_origin",
+      "name": "Artemis III",
+      "departure_date": null,
+      "label": "2027-06 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/sls-block-1-artemis-iii/",
+          "label": "2027-06 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "blue_origin",
+          "role": "partner"
+        },
+        {
+          "provider_id": "spacex",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "astrobotic-3",
+      "provider_id": "voyager",
+      "name": "Astrobotic-3",
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-astrobotic-3/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "voyager",
+          "role": "delivery"
+        },
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "blue-ghost-lunar-lander-2",
+      "provider_id": "spacex",
+      "name": "Blue Ghost Lunar Lander Mission 2",
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-blue-ghost-lunar-lander-mission-2/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
     },
     {
       "id": "blue-moon-pathfinder",
       "provider_id": "blue_origin",
-      "name": "Blue Moon Pathfinder · New Glenn",
+      "name": "Blue Moon Pathfinder",
       "departure_date": null,
-      "label": "March, 2027 · NET/TBD",
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
       "confirmed": false,
       "sources": [
         {
           "name": "Space Launch Schedule",
           "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-moon-pathfinder/",
-          "label": "March, 2027"
+          "label": "2027년 1분기 · 정확일 미정"
         }
-      ]
+      ],
+      "participants": [
+        {
+          "provider_id": "blue_origin",
+          "role": "delivery"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "blue-moon-pathfinder-2-viper",
+      "provider_id": "blue_origin",
+      "name": "Blue Moon Pathfinder Mission 2 & VIPER",
+      "departure_date": null,
+      "label": "2027년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-moon-pathfinder-mission-2-viper/",
+          "label": "2027년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "blue_origin",
+          "role": "delivery"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "nova-c-im-3",
+      "provider_id": "spacex",
+      "name": "Nova-C IM-3",
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-nova-c-im-3/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "nova-c-im-4-2-lunar-data-relay-satellites",
+      "provider_id": "spacex",
+      "name": "Nova-C IM-4 & 2 Lunar Data Relay Satellites",
+      "departure_date": null,
+      "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-nova-c-im-4-2-lunar-data-relay-sa/",
+          "label": "2027년 하반기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "spacex-hls-leo-demo",
+      "provider_id": "spacex",
+      "name": "SpaceX HLS LEO Demo",
+      "departure_date": null,
+      "label": "2027-06 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/starship-spacex-hls-leo-demo/",
+          "label": "2027-06 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "blue_origin",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "turkish-lunar-mission-1",
+      "provider_id": "spacex",
+      "name": "Turkish Lunar Mission-1 (TLM-1)",
+      "departure_date": null,
+      "label": "2027-04 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-turkish-lunar-mission-1-tlm-1/",
+          "label": "2027-04 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
     }
   ],
   "sources": [
     {
       "name": "Spaceflight Now",
       "url": "https://spaceflightnow.com/launch-schedule/",
-      "fetched_at": "2026-11-15T08:11:52.475083+00:00"
+      "fetched_at": "2026-11-15T08:56:58.427503Z",
+      "stale": false,
+      "error": null,
+      "scanned_records": 11,
+      "scanned_pages": 1,
+      "complete": true
     },
     {
       "name": "Space Launch Schedule",
-      "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/",
-      "fetched_at": "2026-11-15T08:11:52.687237+00:00"
-    },
-    {
-      "name": "Space Launch Schedule",
-      "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-moon-pathfinder/",
-      "fetched_at": "2026-11-15T08:11:52.787575+00:00"
+      "url": "https://www.spacelaunchschedule.com/",
+      "fetched_at": "2026-11-15T08:57:00.978714Z",
+      "stale": false,
+      "error": null,
+      "scanned_records": 242,
+      "scanned_pages": 26,
+      "complete": true
     }
-  ]
+  ],
+  "timezone": "UTC"
 }
