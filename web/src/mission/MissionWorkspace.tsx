@@ -264,6 +264,24 @@ export function MissionWorkspace({
                   m 창)
                 </p>
                 <p className="mt-1 text-neutral-400">
+                  지구 LOS 연속 가시 최대{' '}
+                  {selectedEvaluation.data.earth.longest_visible_hours?.toFixed(1) ?? 'N/A'}시간
+                  · 지구 가시 상태 전환{' '}
+                  {selectedEvaluation.data.earth.transitions ?? 'N/A'}회
+                  · 지구 지형 여유각 P10{' '}
+                  {selectedEvaluation.data.earth.clearance_p10_deg?.toFixed(2) ?? 'N/A'}°
+                </p>
+                <p className="mt-1 text-neutral-400">
+                  태양 LOS 연속 가시 최대{' '}
+                  {selectedEvaluation.data.sun.longest_visible_hours?.toFixed(1) ?? 'N/A'}시간
+                  · 태양 지형 여유각 P10{' '}
+                  {selectedEvaluation.data.sun.clearance_p10_deg?.toFixed(2) ?? 'N/A'}°
+                </p>
+                <p className="mt-1 text-neutral-500">
+                  여유각은 가시 시점의 기하학적 차폐 여유이며 통신 링크 마진이나
+                  발전량을 뜻하지 않습니다.
+                </p>
+                <p className="mt-1 text-neutral-400">
                   250 m 평가 원: 경사 P95{' '}
                   {selectedEvaluation.data.region.slope_p95_deg?.toFixed(2) ??
                     'N/A'}
