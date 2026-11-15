@@ -554,3 +554,20 @@ flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
 날짜와 청구 조건의 해석은 [launch-schedule.md](launch-schedule.md)를 참고한다.
 
 데모에서는 목적지·회사로 목록을 제한하지 않습니다. 일반 발사도 분석용 출발일로 선택할 수 있으며 실제 달 배송 가능성을 뜻하지 않습니다.
+
+
+`POST /pricing/providers/calendar`는 `estimate: true`일 때만
+`selected_launch_id?: string|null`을 받는다. `/launches`에서 선택한 실제 ID를 보내면
+캐시된 일정의 **발사사**로 회사 모델을 결정한다. 브라우저가 보낸 회사명·단가를 신뢰하지
+않는다. ID가 없으면 기존 6사 최저가 평균 모드다. 존재하지 않는 ID는 409,
+견적 모드에서 ID 지정은 422다. 계산 중 외부 일정 수집을 기다리거나 다시 실행하지 않는다.
+
+선택 시 응답 `selection`은 `{launch_id, launch_name, company_id: ProviderId|null,
+company_name, tariff_usd_per_kg, fixed_usd, billable_mass_kg,
+tariff_basis: public_tariff|common_model, tariff_source, assumptions}`다. 미선택은 null이다.
+해당 배송 방식의 회사 공개 단가를 우선하며 없으면 공통 참조 단가를 사용한다.
+일반 발사에 달 배송 단가를 적용한 데모이므로 회사의 실제 달 운항 기간·화물 수용 여부는
+적용하지 않는다. 기본 전이 3~150일·지형 부적합 판정은 유지한다.
+`mean_min_usd`는 같은 적합 500m 격자 전체의 선택 회사 모델 산술평균이다.
+단일 회사이므로 격자별 최솟값도 그 회사 가격이다. `eligible_provider_ids`는 알려진
+6사 ID만 담으며 ULA 등은 빈 배열이다. 이 경우 `selection.company_name`으로 회사를 구분한다.

@@ -266,6 +266,46 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     assert estimated.json()["cells"][0]["status"] == "estimated"
     assert estimated.json()["cells"][0]["eligible_grid_count"] == 110
     assert estimated.json()["cells"][0]["mean_min_usd"] == pytest.approx(100)
+    # Switching operators changes only pricing: the same 110 saved fine grids are reused.
+    from lunar_margin.app.launch_schedule import get_reader
+
+    schedules = get_reader().peek().launches
+    for operator, price, provider_id in [
+        ("SpaceX", 600_000, "spacex"),
+        ("United Launch Alliance (ULA)", 1_700_000, None),
+    ]:
+        launch = next(item for item in schedules if item.launch_provider == operator)
+        request = {
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": ["2027-01-06", "2027-01-07"],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+            "selected_launch_id": launch.id,
+        }
+        chosen = client.post("/pricing/providers/calendar", json=request)
+        assert chosen.status_code == 200
+        result = chosen.json()
+        assert result["selection"]["company_id"] == provider_id
+        assert result["selection"]["company_name"] == operator
+        for selected_cell in result["cells"]:
+            assert selected_cell["status"] == "estimated"
+            assert selected_cell["mean_min_usd"] == pytest.approx(price)
+            assert selected_cell["eligible_grid_count"] == selected_cell["quoted_grid_count"] == 110
+            assert selected_cell["eligible_provider_ids"] == ([provider_id] if provider_id else [])
+        assert (
+            client.post(
+                "/pricing/providers/calendar", json={**request, "estimate": False}
+            ).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/pricing/providers/calendar", json={**request, "selected_launch_id": "missing"}
+            ).status_code
+            == 409
+        )
     # A destination with only one covered grid must not silently shrink the mean's population.
     catalog = published_catalog()
     providers = catalog.providers.copy()
