@@ -23,9 +23,7 @@ def test_clearance_wrap_and_positive_percentile() -> None:
 
 def test_no_geometric_access_returns_null_percentile() -> None:
     h = HorizonProfile(np.array([0.0, 180.0]), np.array([0.0, 0.0]))
-    result = terrain_clearance_diagnostics(
-        h, np.zeros(3), np.array([-2.0, -1.0, 0.0])
-    )
+    result = terrain_clearance_diagnostics(h, np.zeros(3), np.array([-2.0, -1.0, 0.0]))
     assert result.visible_clearance_p10_deg is None
 
 
