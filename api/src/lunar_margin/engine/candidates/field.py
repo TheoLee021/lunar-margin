@@ -16,6 +16,7 @@ from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
 from lunar_margin.engine.horizon import horizon_profile
 from lunar_margin.engine.metrics import summarize, visibility_series
+from lunar_margin.engine.site_characteristics import characterize_region
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,9 @@ class MetricField:
     horizon_max_deg: NDArray[np.float64]
     horizon_complete: NDArray[np.bool_]
     computed: NDArray[np.bool_]  # False면 이 지점의 어떤 지표도 계산하지 못했다 (예: DEM 밖)
+
+    terrain_slope_p95_deg: NDArray[np.float64]
+    terrain_coverage_fraction: NDArray[np.float64]
 
     def __len__(self) -> int:
         return int(self.computed.shape[0])
@@ -51,6 +55,8 @@ class MetricField:
             horizon_max_deg=nan.copy(),
             horizon_complete=np.zeros(n, dtype=np.bool_),
             computed=np.zeros(n, dtype=np.bool_),
+            terrain_slope_p95_deg=nan.copy(),
+            terrain_coverage_fraction=nan.copy(),
         )
 
     @classmethod
@@ -69,6 +75,7 @@ class FieldSettings:
     azimuth_step_deg: float
     max_range_m: float
     observer_height_m: float
+    assess_terrain: bool = False
 
 
 @dataclass(frozen=True)
@@ -81,8 +88,8 @@ class _Context:
 
 
 # 한 지점이 돌려주는 값의 열 순서 (MetricField의 필드 순서와 같다)
-_COLUMNS = 11
-_NAN_ROW = (math.nan,) * 9 + (0.0, 0.0)
+_COLUMNS = 13
+_NAN_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan)
 
 
 def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
@@ -114,6 +121,17 @@ def _site_row(ctx: _Context, lat_deg: float, lon_deg: float, row: int) -> tuple[
             mean_el,
         ]
     values += [float(horizon.elevation_deg.max()), float(horizon.complete), 1.0]
+    slope, coverage = math.nan, math.nan
+    if s.assess_terrain:
+        # The wider fallback DEM is for horizon rays, not regional landing terrain.
+        terrain_dem = ctx.dem.primary if isinstance(ctx.dem, CompositeDem) else ctx.dem
+        try:
+            region = characterize_region(terrain_dem, lat_deg, lon_deg)
+            slope = region.slope_p95_deg if region.slope_p95_deg is not None else math.nan
+            coverage = region.coverage_fraction
+        except ValueError:
+            coverage = 0.0
+    values += [slope, coverage]
     return tuple(values)
 
 
@@ -227,4 +245,6 @@ def compute_field(
         horizon_max_deg=matrix[:, 8],
         horizon_complete=matrix[:, 9] > 0.5,
         computed=matrix[:, 10] > 0.5,
+        terrain_slope_p95_deg=matrix[:, 11],
+        terrain_coverage_fraction=matrix[:, 12],
     )

@@ -9,11 +9,12 @@ Slope and roughness are scale-dependent, so the sampling baseline/window are
 explicit inputs and returned with the result.
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 
-from lunar_margin.engine.dem import PolarDem
+from lunar_margin.engine.dem import Dem
 
 
 @dataclass(frozen=True)
@@ -25,14 +26,15 @@ class SiteCharacteristics:
     roughness_window_m: float
 
 
-def _xy_at_site(dem: PolarDem, lat_deg: float, lon_deg: float) -> tuple[float, float]:
-    if not dem.contains(lat_deg, lon_deg):
-        raise ValueError(f"({lat_deg}, {lon_deg}) is outside the DEM or on a missing pixel")
-    return dem.lonlat_to_xy(lat_deg, lon_deg)
+def _xy_at_site(dem: Dem, lat_deg: float, lon_deg: float) -> tuple[float, float]:
+    dem.height_at(lat_deg, lon_deg)  # Validate coverage before sampling the footprint.
+    rho = 2.0 * dem.radius_m * math.tan(math.radians(90.0 + lat_deg) / 2.0)
+    lon = math.radians(lon_deg)
+    return rho * math.sin(lon), rho * math.cos(lon)
 
 
 def local_slope_deg(
-    dem: PolarDem,
+    dem: Dem,
     lat_deg: float,
     lon_deg: float,
     *,
@@ -61,7 +63,7 @@ def local_slope_deg(
 
 
 def local_roughness_rms_m(
-    dem: PolarDem,
+    dem: Dem,
     lat_deg: float,
     lon_deg: float,
     *,
@@ -95,7 +97,7 @@ def local_roughness_rms_m(
 
 
 def characterize_site(
-    dem: PolarDem,
+    dem: Dem,
     lat_deg: float,
     lon_deg: float,
     *,
@@ -135,7 +137,7 @@ class RegionalTerrain:
 
 
 def characterize_region(
-    dem: PolarDem,
+    dem: Dem,
     lat_deg: float,
     lon_deg: float,
     *,
