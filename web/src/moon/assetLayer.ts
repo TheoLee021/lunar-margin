@@ -1,9 +1,11 @@
 import {
+  ArcType,
+  CallbackPositionProperty,
+  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
   ColorMaterialProperty,
-  ConstantPositionProperty,
   ConstantProperty,
   DistanceDisplayCondition,
   Ellipsoid,
@@ -11,8 +13,10 @@ import {
   HeightReference,
   Matrix4,
   Transforms,
+  VerticalOrigin,
   type Viewer,
 } from 'cesium'
+import { assetSymbolImage, type AssetSymbol } from './assetSymbol'
 import type { LunarLocation } from './location'
 import { rayOffsetEnu, type SkyDirection } from './lineOfSight'
 
@@ -37,6 +41,8 @@ export interface MoonAsset {
    */
   observerHeightM: number
   shape: AssetShape
+  /** Badge above the unit saying what it is, since metre-scale shapes read alike. */
+  symbol?: AssetSymbol
   /** The Earth in this asset's sky at the mission instant, or null when not evaluated. */
   earth: SkyDirection | null
 }
@@ -45,24 +51,34 @@ export interface MoonAsset {
 const SIGHT_LENGTH_M = 40_000
 
 /**
- * Camera distance where a marker hands over to the equipment itself, metres.
- * Equipment is 2-10 m, so past this it covers only a few pixels: beyond it a marker
- * shows where the asset is, and within it the asset is drawn at its real size.
+ * Camera distance where a badge hands over to the equipment itself, metres.
+ * Equipment is 2-10 m, so past this it covers only a few pixels.
  */
 const BODY_VISIBLE_WITHIN_M = 1_500
-
-const FAR_MARKER = new DistanceDisplayCondition(
-  BODY_VISIBLE_WITHIN_M,
-  Number.MAX_VALUE,
-)
 const NEAR_BODY = new DistanceDisplayCondition(0, BODY_VISIBLE_WITHIN_M)
+/**
+ * The badge stands in for the equipment at any distance up to the overview, where it
+ * would only clutter the whole-pole view. A dark square with the unit's glyph,
+ * deliberately unlike the orange dot that marks a candidate site.
+ */
+const BADGE_RANGE = new DistanceDisplayCondition(0, 50_000)
 
-const MARKER_COLOR = Color.fromCssColorString('#f0a43c')
+/** The mast that carries the line of sight, drawn so its height is visible, not implied. */
+const MAST_RADIUS_M = 0.12
+const MAST_MIN_M = 1
+
+const MAST_COLOR = Color.fromCssColorString('#94a3b8')
 const BODY_COLOR = Color.fromCssColorString('#cbd5e1').withAlpha(0.95)
 const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
 const SIGHT_CLEAR = Color.fromCssColorString('#4ade80')
 const SIGHT_BLOCKED = Color.fromCssColorString('#f87171')
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191ee6')
+/**
+ * The Earth sits about 4 degrees up at the pole, so close to the ground the ray spends
+ * its first kilometres inside the terrain. The buried stretch is drawn faint instead of
+ * being swallowed: that is the ridge doing the blocking, which is the point of the demo.
+ */
+const BEHIND_TERRAIN_ALPHA = 0.55
 
 export interface AssetLayer {
   /**
@@ -72,29 +88,54 @@ export interface AssetLayer {
   setAssets(assets: readonly MoonAsset[]): void
 }
 
+/**
+ * What changes as an asset moves. The body and mast read it through callback properties
+ * rather than being handed a fresh property object each frame, because that churn makes
+ * Cesium rebuild their geometry on every tick of a traverse.
+ */
+interface Live {
+  body: Cartesian3
+  mast: Cartesian3
+  color: Color
+  label: string
+  /** Last drawn ray, so an unchanged one is never handed a fresh property object. */
+  sight: Cartesian3[]
+  /** Last ground point that sampled cleanly, so a streaming tileset cannot drop the ray. */
+  ground?: Cartesian3
+}
+
 interface Drawn {
   body: Entity
+  mast: Entity
   sight: Entity
+  live: Live
 }
 
 export function createAssetLayer(viewer: Viewer): AssetLayer {
   const drawn = new Map<string, Drawn>()
 
-  /** Surface point under a location: the loaded tileset when it can be sampled, else the ellipsoid. */
-  const groundAt = (location: LunarLocation): Cartesian3 => {
-    const onEllipsoid = Cartesian3.fromDegrees(
-      location.lon,
-      location.lat,
-      0,
-      Ellipsoid.MOON,
-    )
-    return viewer.scene.clampToHeight(onEllipsoid) ?? onEllipsoid
+  const positionAt = (location: LunarLocation, heightM: number): Cartesian3 =>
+    Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
+
+  /**
+   * Surface point under a location. `clampToHeight` is a scene pick, so it answers
+   * differently while tiles stream in; the last clean answer is kept per asset and the
+   * ellipsoid is only the first-frame fallback.
+   */
+  const groundAt = (location: LunarLocation, live: Live): Cartesian3 => {
+    const onEllipsoid = positionAt(location, 0)
+    const clamped = viewer.scene.clampToHeight(onEllipsoid)
+    if (clamped && Number.isFinite(clamped.x)) {
+      live.ground = clamped
+      return clamped
+    }
+    return live.ground ?? onEllipsoid
   }
 
-  const sightPositions = (asset: MoonAsset): Cartesian3[] => {
+  const sightPositions = (asset: MoonAsset, live: Live): Cartesian3[] => {
     if (!asset.earth) return []
     const frame = Transforms.eastNorthUpToFixedFrame(
-      groundAt(asset.location),
+      groundAt(asset.location, live),
       Ellipsoid.MOON,
     )
     const eye = Matrix4.multiplyByPoint(
@@ -112,30 +153,45 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
   }
 
   const create = (asset: MoonAsset): Drawn => {
-    const { shape } = asset
+    const { shape, symbol } = asset
+    const live: Live = {
+      body: positionAt(asset.location, shape.heightM / 2),
+      mast: positionAt(asset.location, asset.observerHeightM / 2),
+      color: SIGHT_CLEAR,
+      label: asset.label,
+      sight: [],
+    }
+
     const body = viewer.entities.add({
-      position: Cartesian3.fromDegrees(
-        asset.location.lon,
-        asset.location.lat,
-        shape.heightM / 2,
-      ),
-      point: {
-        pixelSize: 8,
-        color: MARKER_COLOR,
-        heightReference: HeightReference.CLAMP_TO_3D_TILE,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: FAR_MARKER,
-      },
+      position: new CallbackPositionProperty(() => live.body, false),
       label: {
-        text: asset.label,
+        text: new CallbackProperty(() => live.label, false),
         font: '600 13px monospace',
         showBackground: true,
         backgroundColor: LABEL_BACKGROUND,
-        fillColor: Color.WHITE,
+        // The ray itself can be buried in terrain; the name always shows, so it
+        // carries the verdict too.
+        fillColor: new CallbackProperty(() => live.color, false),
         heightReference: HeightReference.RELATIVE_TO_3D_TILE,
         pixelOffset: new Cartesian2(0, -18),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        distanceDisplayCondition: NEAR_BODY,
       },
+      ...(symbol
+        ? {
+            billboard: {
+              image: new CallbackProperty(
+                () => assetSymbolImage(symbol, live.color.toCssHexString()),
+                false,
+              ),
+              verticalOrigin: VerticalOrigin.BOTTOM,
+              heightReference: HeightReference.RELATIVE_TO_3D_TILE,
+              pixelOffset: new Cartesian2(0, -32),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              distanceDisplayCondition: BADGE_RANGE,
+            },
+          }
+        : {}),
       ...(shape.kind === 'box'
         ? {
             box: {
@@ -165,36 +221,67 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
           }),
     })
 
-    const sight = viewer.entities.add({
-      polyline: {
-        positions: [],
-        width: 2,
-        material: SIGHT_CLEAR,
+    const mast = viewer.entities.add({
+      position: new CallbackPositionProperty(() => live.mast, false),
+      show: asset.observerHeightM >= MAST_MIN_M,
+      cylinder: {
+        length: asset.observerHeightM,
+        topRadius: MAST_RADIUS_M,
+        bottomRadius: MAST_RADIUS_M,
+        material: MAST_COLOR,
+        heightReference: HeightReference.RELATIVE_TO_3D_TILE,
+        distanceDisplayCondition: NEAR_BODY,
       },
     })
 
-    return { body, sight }
+    const sight = viewer.entities.add({
+      show: false,
+      polyline: {
+        positions: new ConstantProperty(live.sight),
+        // A line of sight runs straight through space; the default geodesic would bend
+        // it along the surface.
+        arcType: ArcType.NONE,
+        width: 2,
+        material: new ColorMaterialProperty(live.color),
+        depthFailMaterial: new ColorMaterialProperty(
+          live.color.withAlpha(BEHIND_TERRAIN_ALPHA),
+        ),
+      },
+    })
+
+    return { body, mast, sight, live }
   }
 
   const paint = (asset: MoonAsset, entities: Drawn): void => {
-    entities.body.position = new ConstantPositionProperty(
-      Cartesian3.fromDegrees(
-        asset.location.lon,
-        asset.location.lat,
-        asset.shape.heightM / 2,
-      ),
-    )
-    if (entities.body.label)
-      entities.body.label.text = new ConstantProperty(asset.label)
+    const { live, sight } = entities
+    live.label = asset.label
+    live.body = positionAt(asset.location, asset.shape.heightM / 2)
+    live.mast = positionAt(asset.location, asset.observerHeightM / 2)
+    if (entities.mast.cylinder)
+      entities.mast.cylinder.length = new ConstantProperty(
+        asset.observerHeightM,
+      )
+    entities.mast.show = asset.observerHeightM >= MAST_MIN_M
 
-    const { polyline } = entities.sight
+    const { polyline } = sight
     if (!polyline) return
-    const positions = sightPositions(asset)
-    polyline.positions = new ConstantProperty(positions)
-    polyline.material = new ColorMaterialProperty(
-      asset.earth?.visible ? SIGHT_CLEAR : SIGHT_BLOCKED,
-    )
-    entities.sight.show = positions.length > 0
+    const positions = sightPositions(asset, live)
+    // Only hand Cesium a new property when the ray actually moved. Replacing these
+    // every frame rebuilds the geometry for assets that are standing still.
+    if (!samePositions(positions, live.sight)) {
+      live.sight = positions
+      polyline.positions = new ConstantProperty(positions)
+    }
+    sight.show = positions.length > 0
+
+    const color = asset.earth?.visible ? SIGHT_CLEAR : SIGHT_BLOCKED
+    if (!Color.equals(color, live.color)) {
+      live.color = color
+      polyline.material = new ColorMaterialProperty(color)
+      polyline.depthFailMaterial = new ColorMaterialProperty(
+        color.withAlpha(BEHIND_TERRAIN_ALPHA),
+      )
+    }
   }
 
   return {
@@ -203,6 +290,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       for (const [id, entities] of drawn) {
         if (keep.has(id)) continue
         viewer.entities.remove(entities.body)
+        viewer.entities.remove(entities.mast)
         viewer.entities.remove(entities.sight)
         drawn.delete(id)
       }
@@ -216,4 +304,14 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       }
     },
   }
+}
+
+function samePositions(
+  next: readonly Cartesian3[],
+  previous: readonly Cartesian3[],
+): boolean {
+  return (
+    next.length === previous.length &&
+    next.every((point, index) => Cartesian3.equals(point, previous[index]))
+  )
 }

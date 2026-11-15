@@ -1,4 +1,5 @@
 import type { AssetShape, MoonAsset } from '../moon/assetLayer'
+import type { AssetSymbol } from '../moon/assetSymbol'
 import type { SkyDirection } from '../moon/lineOfSight'
 import { offsetLocation } from '../moon/location'
 import type { CandidateSite } from './types'
@@ -17,6 +18,8 @@ export interface EquipmentSpec {
   /** Height of the point that has to see the Earth (the API's `observer_height_m`). */
   observerHeightM: number
   shape: AssetShape
+  /** Badge drawn above the unit so it is recognisable from a distance. */
+  symbol: AssetSymbol
 }
 
 // Terra Nova Works melts regolith into landing pads: an array for power, a thermal unit
@@ -26,44 +29,48 @@ export const STATIC_EQUIPMENT: readonly EquipmentSpec[] = [
   {
     id: 'array',
     label: '태양광 어레이',
-    offset: { eastM: -60, northM: 40 },
+    offset: { eastM: -250, northM: 180 },
     observerHeightM: 10,
     shape: { kind: 'box', widthM: 8, depthM: 2.2, heightM: 8 },
+    symbol: 'solar',
   },
   {
     id: 'thermal',
     label: '열제어 유닛',
-    offset: { eastM: -20, northM: 10 },
+    offset: { eastM: -60, northM: 60 },
     observerHeightM: 4,
     shape: { kind: 'box', widthM: 3, depthM: 1.8, heightM: 1.4 },
+    symbol: 'thermal',
   },
   {
     id: 'printer',
     label: '소결 프린터',
-    offset: { eastM: 30, northM: -20 },
+    offset: { eastM: 160, northM: -120 },
     observerHeightM: 1.5,
     shape: { kind: 'box', widthM: 6, depthM: 6, heightM: 4.5 },
+    symbol: 'printer',
   },
 ]
 
 export const TRENCHER: EquipmentSpec = {
   id: 'trencher',
   label: '트렌처',
-  offset: { eastM: 60, northM: -60 },
+  offset: { eastM: 300, northM: -260 },
   observerHeightM: 2,
   shape: { kind: 'box', widthM: 2, depthM: 4.8, heightM: 2.4 },
+  symbol: 'trencher',
 }
 
 /** The trench the trencher cuts, away from the pad toward the crater edge. */
 export const TRAVERSE: readonly SurfaceOffset[] = [
-  { eastM: 60, northM: -60 },
-  { eastM: 90, northM: -90 },
-  { eastM: 120, northM: -120 },
-  { eastM: 140, northM: -160 },
-  { eastM: 150, northM: -200 },
-  { eastM: 140, northM: -240 },
-  { eastM: 110, northM: -270 },
-  { eastM: 70, northM: -290 },
+  { eastM: 300, northM: -260 },
+  { eastM: 340, northM: -360 },
+  { eastM: 360, northM: -470 },
+  { eastM: 350, northM: -580 },
+  { eastM: 320, northM: -680 },
+  { eastM: 270, northM: -760 },
+  { eastM: 200, northM: -820 },
+  { eastM: 120, northM: -860 },
 ]
 
 const legLength = (from: SurfaceOffset, to: SurfaceOffset): number =>
@@ -78,7 +85,7 @@ export const TRAVERSE_LENGTH_M: number = TRAVERSE.reduce(
 /** Real driving speed. Earth round-trip latency is what holds it to a walking crawl. */
 export const TRENCHER_SPEED_MS = 0.2
 /** The traverse is replayed faster than real time so it fits in a demo. */
-export const DEMO_SPEED_SCALE = 60
+export const DEMO_SPEED_SCALE = 150
 export const TRAVERSE_DURATION_MS =
   (TRAVERSE_LENGTH_M / TRENCHER_SPEED_MS / DEMO_SPEED_SCALE) * 1000
 
@@ -137,6 +144,7 @@ export function buildEquipmentAssets(
     location: offsetLocation(centre, offset.eastM, offset.northM),
     observerHeightM: spec.observerHeightM,
     shape: spec.shape,
+    symbol: spec.symbol,
     earth,
   })
   const point = traverseAt(progress)

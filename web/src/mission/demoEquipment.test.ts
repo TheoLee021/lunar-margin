@@ -71,9 +71,11 @@ describe('buildEquipmentAssets', () => {
     ])
   })
 
-  it('keeps the units within a few hundred metres of the site', () => {
+  it('keeps the units within about a kilometre of the site', () => {
+    // 0.05 deg is 1.5 km on the Moon. The set spreads over a few hundred metres
+    // because cable runs and stand-off distances put it there, not metres apart.
     for (const asset of buildEquipmentAssets(SITE, 0, noSky)) {
-      expect(Math.abs(asset.location.lat - SITE.latitude)).toBeLessThan(0.02)
+      expect(Math.abs(asset.location.lat - SITE.latitude)).toBeLessThan(0.05)
     }
   })
 

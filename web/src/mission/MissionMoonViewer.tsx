@@ -13,7 +13,7 @@ import type { CandidateSite, MissionSelection } from './types'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
 
 /** Close enough that metre-scale equipment reads on screen. */
-const EQUIPMENT_RANGE_M = 450
+const EQUIPMENT_RANGE_M = 5000
 
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
