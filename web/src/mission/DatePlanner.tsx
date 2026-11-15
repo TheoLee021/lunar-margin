@@ -1,30 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { dayOf, exampleCost, iso, short, DAY } from './missionDates'
 import { MissionCharts } from './MissionCharts'
-import { missionParams } from './liveAnalysis'
-import {
-  useMissionAnalysis,
-  type MissionAnalysisResult,
-} from './useMissionAnalysis'
 import { demoDateScore } from './demoDateScore'
-import type { CandidateSite, Schedule } from './types'
+import type { Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
 import './date-planner.css'
 
 type Props = {
   schedule: Schedule
-  site: CandidateSite
-  appliedAnalysis: MissionAnalysisResult
-  hour: number
   onViewOrbit: (schedule: Schedule) => void
   onApply: (schedule: Schedule) => void
   onClose: () => void
 }
 export function DatePlanner({
   schedule,
-  site,
-  appliedAnalysis,
-  hour,
   onApply,
   onViewOrbit,
   onClose,
@@ -49,12 +38,6 @@ export function DatePlanner({
   const minimum = Math.min(...prices)
   const validDraft = ScheduleSchema.safeParse(draft).success
   const score = validDraft ? demoDateScore(draft) : null
-  const sameSurfacePeriod =
-    draft.landing === schedule.landing && draft.duration === schedule.duration
-  const preview = useMissionAnalysis(
-    validDraft && !sameSurfacePeriod ? missionParams(site, draft) : null,
-  )
-  const live = sameSurfacePeriod ? appliedAnalysis : preview
   const [formError, setFormError] = useState('')
   useEffect(() => {
     const dialog = ref.current!,
@@ -296,12 +279,7 @@ export function DatePlanner({
           </section>
           {validDraft ? (
             <>
-              <MissionCharts
-                score={score}
-                live={live}
-                hour={hour}
-                onLanding={selectLanding}
-              />
+              <MissionCharts score={score} onLanding={selectLanding} />
             </>
           ) : (
             <section className="group" role="status">
@@ -314,11 +292,6 @@ export function DatePlanner({
         </div>
       </div>
       <footer className="planner-footer">
-        <p>
-          <span className="example-dot" />
-          비용은 목업 예시입니다.
-          <small>궤도 보기로 이동하면 선택한 일정이 유지됩니다.</small>
-        </p>
         <div>
           <span aria-live="polite">
             {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}

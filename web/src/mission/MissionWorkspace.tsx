@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
+import { MissionTimeline } from './MissionTimeline'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import { MissionMoonViewer } from './MissionMoonViewer'
@@ -159,7 +160,7 @@ export function MissionWorkspace({
           </aside>
           <aside
             aria-label="선택한 지점"
-            className="hud-panel absolute right-4 top-24 w-72 p-3 max-lg:hidden"
+            className="hud-panel absolute right-4 top-24 max-h-[calc(100dvh-176px)] w-[420px] overflow-y-auto p-3 max-lg:hidden"
           >
             <h2 className="mb-1 font-semibold">{selected.name}</h2>
             <p className="mb-3 font-mono text-xs text-neutral-400">
@@ -167,6 +168,27 @@ export function MissionWorkspace({
               {Math.abs(selected.longitude).toFixed(1)}°W
             </p>
             <MissionMetrics result={analysis} />
+            {analysis.kind === 'ready' ? (
+              <section
+                className="mission-timeline-panel mt-4 border-t border-white/10 pt-4"
+                aria-label="미션 기간 타임라인"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-neutral-300">
+                    미션 기간 타임라인
+                  </h3>
+                  <span className="text-[10px] text-neutral-400">
+                    선택한 후보 기준
+                  </span>
+                </div>
+                <MissionTimeline
+                  key={`${analysis.data.sun.start}/${analysis.data.sun.end}/${analysis.data.sun.lat}/${analysis.data.sun.lon}`}
+                  timeline={analysis.data.timeline}
+                  duration={selection.duration}
+                  hour={0}
+                />
+              </section>
+            ) : null}
           </aside>
         </>
       ) : null}
