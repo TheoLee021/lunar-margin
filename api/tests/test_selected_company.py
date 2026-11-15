@@ -53,3 +53,70 @@ def test_selected_launch_uses_operator_tariff_not_delivery_owner_or_another_comp
     orbit = company_model(load_catalog(), launch, mass_kg=24, delivery="orbit")
     assert orbit.tariff_basis == "common_model"
     assert orbit.tariff_usd_per_kg == 300_000
+
+
+def test_scheduled_departure_minima_preserve_every_grid_and_attribute_ties() -> None:
+    from datetime import date
+
+    import numpy as np
+
+    from lunar_margin.engine.selected_company import minimum_company_prices, scheduled_models
+
+    source = LaunchSource(
+        name="Spaceflight Now", url="https://example.com/launches", label="January 6"
+    )
+    launches = [
+        Launch(
+            id="ula",
+            provider_id=None,
+            name="ULA flight",
+            launch_provider="United Launch Alliance (ULA)",
+            departure_date=date(2027, 1, 6),
+            label="January 6",
+            sources=[source],
+        ),
+        Launch(
+            id="spacex",
+            provider_id="spacex",
+            name="SpaceX flight",
+            launch_provider="SpaceX",
+            departure_date=date(2027, 1, 6),
+            label="January 6",
+            sources=[source],
+        ),
+        Launch(
+            id="other-day",
+            provider_id="blue_origin",
+            name="Another day",
+            launch_provider="Blue Origin",
+            departure_date=date(2027, 1, 7),
+            label="January 7",
+            sources=[source],
+        ),
+        Launch(
+            id="undated",
+            provider_id="voyager",
+            name="Month only",
+            launch_provider="Astrobotic",
+            label="January 2027",
+            sources=[source],
+        ),
+    ]
+    models = scheduled_models(
+        load_catalog(), launches, date(2027, 1, 6), mass_kg=24, delivery="surface"
+    )
+    assert {model.launch_id for model in models} == {"ula", "spacex"}
+    prices, winners = minimum_company_prices(models, np.array([1.0, 1.3]))
+    assert prices.tolist() == pytest.approx([2_900_000, 3_620_000])
+    assert [winner.company_name for winner in winners] == ["SpaceX"]
+    # Equal common-reference costs retain both real scheduled carriers, not the first one.
+    models = scheduled_models(
+        load_catalog(), launches, date(2027, 1, 6), mass_kg=24, delivery="orbit"
+    )
+    _, tied = minimum_company_prices(models, np.array([1.0, 1.3]))
+    assert {winner.company_name for winner in tied} == {"SpaceX", "United Launch Alliance (ULA)"}
+    empty = scheduled_models(
+        load_catalog(), launches, date(2027, 1, 8), mass_kg=24, delivery="surface"
+    )
+    assert empty == []
+    assert minimum_company_prices(models, np.array([]))[1] == []
