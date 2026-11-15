@@ -27,7 +27,11 @@ function metric(
   if (limit == null) return null // An unset requirement is not a failed requirement.
   const number = value == null || !Number.isFinite(value) ? null : value
   const margin =
-    number === null ? null : direction === 'maximum' ? limit - number : number - limit
+    number === null
+      ? null
+      : direction === 'maximum'
+        ? limit - number
+        : number - limit
   return {
     key,
     label,
@@ -123,7 +127,9 @@ export function requirementMargins(
   ].filter((entry): entry is RequirementMargin => entry !== null)
 }
 
-export function marginSummary(rows: RequirementMargin[]): 'FAIL' | 'UNKNOWN' | 'PASS' | 'NOT_ASSESSED' {
+export function marginSummary(
+  rows: RequirementMargin[],
+): 'FAIL' | 'UNKNOWN' | 'PASS' | 'NOT_ASSESSED' {
   if (rows.length === 0) return 'NOT_ASSESSED'
   if (rows.some((row) => row.status === 'FAIL')) return 'FAIL'
   if (rows.some((row) => row.status === 'UNKNOWN')) return 'UNKNOWN'
