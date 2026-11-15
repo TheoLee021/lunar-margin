@@ -14,11 +14,15 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
+  onCompare,
+  compareIds,
 }: {
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string) => void
+  onCompare: (siteId: string) => void
+  compareIds: readonly string[]
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
   const markers = useMemo<readonly MoonMarker[]>(
@@ -50,6 +54,8 @@ export function MissionMoonViewer({
           ref={viewer}
           markers={markers}
           selectedMarkerId={selection.siteId}
+          comparedMarkerIds={compareIds}
+          onMarkerCompare={onCompare}
           onMarkerSelect={(siteId) => {
             const site = sites.find((candidate) => candidate.id === siteId)
             if (!site) return
