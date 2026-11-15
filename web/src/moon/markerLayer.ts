@@ -7,11 +7,16 @@ import {
   PolygonHierarchy,
   ConstantProperty,
   ConstantPositionProperty,
+  CustomDataSource,
   Entity,
   HeightReference,
+  type Billboard,
+  type Label,
+  type PointPrimitive,
   type Viewer,
 } from 'cesium'
 import type { LunarLocation } from './location'
+import clusterBadge from './cluster-badge.svg?raw'
 
 /** A labelled point or grid footprint on the Moon. */
 export interface MoonMarker {
@@ -30,9 +35,36 @@ export interface MarkerLayer {
   setSelected(id: string | null): void
   /** The marker id under a `scene.pick` result, if the pick hit one of ours. */
   markerIdOf(picked: unknown): string | undefined
+  /** Cluster members at their terrain anchors, for zooming without changing selection. */
+  clusterPositionsOf(picked: unknown): Cartesian3[] | undefined
 }
 
 export function createMarkerLayer(viewer: Viewer): MarkerLayer {
+  const source = new CustomDataSource('candidate-markers')
+  source.clustering.pixelRange = 32
+  source.clustering.minimumClusterSize = 2
+  source.clustering.clusterPoints = false
+  source.clustering.clusterBillboards = false
+  source.clustering.clusterEvent.addEventListener(
+    (
+      members: Entity[],
+      cluster: { billboard: Billboard; label: Label; point: PointPrimitive },
+    ) => {
+      cluster.point.show = false
+      cluster.billboard.show = true
+      cluster.billboard.id = members
+      cluster.billboard.image = `data:image/svg+xml,${encodeURIComponent(
+        clusterBadge.replace('CANDIDATE_COUNT', String(members.length)),
+      )}`
+      cluster.billboard.position = cluster.label.position
+      cluster.billboard.width = 128
+      cluster.billboard.height = 42
+      cluster.billboard.pixelOffset = new Cartesian2(0, -14)
+      cluster.billboard.disableDepthTestDistance = Number.POSITIVE_INFINITY
+      cluster.label.show = false
+    },
+  )
+  void viewer.dataSources.add(source)
   const entities = new Map<string, Entity>()
   let selectedId: string | null = null
 
@@ -54,14 +86,15 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
 
   return {
     setMarkers(markers) {
-      for (const entity of entities.values()) viewer.entities.remove(entity)
+      source.entities.removeAll()
       entities.clear()
+      source.clustering.enabled = markers.some((marker) => marker.footprint)
       const anchors: { entity: Entity; position: Cartesian3 }[] = []
       for (const marker of markers) {
         const corners = marker.footprint?.map((point) =>
           Cartesian3.fromDegrees(point.lon, point.lat),
         )
-        const entity = viewer.entities.add({
+        const entity = source.entities.add({
           position: Cartesian3.fromDegrees(
             marker.location.lon,
             marker.location.lat,
@@ -153,6 +186,19 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
       for (const [id, candidate] of entities)
         if (candidate === entity) return id
       return undefined
+    },
+    clusterPositionsOf(picked) {
+      if (typeof picked !== 'object' || picked === null || !('id' in picked))
+        return undefined
+      const members: unknown = picked.id
+      if (!Array.isArray(members)) return undefined
+      const owned = new Set(entities.values())
+      const positions = members.flatMap((member: unknown) => {
+        if (!(member instanceof Entity) || !owned.has(member)) return []
+        const position = member.position?.getValue(viewer.clock.currentTime)
+        return position ? [position] : []
+      })
+      return positions.length >= 2 ? positions : undefined
     },
   }
 }

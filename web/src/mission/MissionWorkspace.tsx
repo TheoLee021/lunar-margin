@@ -104,8 +104,8 @@ export function MissionWorkspace({
             <section className="hud-section">
               <h2>TOP 5 후보</h2>
               <p className="text-xs text-neutral-400">
-                사각형은 후보의 500m × 500m 격자입니다. 선택 후 ‘선택 지점 3D로
-                보기’로 확대하세요.
+                멀리서는 가까운 후보를 묶어 표시합니다. 묶음을 누르면 확대되고,
+                가까이서는 500m × 500m 격자가 보입니다.
               </p>
               <p className="text-xs text-neutral-400">
                 {selection.landing} · {selection.duration}일

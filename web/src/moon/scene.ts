@@ -162,10 +162,26 @@ export async function createMoonScene(
   }
 
   const markers = createMarkerLayer(viewer)
+  let flight = 0
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
-      const markerId = markers.markerIdOf(scene.pick(position))
+      const picked: unknown = scene.pick(position)
+      const cluster = markers.clusterPositionsOf(picked)
+      if (cluster) {
+        flight++
+        const bounds = BoundingSphere.fromPoints(cluster)
+        camera.flyToBoundingSphere(bounds, {
+          offset: new HeadingPitchRange(
+            0,
+            -CesiumMath.PI_OVER_TWO,
+            Math.max(bounds.radius * 5, 5_000),
+          ),
+          duration: 1.2,
+        })
+        return
+      }
+      const markerId = markers.markerIdOf(picked)
       if (markerId !== undefined) {
         options.onMarkerSelect(markerId)
         return
@@ -196,7 +212,6 @@ export async function createMoonScene(
     orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 },
   }
   camera.setView(overview)
-  let flight = 0
 
   return {
     flyTo(location, rangeM = SITE_RANGE_M) {
