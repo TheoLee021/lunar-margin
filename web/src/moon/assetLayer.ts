@@ -8,11 +8,14 @@ import {
   DistanceDisplayCondition,
   Ellipsoid,
   Entity,
+  HeadingPitchRoll,
   HeightReference,
   Material,
+  Math as CesiumMath,
   Matrix4,
   Polyline,
   PolylineCollection,
+  Quaternion,
   Transforms,
   VerticalOrigin,
   type Viewer,
@@ -32,6 +35,22 @@ export interface AssetShape {
   heightM: number
 }
 
+/**
+ * A glTF model standing in for the plain shape. Every number is measured from the
+ * file's own bounding box, because a downloaded model arrives in whatever units and
+ * origin its author used: ours is 12.7 m tall in its own units with the origin 4.2 m
+ * up inside the body.
+ */
+export interface AssetModel {
+  uri: string
+  /** Multiplier that brings the file's height to the asset's `shape.heightM`. */
+  scale: number
+  /** Metres to raise the origin so the model's lowest point rests on the surface. */
+  baseLiftM: number
+  /** Degrees to turn the model so its nose points along its heading. */
+  headingOffsetDeg?: number
+}
+
 export interface MoonAsset {
   id: string
   label: string
@@ -42,6 +61,10 @@ export interface MoonAsset {
    */
   observerHeightM: number
   shape: AssetShape
+  /** Drawn instead of `shape` when given. `shape` still carries the real dimensions. */
+  model?: AssetModel
+  /** Degrees clockwise from north the unit faces. Only meaningful for a model. */
+  headingDeg?: number
   /** Badge above the unit saying what it is, since metre-scale shapes read alike. */
   symbol?: AssetSymbol
   /** The Earth in this asset's sky at the mission instant, or null when not evaluated. */
@@ -90,6 +113,7 @@ export interface AssetLayer {
  */
 interface Live {
   body: Cartesian3
+  orientation: Quaternion
   mast: Cartesian3
   color: Color
   label: string
@@ -154,10 +178,28 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
     return [eye, tip]
   }
 
+  /** Where the drawable sits: a model hangs off its own origin, a box off its centre. */
+  const anchorHeight = (asset: MoonAsset): number =>
+    asset.model ? asset.model.baseLiftM : asset.shape.heightM / 2
+
+  const facing = (asset: MoonAsset, position: Cartesian3): Quaternion =>
+    Transforms.headingPitchRollQuaternion(
+      position,
+      new HeadingPitchRoll(
+        CesiumMath.toRadians(
+          (asset.headingDeg ?? 0) + (asset.model?.headingOffsetDeg ?? 0),
+        ),
+        0,
+        0,
+      ),
+    )
+
   const create = (asset: MoonAsset): Drawn => {
     const { shape, symbol } = asset
+    const anchor = positionAt(asset.location, anchorHeight(asset))
     const live: Live = {
-      body: positionAt(asset.location, shape.heightM / 2),
+      body: anchor,
+      orientation: facing(asset, anchor),
       mast: positionAt(asset.location, asset.observerHeightM / 2),
       color: SIGHT_CLEAR,
       label: asset.label,
@@ -193,33 +235,43 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
             },
           }
         : {}),
-      ...(shape.kind === 'box'
+      orientation: new CallbackProperty(() => live.orientation, false),
+      ...(asset.model
         ? {
-            box: {
-              dimensions: new Cartesian3(
-                shape.widthM,
-                shape.depthM,
-                shape.heightM,
-              ),
-              material: BODY_COLOR,
-              outline: true,
-              outlineColor: BODY_OUTLINE,
+            model: {
+              uri: asset.model.uri,
+              scale: asset.model.scale,
               heightReference: HeightReference.RELATIVE_TO_3D_TILE,
               distanceDisplayCondition: NEAR_BODY,
             },
           }
-        : {
-            cylinder: {
-              length: shape.heightM,
-              topRadius: shape.widthM / 2,
-              bottomRadius: shape.widthM / 2,
-              material: BODY_COLOR,
-              outline: true,
-              outlineColor: BODY_OUTLINE,
-              heightReference: HeightReference.RELATIVE_TO_3D_TILE,
-              distanceDisplayCondition: NEAR_BODY,
-            },
-          }),
+        : shape.kind === 'box'
+          ? {
+              box: {
+                dimensions: new Cartesian3(
+                  shape.widthM,
+                  shape.depthM,
+                  shape.heightM,
+                ),
+                material: BODY_COLOR,
+                outline: true,
+                outlineColor: BODY_OUTLINE,
+                heightReference: HeightReference.RELATIVE_TO_3D_TILE,
+                distanceDisplayCondition: NEAR_BODY,
+              },
+            }
+          : {
+              cylinder: {
+                length: shape.heightM,
+                topRadius: shape.widthM / 2,
+                bottomRadius: shape.widthM / 2,
+                material: BODY_COLOR,
+                outline: true,
+                outlineColor: BODY_OUTLINE,
+                heightReference: HeightReference.RELATIVE_TO_3D_TILE,
+                distanceDisplayCondition: NEAR_BODY,
+              },
+            }),
     })
 
     const mast = viewer.entities.add({
@@ -248,7 +300,8 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
   const paint = (asset: MoonAsset, entities: Drawn): void => {
     const { live, sight } = entities
     live.label = asset.label
-    live.body = positionAt(asset.location, asset.shape.heightM / 2)
+    live.body = positionAt(asset.location, anchorHeight(asset))
+    live.orientation = facing(asset, live.body)
     live.mast = positionAt(asset.location, asset.observerHeightM / 2)
     if (entities.mast.cylinder)
       entities.mast.cylinder.length = new ConstantProperty(

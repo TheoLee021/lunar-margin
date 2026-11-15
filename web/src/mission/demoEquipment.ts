@@ -1,4 +1,4 @@
-import type { AssetShape, MoonAsset } from '../moon/assetLayer'
+import type { AssetModel, AssetShape, MoonAsset } from '../moon/assetLayer'
 import type { AssetSymbol } from '../moon/assetSymbol'
 import type { SkyDirection } from '../moon/lineOfSight'
 import { offsetLocation } from '../moon/location'
@@ -18,8 +18,22 @@ export interface EquipmentSpec {
   /** Height of the point that has to see the Earth (the API's `observer_height_m`). */
   observerHeightM: number
   shape: AssetShape
+  /** Drawn in place of `shape` when the unit has a model file. */
+  model?: AssetModel
   /** Badge drawn above the unit so it is recognisable from a distance. */
   symbol: AssetSymbol
+}
+
+/**
+ * rover.glb measured from its own bounding box: 12.71 m tall once the scale inside the
+ * file is applied, with the origin 0.79 m above its lowest point at this scale. Scaling
+ * to the trencher's 2.4 m leaves a 1.6 x 1.4 m footprint, narrower than the 4.8 x 2.0 m
+ * on the spec sheet: the file is a masted rover, and `shape` stays the real dimensions.
+ */
+const TRENCHER_MODEL: AssetModel = {
+  uri: '/models/rover.glb',
+  scale: 0.18885,
+  baseLiftM: 0.79,
 }
 
 // Terra Nova Works melts regolith into landing pads: an array for power, a thermal unit
@@ -58,6 +72,7 @@ export const TRENCHER: EquipmentSpec = {
   offset: { eastM: 300, northM: -260 },
   observerHeightM: 2,
   shape: { kind: 'box', widthM: 2, depthM: 4.8, heightM: 2.4 },
+  model: TRENCHER_MODEL,
   symbol: 'trencher',
 }
 
@@ -93,6 +108,15 @@ export interface TraversePoint {
   offset: SurfaceOffset
   /** Index of the waypoint whose measured sky applies here. */
   waypoint: number
+  /** Direction of travel, degrees clockwise from north. */
+  headingDeg: number
+}
+
+/** Bearing of a leg, degrees clockwise from north. */
+function bearingOf(from: SurfaceOffset, to: SurfaceOffset): number {
+  const degrees =
+    (Math.atan2(to.eastM - from.eastM, to.northM - from.northM) * 180) / Math.PI
+  return (degrees + 360) % 360
 }
 
 /** Where the trencher is after `progress` (0..1) of the trench, at constant speed. */
@@ -100,7 +124,11 @@ export function traverseAt(progress: number): TraversePoint {
   const clamped = Math.min(1, Math.max(0, progress))
   // Subtracting leg by leg leaves a rounding crumb, so land the end exactly.
   if (clamped === 1)
-    return { offset: TRAVERSE.at(-1)!, waypoint: TRAVERSE.length - 1 }
+    return {
+      offset: TRAVERSE.at(-1)!,
+      waypoint: TRAVERSE.length - 1,
+      headingDeg: bearingOf(TRAVERSE.at(-2)!, TRAVERSE.at(-1)!),
+    }
   let remaining = clamped * TRAVERSE_LENGTH_M
   for (let index = 1; index < TRAVERSE.length; index += 1) {
     const from = TRAVERSE[index - 1]!
@@ -114,11 +142,16 @@ export function traverseAt(progress: number): TraversePoint {
           northM: from.northM + (to.northM - from.northM) * fraction,
         },
         waypoint: index - 1,
+        headingDeg: bearingOf(from, to),
       }
     }
     remaining -= leg
   }
-  return { offset: TRAVERSE.at(-1)!, waypoint: TRAVERSE.length - 1 }
+  return {
+    offset: TRAVERSE.at(-1)!,
+    waypoint: TRAVERSE.length - 1,
+    headingDeg: bearingOf(TRAVERSE.at(-2)!, TRAVERSE.at(-1)!),
+  }
 }
 
 /** Measured Earth directions: one per static unit by id, one per traverse waypoint. */
@@ -138,12 +171,15 @@ export function buildEquipmentAssets(
     spec: EquipmentSpec,
     offset: SurfaceOffset,
     earth: SkyDirection | null,
+    headingDeg?: number,
   ): MoonAsset => ({
     id: spec.id,
     label: spec.label,
     location: offsetLocation(centre, offset.eastM, offset.northM),
     observerHeightM: spec.observerHeightM,
     shape: spec.shape,
+    ...(spec.model ? { model: spec.model } : {}),
+    ...(headingDeg === undefined ? {} : { headingDeg }),
     symbol: spec.symbol,
     earth,
   })
@@ -152,6 +188,11 @@ export function buildEquipmentAssets(
     ...STATIC_EQUIPMENT.map((spec) =>
       place(spec, spec.offset, sky.statics[spec.id] ?? null),
     ),
-    place(TRENCHER, point.offset, sky.waypoints[point.waypoint] ?? null),
+    place(
+      TRENCHER,
+      point.offset,
+      sky.waypoints[point.waypoint] ?? null,
+      point.headingDeg,
+    ),
   ]
 }

@@ -19,14 +19,23 @@ const noSky = { statics: {}, waypoints: TRAVERSE.map(() => null) }
 
 describe('traverseAt', () => {
   it('starts on the first waypoint', () => {
-    expect(traverseAt(0)).toEqual({ offset: TRAVERSE[0], waypoint: 0 })
+    expect(traverseAt(0)).toMatchObject({ offset: TRAVERSE[0], waypoint: 0 })
   })
 
   it('ends on the last waypoint', () => {
-    expect(traverseAt(1)).toEqual({
+    expect(traverseAt(1)).toMatchObject({
       offset: TRAVERSE.at(-1),
       waypoint: TRAVERSE.length - 1,
     })
+  })
+
+  it('faces the way it is driving', () => {
+    // The trench starts heading south-east: east grows, north falls.
+    const start = traverseAt(0).headingDeg
+    expect(start).toBeGreaterThan(90)
+    expect(start).toBeLessThan(180)
+    // It curves back west by the end, so the bearing passes south.
+    expect(traverseAt(1).headingDeg).toBeGreaterThan(180)
   })
 
   it('clamps progress outside 0..1', () => {
