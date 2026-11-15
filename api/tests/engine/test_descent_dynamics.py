@@ -54,12 +54,7 @@ def _independent_reference_sample(
     bump_d = (32.0 * s - 96.0 * s**2 + 64.0 * s**3) / duration_s
     bump_dd = (32.0 - 192.0 * s + 192.0 * s**2) / duration_s**2
     position = (
-        pdi_position
-        + pdi_velocity * t_s
-        + c3 * s**3
-        + c4 * s**4
-        + c5 * s**5
-        + loft_m * bump * up
+        pdi_position + pdi_velocity * t_s + c3 * s**3 + c4 * s**4 + c5 * s**5 + loft_m * bump * up
     )
     velocity = (
         pdi_velocity
@@ -67,9 +62,8 @@ def _independent_reference_sample(
         + loft_m * bump_d * up
     )
     acceleration = (
-        (6.0 * c3 * s + 12.0 * c4 * s**2 + 20.0 * c5 * s**3) / duration_s**2
-        + loft_m * bump_dd * up
-    )
+        6.0 * c3 * s + 12.0 * c4 * s**2 + 20.0 * c5 * s**3
+    ) / duration_s**2 + loft_m * bump_dd * up
     return position, velocity, acceleration
 
 
