@@ -5,9 +5,9 @@
 """
 
 import math
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Lock
 from typing import Literal
 
 import numpy as np
@@ -22,10 +22,11 @@ _KERNELS = (
     "moon_pa_de440_200625.bpc",
     "moon_de440_250416.tf",
 )
-# CSPICE has process-global kernel/error state and is not thread-safe.
-# All CSPICE entry points below share this lock; pure NumPy/DEM work stays parallel.
-_SPICE_LOCK = Lock()
 _loaded: set[Path] = set()
+# CSPICE는 스레드 안전하지 않다(전역 상태 사용). 동시에 부르면 오류가 나거나 프로세스가 비정상
+# 종료하므로, SPICE를 부르는 모든 곳을 이 락으로 감싼다. FastAPI는 동기 엔드포인트를
+# 스레드풀에서 동시에 실행한다.
+_SPICE_LOCK = threading.RLock()
 
 
 def load_kernels(spice_dir: Path) -> None:
@@ -59,6 +60,36 @@ def utc_range(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.f
     return et0 + step_s * np.arange(count, dtype=np.float64)
 
 
+def body_vectors(body: Literal["SUN", "EARTH"], et: NDArray[np.float64]) -> NDArray[np.float64]:
+    """달 중심에서 본 천체의 위치 벡터(km, MOON_ME 프레임, LT+S 보정). 모양 (N, 3).
+
+    지점과 무관하므로 한 번만 계산해 여러 지점에 재사용할 수 있다.
+    """
+    with _SPICE_LOCK:
+        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
+    return np.asarray(positions, dtype=np.float64)
+
+
+def topocentric_azel(
+    vectors_km: NDArray[np.float64],
+    lat_deg: float,
+    lon_deg: float,
+    observer_height_m: float = 0.0,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """달 중심 벡터를 한 관측점의 (방위각°, 고각°)으로 바꾼다. 방위각 0°=북, 시계방향."""
+    lat, lon = math.radians(lat_deg), math.radians(lon_deg)
+    up = np.array([math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)])
+    east = np.array([-math.sin(lon), math.cos(lon), 0.0])
+    north = np.cross(up, east)  # up 과 east 의 외적이 north
+    observer_km = up * (MOON_RADIUS_M + observer_height_m) / 1000.0
+
+    local = vectors_km - observer_km  # (N, 3)
+    e, n, u = local @ east, local @ north, local @ up
+    elevation = np.degrees(np.arctan2(u, np.hypot(e, n)))
+    azimuth = np.degrees(np.arctan2(e, n)) % 360.0
+    return azimuth, elevation
+
+
 def body_azel(
     body: Literal["SUN", "EARTH"],
     lat_deg: float,
@@ -67,20 +98,7 @@ def body_azel(
     observer_height_m: float = 0.0,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """(방위각°, 고각°). 방위각 0°=북, 시계방향. 빛 시간·광행차 보정(LT+S)."""
-    lat, lon = math.radians(lat_deg), math.radians(lon_deg)
-    up = np.array([math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)])
-    east = np.array([-math.sin(lon), math.cos(lon), 0.0])
-    north = np.cross(up, east)  # up と east の外積が north
-    observer_km = up * (MOON_RADIUS_M + observer_height_m) / 1000.0
-
-    with _SPICE_LOCK:
-        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
-    vectors = np.asarray(positions, dtype=np.float64) - observer_km  # (N, 3)
-
-    e, n, u = vectors @ east, vectors @ north, vectors @ up
-    elevation = np.degrees(np.arctan2(u, np.hypot(e, n)))
-    azimuth = np.degrees(np.arctan2(e, n)) % 360.0
-    return azimuth, elevation
+    return topocentric_azel(body_vectors(body, et), lat_deg, lon_deg, observer_height_m)
 
 
 def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.float64]:

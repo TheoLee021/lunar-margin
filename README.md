@@ -4,12 +4,22 @@ A mission decision tool for comparing and evaluating landing sites and landing t
 
 ## NASA data
 
-The analysis is computed from two NASA datasets (about 269 MB, downloaded by `cd api && uv run python -m lunar_margin.pipeline.fetch`, never committed to git):
+The analysis is computed from NASA data that `cd api && uv run python -m lunar_margin.pipeline.fetch` downloads (about 501 MB; never committed to git):
 
-- **Terrain**: LRO LOLA south-pole DEM (`ldem_80s_80m_float`, 80 m/px, 80°S–90°S) from PDS Geosciences. Used to compute the terrain horizon seen from a site.
+- **Terrain**: LRO LOLA south-pole DEM `ldem_80s_80m_float` (80 m/px, 80°S–90°S) from PDS Geosciences. Used to compute the terrain horizon seen from a site.
+- **Terrain, supplementary**: LOLA DEM `ldem_75s_120m_float` (120 m/px, 75°S–90°S, 232 MB).
+  The 80 m DEM ends at about 80°S, so for sites near the edge of the search region (85°S) the horizon rays toward the far side would leave the data.
+  The two are combined as a _composite DEM_: the 80 m values are used wherever they exist, and the 120 m values only fill in outside them (or where a pixel is missing).
+  Both use the same polar stereographic projection, so they overlay directly. The 120 m grid is coarser, so features smaller than about 120 m are not resolved there;
+  that only affects distant terrain.
 - **Sun and Earth positions**: NAIF SPICE kernels (DE440s ephemeris, lunar orientation and frame kernels, leap seconds) from NASA JPL. Used to compute where the Sun and Earth are in the lunar sky over time.
 
-A body counts as visible when its elevation is above the terrain horizon in its direction. Sources, versions, and file list: [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
+A body counts as visible when its elevation is above the terrain horizon in its direction.
+
+Derived data (generated locally, not downloaded, not in git): `uv run python -m lunar_margin.pipeline.horizons` precomputes the terrain horizon of every search-grid site into `DATA_DIR/horizons/` (about 210 MB, roughly 20 minutes on 12 cores).
+Horizons depend only on the site and the DEM, not on dates or mission limits, so later searches read them instead of recomputing.
+
+Sources, versions, and file list: [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
 
 ## Quick start
 

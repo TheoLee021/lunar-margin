@@ -1,0 +1,95 @@
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from lunar_margin.engine.candidates.config import Roi, SearchConfig
+from lunar_margin.pipeline.candidates import run_search
+from lunar_margin.pipeline.horizons import build_for_config, table_spec_for
+
+TINY = SearchConfig(
+    roi=Roi(min_lat_deg=-90.0, max_lat_deg=-89.95),  # 극에서 약 1.5 km
+    grid_spacing_m=500.0,
+    coarse_spacing_m=1000.0,
+    refine_fraction=0.5,
+    min_separation_m=1000.0,
+    top_k=4,
+    fallback_dem=None,
+)
+
+
+@pytest.fixture
+def data_copy(data_dir: Path, tmp_path: Path) -> Path:
+    """실제 데이터를 가리키는 임시 DATA_DIR (테이블은 여기에만 쓴다)."""
+    root = tmp_path / "data"
+    root.mkdir()
+    for sub in ("dem", "spice"):
+        (root / sub).mkdir()
+        for item in (data_dir / sub).iterdir():
+            (root / sub / item.name).symlink_to(item.resolve())
+    return root
+
+
+def test_the_table_spec_follows_the_config_and_the_dem_files(data_copy: Path) -> None:
+    spec = table_spec_for(TINY, data_copy)
+
+    assert spec.roi == TINY.roi and spec.spacing_m == 500.0
+    assert spec.azimuth_step_deg == TINY.fine_azimuth_step_deg
+    assert spec.max_range_m == TINY.max_range_m and spec.observer_height_m == 0.0
+    assert "ldem_80s_80m_float.img" in spec.dem_id
+    other = table_spec_for(TINY.model_copy(update={"observer_height_m": 2.0}), data_copy)
+    assert other.table_id() != spec.table_id()
+
+
+def test_a_search_without_a_table_warns_and_still_works(data_copy: Path) -> None:
+    outcome = run_search(TINY, data_copy, log=lambda _: None)
+
+    assert outcome.source.horizon_table is None
+    assert any("수평선 테이블" in w and "pipeline.horizons" in w for w in outcome.summary.warnings)
+
+
+def test_a_built_table_is_found_and_gives_the_same_candidates(data_copy: Path) -> None:
+    before = run_search(TINY, data_copy, log=lambda _: None)
+
+    path = build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
+    after = run_search(TINY, data_copy, log=lambda _: None)
+
+    assert path.parent == data_copy / "horizons"
+    assert after.source.horizon_table == path.name
+    assert not any("수평선 테이블" in w for w in after.summary.warnings)
+    # 후보 지점(id)과 순위는 같고, 수평선을 0.01° 단위로 저장하므로 지표는 거의 같다
+    assert np.array_equal(before.rank, after.rank)
+    assert np.allclose(
+        before.field.sun_fraction, after.field.sun_fraction, atol=0.01, equal_nan=True
+    )
+    assert np.allclose(
+        before.field.earth_fraction, after.field.earth_fraction, atol=0.01, equal_nan=True
+    )
+
+
+def test_a_table_for_other_parameters_is_not_used(data_copy: Path) -> None:
+    build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
+
+    other = run_search(
+        TINY.model_copy(update={"observer_height_m": 2.0}), data_copy, log=lambda _: None
+    )
+
+    assert other.source.horizon_table is None
+
+
+def test_building_reports_progress_and_replaces_nothing_when_it_already_exists(
+    data_copy: Path,
+) -> None:
+    lines: list[str] = []
+    first = build_for_config(TINY, data_copy, workers=1, log=lines.append)
+    mtime = (first / "meta.json").stat().st_mtime_ns
+
+    again = build_for_config(TINY, data_copy, workers=1, log=lines.append)
+
+    assert again == first and (again / "meta.json").stat().st_mtime_ns == mtime
+    assert any("이미 있" in line for line in lines)
+
+
+def test_build_requires_the_dem_files(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match=r"pipeline\.fetch"):
+        build_for_config(TINY, tmp_path, workers=1, log=lambda _: None)
