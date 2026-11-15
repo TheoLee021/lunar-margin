@@ -6,6 +6,11 @@ function numeric(value: number | null, unit: string): string {
   return `${value.toFixed(unit === '%' ? 1 : 2)} ${unit}`
 }
 
+function signedMargin(value: number | null, unit: string): string {
+  if (value === null) return '—'
+  return `${value >= 0 ? '+' : ''}${numeric(value, unit)}`
+}
+
 export function MissionEngineering({
   candidate,
   config,
@@ -80,9 +85,7 @@ export function MissionEngineering({
                     {numeric(row.value, row.unit)}
                   </td>
                   <td className="py-2 pr-2 font-mono">
-                    {row.margin === null
-                      ? '—'
-                      : `${row.margin >= 0 ? '+' : ''}${numeric(row.margin, row.unit)}`}
+                    {signedMargin(row.margin, row.unit)}
                   </td>
                   <td className={`py-2 font-mono ${statusStyle[row.status]}`}>
                     {row.status}
