@@ -63,7 +63,10 @@ export function comparisonMetrics(
   const slopeReference = slopeLimit != null && slopeLimit > 0 ? slopeLimit : 15
   const roughnessReference =
     roughnessLimit != null && roughnessLimit > 0 ? roughnessLimit : 20
-  const terrainValue = (site: Candidate, kind: 'slope_p95_deg' | 'roughness_p95_m') =>
+  const terrainValue = (
+    site: Candidate,
+    kind: 'slope_p95_deg' | 'roughness_p95_m',
+  ) =>
     site.terrain?.coverage_fraction != null &&
     site.terrain.coverage_fraction >= 0.9999
       ? site.terrain[kind]
