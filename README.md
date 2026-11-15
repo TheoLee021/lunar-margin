@@ -85,3 +85,15 @@ The timeline uses server elevations/visibility and exact server windows, with th
 Run a backend containing #5 and the SPICE concurrency fix before exercising this frontend. Download NASA data once from `api/` with `uv run python -m lunar_margin.pipeline.fetch`; DEM and kernels stay outside the frontend and Git. `API_PROXY_TARGET` selects the local API; `VITE_API_URL` selects the deployed API. The API client, response schema and shared analysis helpers are reused from #6 without replacing its analysis page.
 
 Candidate search UI: choose **후보지 탐색**, enter a mission, and optionally enable the development search (20 km → 10 km). Requires the candidate search backend. See [docs/candidates.md](docs/candidates.md).
+
+
+## Candidate-search terrain slope
+
+Candidate search now enforces the optional maximum terrain slope in both standard
+and development searches. It uses the 250 m regional DEM slope P95
+(160 m slope baseline, 400 m roughness window). Incomplete
+regional terrain cannot pass. The table and candidate detail show measured slopes;
+the filter step explains slope and terrain-coverage exclusions. Historical runs
+remain readable and are labeled as not applying slope. Start a new search to apply
+the limit; old results are not reused by the new mission cache version.
+This is terrain screening, not certified landing safety.

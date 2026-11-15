@@ -227,7 +227,8 @@ export function MissionForm({
               onChange={(event) => update('slopeDegrees', event.target.value)}
             />
             <span className="text-amber-300">
-              현재 경사 조건은 저장만 하며 필터에 적용되지 않습니다.
+              250 m 반경의 DEM 경사 P95에 적용합니다. 지형 자료가 불완전한
+              지점은 제외합니다. 착륙 안전 인증은 아닙니다.
             </span>
           </div>
           <div className="flex flex-col gap-2 text-xs text-neutral-300">
