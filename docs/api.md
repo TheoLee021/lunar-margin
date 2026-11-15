@@ -613,6 +613,45 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
 
+### 발사 예정일과 모델 예상 비용 (추가)
+
+`GET /pricing/providers/launches` → `{timezone: "UTC", scope: "all_launches_demo", launches, sources}`.
+각 launch는 `{id, provider_id: ProviderId|null, launch_provider: string, lunar_related: boolean, name, departure_date: date|null, label, confirmed: false,
+sources: [{name, url, label}], date_precision, participants: [{provider_id, role}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
+각 source 상태는 `{name, url, fetched_at, stale, error: string|null, scanned_records, scanned_pages, complete}`이다.
+`date_precision`은 day/month/quarter/year/unknown, role은 delivery/launch/partner(본문 관련 언급)다.
+두 소스의 전체 페이지 수집 실패 시 complete=false이며, 회사별 빈 결과를 확정적 부재로 해석하지 않는다.
+10분 동안 응답을 재사용하며 외부 오류 시 확인일이 유지된 마지막 자료를 표시한다.
+
+`POST /pricing/providers/compare`와 `/calendar`의 `estimate?: boolean`은 기본 false다.
+true이면 공개 단가 또는 공통 참조 단가로 예상 비용을 계산한다. `/compare`의
+`minimum_estimate_usd`와 provider의 `minimum_estimate_usd`가 모델 최솟값이다.
+flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
+`estimate_tariff_usd_per_kg`, `estimate_fixed_usd`, `estimate_tariff_source`,
+`estimate_assumptions`가 계산 근거를 전달한다. 기존 `price_usd`, `minimum_usd`는
+완전한 공개 조건을 충족한 견적만 담고 모델값으로 채우지 않는다.
+`/calendar`의 `estimate`는 요청 모드를 반환하며 모델 평균은 cell.status `estimated`,
+`mean_min_usd`에 담긴다. 기존 전체 격자 평균·부분 산정 규칙은 동일하다.
+날짜와 청구 조건의 해석은 [launch-schedule.md](launch-schedule.md)를 참고한다.
+
+데모에서는 목적지·회사로 목록을 제한하지 않습니다. 일반 발사도 분석용 출발일로 선택할 수 있으며 실제 달 배송 가능성을 뜻하지 않습니다.
+
+
+`POST /pricing/providers/calendar`는 `estimate: true`일 때만
+`selected_launch_id?: string|null`을 받는다. `/launches`에서 선택한 실제 ID를 보내면
+캐시된 일정의 **발사사**로 회사 모델을 결정한다. 브라우저가 보낸 회사명·단가를 신뢰하지
+않는다. ID가 없으면 해당 UTC 출발일에 등록된 발사사들의 격자별 최저가 평균 모드다. 존재하지 않는 ID는 409,
+견적 모드에서 ID 지정은 422다. 계산 중 외부 일정 수집을 기다리거나 다시 실행하지 않는다.
+
+선택 시 응답 `selection`은 `{launch_id, launch_name, company_id: ProviderId|null,
+company_name, tariff_usd_per_kg, fixed_usd, billable_mass_kg,
+tariff_basis: public_tariff|common_model, tariff_source, assumptions}`다. 미선택은 null이다.
+해당 배송 방식의 회사 공개 단가를 우선하며 없으면 공통 참조 단가를 사용한다.
+일반 발사에 달 배송 단가를 적용한 데모이므로 회사의 실제 달 운항 기간·화물 수용 여부는
+적용하지 않는다. 기본 전이 3~150일·지형 부적합 판정은 유지한다.
+`mean_min_usd`는 같은 적합 500m 격자 전체의 선택 회사 모델 산술평균이다.
+단일 회사이므로 격자별 최솟값도 그 회사 가격이다. `eligible_provider_ids`는 알려진
+6사 ID만 담으며 ULA 등은 빈 배열이다. 이 경우 `selection.company_name`으로 회사를 구분한다.
 
 ### Optional regional roughness filtering
 
@@ -637,3 +676,15 @@ be ranked; it does not introduce an arbitrary roughness score weight.
 
 RF communication changes are tracked separately; this roughness change preserves
 the existing geometric Earth-visibility metric and scoring.
+
+모델 날짜표 cell의 `lowest_company_names: string[]`는 각 적합 격자의 최저가 계산에
+기여한 발사사 이름이다. 동률·격자별 다른 최저가 회사는 모두 포함한다. 가격이 없는
+셀은 빈 배열이다. `lowest_launch_id: string|null`는 기여 회사가 하나일 때 해당 공개
+발사편 ID이며, 여러 회사가 기여하면 null이다. 엄격한 공개 견적 모드에서는 이 추가
+모델 필드를 기본 빈 배열/null로 반환한다.
+
+`estimate:true`에서 발사편을 선택하지 않으면 `/launches`의 해당 UTC 출발일에
+등록된 발사사 모델끼리만 비교한다. 선택 시에도 해당 편의 예정일만 허용한다.
+해당 날짜에 발사편이 없거나 날짜가 미정이면 `status: no_launch`와 null 가격을
+반환하며 DEM을 계산하지 않는다. 월·연도를 임의의 출발일로 확장하지 않는다.
+회사당 지형 분석을 반복하지 않고 저장된 목적지 계수에 모델 가격 벡터를 적용한다.

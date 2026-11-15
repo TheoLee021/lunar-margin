@@ -190,6 +190,46 @@ def test_published_decimal_billing_step_does_not_round_fourteen_units_up_to_fift
     assert billable_mass(step, 0.14) == 0.14
 
 
+@pytest.mark.parametrize(
+    ("minimum_kg", "increment_kg", "mass_kg", "expected_usd", "assumption"),
+    [
+        (3.0, None, 1.0, 300.0, "청구 단위 미확인 · 추가 올림 없음 가정"),
+        (None, 2.0, 1.0, 200.0, "최소 청구량 미확인 · 입력 질량을 하한으로 가정"),
+        (None, 0.01, 0.14, 14.0, "최소 청구량 미확인 · 입력 질량을 하한으로 가정"),
+    ],
+)
+def test_estimates_preserve_each_published_billing_rule_without_creating_a_quote(
+    minimum_kg: float | None,
+    increment_kg: float | None,
+    mass_kg: float,
+    expected_usd: float,
+    assumption: str,
+) -> None:
+    catalog = published_catalog()
+    provider = catalog.providers[0]
+    flight = provider.flights[0]
+    assert flight.pricing is not None
+    pricing = flight.pricing.model_copy(
+        update={"minimum_billable_kg": minimum_kg, "billing_increment_kg": increment_kg}
+    )
+    updated = provider.model_copy(
+        update={"flights": [flight.model_copy(update={"pricing": pricing})]}
+    )
+    catalog = catalog.model_copy(update={"providers": [updated, *catalog.providers[1:]]})
+    context = QuoteContext(
+        estimate=True,
+        departure_date=date(2027, 1, 6),
+        landing_date=date(2027, 1, 10),
+        mass_kg=mass_kg,
+        delivery="surface",
+    )
+    offer = compare_grid(catalog, context, x_m=0, y_m=0, destination_multiplier=1)[0]
+    assert offer.minimum_estimate_usd == pytest.approx(expected_usd)
+    assert assumption in offer.flights[0].estimate_assumptions
+    assert offer.minimum_usd is None
+    assert offer.flights[0].price_usd is None
+
+
 def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_path: Path) -> None:
     mission = MissionRequest(landing_date=date(2027, 1, 10), mission_duration_days=14)
     root = tmp_path / "candidates" / mission.run_id()
@@ -250,6 +290,80 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     assert detail.status_code == 200
     assert len(detail.json()["providers"]) == 6
     assert detail.json()["minimum_usd"] == 100
+    estimated = client.post(
+        "/pricing/providers/calendar",
+        json={
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": ["2027-01-06"],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+        },
+    )
+    assert estimated.status_code == 200
+    assert estimated.json()["estimate"] is True
+    assert estimated.json()["cells"][0]["status"] == "estimated"
+    assert estimated.json()["cells"][0]["eligible_grid_count"] == 110
+    assert estimated.json()["cells"][0]["mean_min_usd"] == pytest.approx(600_000)
+    assert estimated.json()["cells"][0]["lowest_company_names"] == ["SpaceX"]
+    assert estimated.json()["cells"][0]["lowest_launch_id"]
+    no_launch = client.post(
+        "/pricing/providers/calendar",
+        json={
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": ["2027-01-05"],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+        },
+    ).json()["cells"][0]
+    assert no_launch["status"] == "no_launch"
+    assert no_launch["mean_min_usd"] is None
+    assert no_launch["lowest_company_names"] == []
+    # Switching operators changes only pricing: the same 110 saved fine grids are reused.
+    from lunar_margin.app.launch_schedule import get_reader
+
+    schedules = get_reader().peek().launches
+    for operator, price, provider_id in [
+        ("SpaceX", 600_000, "spacex"),
+        ("United Launch Alliance (ULA)", 1_700_000, None),
+    ]:
+        launch = next(item for item in schedules if item.launch_provider == operator)
+        request = {
+            "mission": mission.model_dump(mode="json"),
+            "landing_dates": ["2027-01-10"],
+            "departure_dates": [launch.departure_date.isoformat()] if launch.departure_date else [],
+            "mass_kg": 1,
+            "delivery": "surface",
+            "estimate": True,
+            "selected_launch_id": launch.id,
+        }
+        chosen = client.post("/pricing/providers/calendar", json=request)
+        assert chosen.status_code == 200
+        result = chosen.json()
+        assert result["selection"]["company_id"] == provider_id
+        assert result["selection"]["company_name"] == operator
+        for selected_cell in result["cells"]:
+            assert selected_cell["lowest_company_names"] == [operator]
+            assert selected_cell["lowest_launch_id"] == launch.id
+            assert selected_cell["status"] == "estimated"
+            assert selected_cell["mean_min_usd"] == pytest.approx(price)
+            assert selected_cell["eligible_grid_count"] == selected_cell["quoted_grid_count"] == 110
+            assert selected_cell["eligible_provider_ids"] == ([provider_id] if provider_id else [])
+        assert (
+            client.post(
+                "/pricing/providers/calendar", json={**request, "estimate": False}
+            ).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/pricing/providers/calendar", json={**request, "selected_launch_id": "missing"}
+            ).status_code
+            == 409
+        )
     # A destination with only one covered grid must not silently shrink the mean's population.
     catalog = published_catalog()
     providers = catalog.providers.copy()
@@ -309,3 +423,51 @@ def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_
     ).json()
     assert changed["dates"][0]["state"] == "not_computed"
     assert changed["dates"][0]["run_id"] != legacy_id
+
+
+def test_model_estimate_uses_common_tariff_without_claiming_a_bookable_quote() -> None:
+    context = QuoteContext.model_validate(
+        {
+            "departure_date": "2027-01-06",
+            "landing_date": "2027-01-10",
+            "mass_kg": 24,
+            "delivery": "surface",
+            "estimate": True,
+        }
+    )
+    offers = compare_grid(load_catalog(), context, x_m=0, y_m=0, destination_multiplier=1.1)
+    assert len(offers) == 6
+    voyager = offers[-1]
+    assert voyager.minimum_usd is None
+    assert voyager.minimum_estimate_usd == pytest.approx(32_180_000)
+    assert voyager.flights[0].estimate_basis == "common_model"
+    assert "price_unpublished" in voyager.flights[0].issues
+    assert offers[2].minimum_estimate_usd is None
+    assert offers[3].minimum_estimate_usd == pytest.approx(32_180_000)
+    values = minimum_grid_prices(
+        load_catalog(),
+        context,
+        x_m=np.zeros(2),
+        y_m=np.zeros(2),
+        destination_multipliers=np.array([1.0, 1.1]),
+    )
+    np.testing.assert_allclose(values, [29_300_000, 32_180_000])
+
+
+def test_public_tariff_estimate_can_use_user_landing_without_complete_billing_terms() -> None:
+    context = QuoteContext.model_validate(
+        {
+            "departure_date": "2028-01-06",
+            "landing_date": "2028-01-10",
+            "mass_kg": 24,
+            "delivery": "surface",
+            "estimate": True,
+        }
+    )
+    offers = compare_grid(load_catalog(), context, x_m=0, y_m=0, destination_multiplier=1.1)
+    spacex = offers[2]
+    assert offers[0].minimum_estimate_usd is None  # Published 2027 plan excludes 2028.
+    assert spacex.minimum_usd is None
+    assert spacex.minimum_estimate_usd == pytest.approx(3_140_000)
+    assert spacex.flights[0].estimate_basis == "public_tariff"
+    assert spacex.flights[0].estimate_assumptions
