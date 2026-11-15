@@ -5,6 +5,7 @@ import {
   sampledPlaces,
   type Company,
   type EquipmentSky,
+  type PlaceSky,
   type SurfaceOffset,
 } from './demoEquipment'
 import { skyFromAnalysis } from './equipmentSky'
@@ -54,20 +55,35 @@ export function useEquipmentSky(
       .toISOString()
       .replace('.000Z', 'Z')
     const centre = { lat, lon }
-    const sample = (offset: SurfaceOffset, observerHeightM: number) => {
+    /**
+     * Both bodies at one place: the Earth decides whether the unit can talk, the Sun
+     * whether it can run. Same point, same instant, same observer height, so the two
+     * answers are comparable and a unit can be clear on one and blocked on the other.
+     */
+    const sample = async (
+      offset: SurfaceOffset,
+      observerHeightM: number,
+    ): Promise<PlaceSky> => {
       const place = offsetLocation(centre, offset.eastM, offset.northM)
-      return fetchAnalysis(
-        'earth-visibility',
-        {
-          lat: place.lat,
-          lon: place.lon,
-          start,
-          end,
-          step_minutes: STEP_MINUTES,
-          observer_height_m: observerHeightM,
-        },
-        signal,
-      ).then(skyFromAnalysis, () => null)
+      const params = {
+        lat: place.lat,
+        lon: place.lon,
+        start,
+        end,
+        step_minutes: STEP_MINUTES,
+        observer_height_m: observerHeightM,
+      }
+      const [earth, sun] = await Promise.all([
+        fetchAnalysis('earth-visibility', params, signal).then(
+          skyFromAnalysis,
+          () => null,
+        ),
+        fetchAnalysis('illumination', params, signal).then(
+          skyFromAnalysis,
+          () => null,
+        ),
+      ])
+      return { earth, sun }
     }
 
     const statics = company.statics
@@ -81,7 +97,10 @@ export function useEquipmentSky(
       ).then(
         (results) => {
           if (controller.signal.aborted) return
-          const missing = results.filter((sky) => sky === null).length
+          // A place counts as missing only when neither body came back.
+          const missing = results.filter(
+            (sky) => sky.earth === null && sky.sun === null,
+          ).length
           if (results.length > 0 && missing === results.length) {
             setStored({ key, state: { kind: 'error' } })
             return
@@ -93,14 +112,15 @@ export function useEquipmentSky(
               missing,
               sky: {
                 statics: Object.fromEntries(
-                  statics.map((spec, index) => [
-                    spec.id,
-                    results[index] ?? null,
-                  ]),
+                  statics.flatMap((spec, index) => {
+                    const measured = results[index]
+                    return measured ? [[spec.id, measured] as const] : []
+                  }),
                 ),
-                waypoints: route.map(
-                  (_, index) => results[statics.length + index] ?? null,
-                ),
+                waypoints: route.flatMap((_, index) => {
+                  const measured = results[statics.length + index]
+                  return measured ? [measured] : []
+                }),
               },
             },
           })

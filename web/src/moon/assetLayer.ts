@@ -93,6 +93,8 @@ export interface MoonAsset {
   symbol?: AssetSymbol
   /** The Earth in this asset's sky at the mission instant, or null when not evaluated. */
   earth: SkyDirection | null
+  /** The Sun at the same instant and the same point. Power, where the Earth is comms. */
+  sun?: SkyDirection | null
 }
 
 /**

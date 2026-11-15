@@ -32,7 +32,11 @@ const BLOCKED = {
 const TERRA = companyById('terra-nova-works')
 const MERIDIAN = companyById('meridian-relay')
 const TRENCH = TERRA.mobile!.path
-const noSky = { statics: {}, waypoints: TRENCH.map(() => null) }
+const unmeasured = { earth: null, sun: null }
+const noSky = {
+  statics: {},
+  waypoints: TRENCH.map(() => unmeasured),
+}
 
 describe('COMPANIES', () => {
   it('gives every unit a real height and an observer point on it', () => {
@@ -220,7 +224,10 @@ describe('buildEquipmentAssets', () => {
   })
 
   it('gives the mobile unit the sky of the waypoint it is on', () => {
-    const waypoints = TRENCH.map((_, index) => (index === 0 ? CLEAR : BLOCKED))
+    const waypoints = TRENCH.map((_, index) => ({
+      earth: index === 0 ? CLEAR : BLOCKED,
+      sun: null,
+    }))
     expect(
       buildEquipmentAssets(TERRA, SITE, 0, { statics: {}, waypoints }).at(-1)
         ?.earth,
@@ -233,8 +240,8 @@ describe('buildEquipmentAssets', () => {
 
   it('gives each static unit its own sky and leaves the rest unevaluated', () => {
     const assets = buildEquipmentAssets(TERRA, SITE, 0, {
-      statics: { array: CLEAR },
-      waypoints: TRENCH.map(() => null),
+      statics: { array: { earth: CLEAR, sun: null } },
+      waypoints: TRENCH.map(() => unmeasured),
     })
     expect(assets[0]?.earth).toEqual(CLEAR)
     expect(assets[1]?.earth).toBeNull()

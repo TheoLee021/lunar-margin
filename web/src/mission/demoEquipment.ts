@@ -623,10 +623,16 @@ export function traverseAt(
   return end
 }
 
-/** Measured Earth directions: one per static unit by id, one per route waypoint. */
+/** What was measured at one place: the Earth for comms, the Sun for power. */
+export interface PlaceSky {
+  earth: SkyDirection | null
+  sun: SkyDirection | null
+}
+
+/** One reading per static unit by id, and one per route waypoint. */
 export interface EquipmentSky {
-  statics: Readonly<Record<string, SkyDirection | null>>
-  waypoints: readonly (SkyDirection | null)[]
+  statics: Readonly<Record<string, PlaceSky>>
+  waypoints: readonly PlaceSky[]
 }
 
 /** The drawable set for a candidate, with the mobile unit `progress` (0..1) along its route. */
@@ -640,7 +646,7 @@ export function buildEquipmentAssets(
   const place = (
     spec: EquipmentSpec,
     offset: SurfaceOffset,
-    earth: SkyDirection | null,
+    measured: PlaceSky | undefined,
     headingDeg?: number,
   ): MoonAsset => ({
     id: spec.id,
@@ -651,10 +657,11 @@ export function buildEquipmentAssets(
     ...(spec.model ? { model: spec.model } : {}),
     ...(headingDeg === undefined ? {} : { headingDeg }),
     symbol: spec.symbol,
-    earth,
+    earth: measured?.earth ?? null,
+    sun: measured?.sun ?? null,
   })
   const drawn = company.statics.map((spec) =>
-    place(spec, spec.offset, sky.statics[spec.id] ?? null),
+    place(spec, spec.offset, sky.statics[spec.id]),
   )
   const { mobile } = company
   if (mobile) {
@@ -663,7 +670,7 @@ export function buildEquipmentAssets(
       place(
         mobile.spec,
         point.offset,
-        sky.waypoints[point.waypoint] ?? null,
+        sky.waypoints[point.waypoint],
         point.headingDeg,
       ),
     )
