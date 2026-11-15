@@ -11,8 +11,11 @@ import {
   Entity,
   HeadingPitchRoll,
   HorizontalOrigin,
+  Material,
   Math as CesiumMath,
   Matrix4,
+  Polyline,
+  PolylineCollection,
   Quaternion,
   Transforms,
   VerticalOrigin,
@@ -21,7 +24,7 @@ import {
 import { assetCardText } from './assetCard'
 import { assetSymbolImage, type AssetSymbol } from './assetSymbol'
 import type { LunarLocation } from './location'
-import type { SkyDirection } from './lineOfSight'
+import { rayOffsetEnu, type SkyDirection } from './lineOfSight'
 
 /**
  * One piece of a built-up unit, placed in the unit's own frame: `alongM` runs the way
@@ -119,9 +122,17 @@ const wantsMast = (asset: MoonAsset): boolean =>
 const MAST_COLOR = Color.fromCssColorString('#94a3b8')
 const BODY_COLOR = Color.fromCssColorString('#cbd5e1').withAlpha(0.95)
 const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
-/** The Earth verdict, carried by the card beside each unit. */
+/** The Earth verdict, carried by the card beside each unit and by its sight arrow. */
 const EARTH_CLEAR = Color.fromCssColorString('#4ade80')
 const EARTH_BLOCKED = Color.fromCssColorString('#f87171')
+/**
+ * An arrow from the unit's observer point toward the Earth. The length is a display
+ * choice, not a distance to anything: long enough to leave the terrain behind and read
+ * as a direction. Translucent, because it crosses the view rather than belonging to it.
+ */
+const SIGHT_LENGTH_M = 40_000
+const SIGHT_WIDTH_PX = 9
+const SIGHT_ALPHA = 0.55
 /** Translucent so the card reads as an overlay on the surface, not a sticker on it. */
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191eb3')
 
@@ -131,6 +142,8 @@ export interface AssetLayer {
    * so calling this on every animation frame moves them instead of rebuilding them.
    */
   setAssets(assets: readonly MoonAsset[]): void
+  /** Show or hide the arrows pointing at the Earth. */
+  setSightsVisible(visible: boolean): void
 }
 
 /**
@@ -160,11 +173,26 @@ interface Drawn {
   anchor: Entity
   pieces: Entity[]
   mast: Entity
+  sight: Polyline
   live: Live
 }
 
 export function createAssetLayer(viewer: Viewer): AssetLayer {
   const drawn = new Map<string, Drawn>()
+  /**
+   * The sight arrows are primitives, not entities. An entity polyline whose positions
+   * change every frame stops drawing while it moves, because each new property object
+   * sends Cesium's updater between its static and dynamic batches. A PolylineCollection
+   * takes new positions by plain assignment, and draws straight through space.
+   */
+  const sights = new PolylineCollection()
+  viewer.scene.primitives.add(sights)
+  let sightsVisible = true
+
+  const sightMaterial = (color: Color) =>
+    Material.fromType('PolylineArrow', {
+      color: color.withAlpha(SIGHT_ALPHA),
+    })
 
   const positionAt = (location: LunarLocation, heightM: number): Cartesian3 =>
     Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
@@ -240,6 +268,27 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
             distanceDisplayCondition: NEAR_BODY,
           },
         }
+  }
+
+  /** From the observer point on the mast out toward the Earth, in the unit's frame. */
+  const sightPositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
+    if (!asset.earth) return []
+    const frame = Transforms.eastNorthUpToFixedFrame(
+      positionAt(asset.location, ground),
+      Ellipsoid.MOON,
+    )
+    const eye = Matrix4.multiplyByPoint(
+      frame,
+      new Cartesian3(0, 0, asset.observerHeightM),
+      new Cartesian3(),
+    )
+    const [east, north, up] = rayOffsetEnu(asset.earth, SIGHT_LENGTH_M)
+    const tip = Matrix4.multiplyByPoint(
+      frame,
+      new Cartesian3(east, north, asset.observerHeightM + up),
+      new Cartesian3(),
+    )
+    return [eye, tip]
   }
 
   const create = (asset: MoonAsset): Drawn => {
@@ -321,7 +370,14 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       },
     })
 
-    return { anchor, pieces, mast, live }
+    const sight = sights.add({
+      positions: [],
+      width: SIGHT_WIDTH_PX,
+      show: false,
+      material: sightMaterial(live.color),
+    })
+
+    return { anchor, pieces, mast, sight, live }
   }
 
   const paint = (asset: MoonAsset, entities: Drawn): void => {
@@ -341,8 +397,15 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       )
     entities.mast.show = wantsMast(asset)
 
+    const positions = sightPositions(asset, ground)
+    entities.sight.positions = positions
+    entities.sight.show = sightsVisible && positions.length > 0
+
     const color = asset.earth?.visible ? EARTH_CLEAR : EARTH_BLOCKED
-    if (!Color.equals(color, live.color)) live.color = color
+    if (!Color.equals(color, live.color)) {
+      live.color = color
+      entities.sight.material = sightMaterial(color)
+    }
   }
 
   return {
@@ -353,6 +416,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         viewer.entities.remove(entities.anchor)
         viewer.entities.remove(entities.mast)
         for (const piece of entities.pieces) viewer.entities.remove(piece)
+        sights.remove(entities.sight)
         drawn.delete(id)
       }
       for (const asset of assets) {
@@ -363,6 +427,11 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         }
         paint(asset, entities)
       }
+    },
+    setSightsVisible(visible) {
+      sightsVisible = visible
+      for (const entities of drawn.values())
+        entities.sight.show = visible && entities.sight.positions.length > 0
     },
   }
 }

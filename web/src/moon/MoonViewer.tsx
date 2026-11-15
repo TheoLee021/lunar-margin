@@ -32,6 +32,8 @@ export interface MoonViewerHandle {
    * redraws every frame, which React state must not do.
    */
   setAssets(assets: readonly MoonAsset[]): void
+  /** Show or hide the arrows from each unit toward the Earth. */
+  setSightsVisible(visible: boolean): void
   /** Hold the camera on a moving point. `releaseFollow` hands control back. */
   follow(
     location: LunarLocation,
@@ -82,6 +84,7 @@ export default function MoonViewer({
     }
     sun?: Vector3 | null
     assets?: readonly MoonAsset[]
+    sights?: boolean
   }>({})
   const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
@@ -114,6 +117,10 @@ export default function MoonViewer({
       setAssets(assets) {
         if (sceneRef.current) sceneRef.current.setAssets(assets)
         else pending.current.assets = assets
+      },
+      setSightsVisible(visible) {
+        if (sceneRef.current) sceneRef.current.setSightsVisible(visible)
+        else pending.current.sights = visible
       },
       follow(location, rangeM, pitchDeg, headingDeg) {
         sceneRef.current?.follow(location, rangeM, pitchDeg, headingDeg)
@@ -158,10 +165,11 @@ export default function MoonViewer({
         }
         scene = created
         sceneRef.current = created
-        const { fly, sun, assets } = pending.current
+        const { fly, sun, assets, sights } = pending.current
         pending.current = {}
         if (sun !== undefined) created.setSunDirection(sun)
         if (assets) created.setAssets(assets)
+        if (sights !== undefined) created.setSightsVisible(sights)
         if (fly)
           created.flyTo(fly.location, fly.rangeM, fly.pitchDeg, fly.headingDeg)
         setState({ kind: 'ready' })

@@ -102,6 +102,10 @@ export function MissionMoonViewer({
 
   // "Company" already means a delivery provider elsewhere in this app, so the operator
   // whose equipment stands on the surface is called that instead.
+  const [sights, setSights] = useState(true)
+  useEffect(() => {
+    viewer.current?.setSightsVisible(sights)
+  }, [sights])
   const [asked] = useState(operatorParam)
   const [pickedOperatorId, setPickedOperatorId] = useState(() =>
     COMPANIES.some((company) => company.id === asked)
@@ -270,6 +274,15 @@ export function MissionMoonViewer({
               : lit
                 ? '사진으로 보기'
                 : '착륙 시각 햇빛'}
+          </button>
+          <button
+            type="button"
+            className="hud-button"
+            aria-pressed={sights}
+            title="각 장비에서 지구를 향하는 화살표를 그립니다"
+            onClick={() => setSights((shown) => !shown)}
+          >
+            {sights ? '지구 방향 끄기' : '지구 방향 켜기'}
           </button>
           <button
             type="button"

@@ -554,6 +554,8 @@ export interface MoonScene {
   setSelectedMarker(id: string | null): void
   /** Surface equipment, drawn with the Earth verdict on each unit. */
   setAssets(assets: readonly MoonAsset[]): void
+  /** Show or hide the arrows from each unit toward the Earth. */
+  setSightsVisible(visible: boolean): void
   /**
    * Ride along with something that moves. The camera stays in the moving point's own
    * frame, so dragging and zooming still work; once the viewer has been still for a
@@ -969,6 +971,9 @@ export async function createMoonScene(
     },
     setAssets(next) {
       assets.setAssets(next)
+    },
+    setSightsVisible(visible) {
+      assets.setSightsVisible(visible)
     },
     follow(location, rangeM, pitchDeg, headingDeg) {
       // Aim at the terrain, not the reference sphere: the two are kilometres apart
