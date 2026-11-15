@@ -7,7 +7,9 @@ export const LaunchScheduleSchema = z.object({
   launches: z.array(
     z.object({
       id: z.string(),
-      provider_id: ProviderIdSchema,
+      provider_id: ProviderIdSchema.nullable(),
+      launch_provider: z.string().optional().default('발사사 미정'),
+      lunar_related: z.boolean().optional().default(true),
       name: z.string(),
       departure_date: z.iso.date().nullable(),
       label: z.string(),

@@ -114,8 +114,8 @@ not bookable company quotes. Each date combination averages each original eligib
 500m grid's lowest estimated cost, before Top-K selection. Partial grid coverage
 never becomes a full-grid mean.
 
-Choose a lunar mission's tentative departure from Spaceflight Now and Space Launch
-Schedule, then choose the landing date independently. Month-only or conflicting
+Choose a tentative departure from Spaceflight Now and Space Launch
+Schedule (including general launches in demo mode), then choose the landing date independently. Month-only or conflicting
 dates cannot be auto-selected. Source precision, update time and stale fallback
 are visible. Clicking a completed date opens its saved candidate search and carries
 departure, landing, duration, mass and delivery mode. Details display all six companies.
@@ -140,6 +140,6 @@ continues to require its matching precomputed horizon table.
 500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
 
 출발일은 날짜 계획의 **발사 일정에서 출발일 선택**에서 Spaceflight Now와
-Space Launch Schedule의 달 임무 예정일을 고를 수 있습니다. 착륙일은 별도로 직접
+Space Launch Schedule의 전체 발사 예정일을 데모 입력으로 고를 수 있습니다. 착륙일은 별도로 직접
 선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
 실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).

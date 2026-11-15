@@ -81,9 +81,14 @@
     color: var(--muted);
     font-size: 12px;
   }
-  .launch-departure select {
+  .launch-departure :is(select, input) {
+    width: 100%;
+    min-width: 0;
     padding: 9px;
     background: var(--glass);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
   }
   .launch-departure a {
     color: var(--accent, #ffbf00);

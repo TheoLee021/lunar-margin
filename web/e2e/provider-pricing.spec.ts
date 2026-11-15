@@ -81,6 +81,23 @@ test('launch departure changes independently from the user landing date', async 
         ],
         launches: [
           {
+            id: 'amazon-demo',
+            provider_id: null,
+            launch_provider: 'United Launch Alliance (ULA)',
+            lunar_related: false,
+            name: 'Amazon Leo (LV-01)',
+            departure_date: '2026-11-15',
+            label: 'November 15',
+            confirmed: false,
+            sources: [
+              {
+                name: 'Spaceflight Now',
+                url: 'https://spaceflightnow.com/launch-schedule/',
+                label: 'November 15',
+              },
+            ],
+          },
+          {
             id: 'griffin-1',
             provider_id: 'voyager',
             name: 'Griffin Mission One',
@@ -132,9 +149,9 @@ test('launch departure changes independently from the user landing date', async 
   ).toHaveValue('2027-01-06')
   await expect(landing).toHaveValue('2027-01-12')
   const allMissions = picker.getByRole('region', {
-    name: '회사별 전체 달 임무 목록',
+    name: '전체 발사 일정 목록',
   })
-  await expect(allMissions.getByRole('heading')).toHaveCount(6)
+  await expect(allMissions.getByRole('heading')).toHaveCount(7)
   await picker
     .getByLabel('회사별 일정', { exact: true })
     .selectOption('blue_origin')
@@ -146,9 +163,7 @@ test('launch departure changes independently from the user landing date', async 
   await picker
     .getByLabel('회사별 일정', { exact: true })
     .selectOption('lockheed_martin')
-  await expect(allMissions).toContainText(
-    '두 사이트에 등록된 달 임무 일정 없음',
-  )
+  await expect(allMissions).toContainText('두 사이트에 등록된 발사 일정 없음')
   await expect(landing).toHaveValue('2027-01-12')
   await expect(
     picker.locator('option[value="blue-moon-pathfinder"]'),
@@ -159,4 +174,16 @@ test('launch departure changes independently from the user landing date', async 
     'href',
     'https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/',
   )
+  await picker.getByLabel('회사별 일정', { exact: true }).selectOption('other')
+  await picker.getByLabel('임무·발사사 검색', { exact: true }).fill('Amazon')
+  await expect(allMissions).toContainText('일반 발사 · 데모')
+  await allMissions
+    .getByRole('button', {
+      name: 'Amazon Leo (LV-01) 2026-11-15 출발일로 선택',
+    })
+    .click()
+  await expect(
+    page.getByLabel('기준 출발일 · UTC', { exact: true }),
+  ).toHaveValue('2026-11-15')
+  await expect(landing).toHaveValue('2027-01-12')
 })
