@@ -4,7 +4,14 @@ import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
-import { PriceGrid } from './PriceGrid'
+import { PriceGrid, type DepartureStatus } from './PriceGrid'
+import { LaunchDeparture } from './LaunchDeparture'
+import {
+  fetchLaunchSchedule,
+  departureAvailability,
+  type LaunchSchedule,
+} from '../api/launchSchedule'
+import { isTransitPossible } from '../api/pricing'
 import './date-planner.css'
 
 type Props = {
@@ -33,6 +40,36 @@ export function DatePlanner({
     { length: 5 },
     (_, i) => dayOf(anchors.landing) + i - 2,
   )
+  const [launchData, setLaunchData] = useState<LaunchSchedule | null>(null)
+  const [launchError, setLaunchError] = useState('')
+  const [launchRevision, setLaunchRevision] = useState(0)
+  const [departureStatus, setDepartureStatus] =
+    useState<DepartureStatus | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchLaunchSchedule({ signal: controller.signal })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setLaunchData(data)
+          setLaunchError('')
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setLaunchError(error instanceof Error ? error.message : String(error))
+      })
+    return () => controller.abort()
+  }, [launchRevision])
+  const availability = (departure: string) =>
+    departureAvailability(launchData, launchError, draft.launchId, departure)
+  const departureUnavailable =
+    departureStatus?.departure === draft.departure &&
+    departureStatus.launchId === (draft.launchId ?? null) &&
+    departureStatus.unavailable
+  const canApply =
+    !departureUnavailable &&
+    availability(draft.departure) === 'scheduled' &&
+    isTransitPossible(draft.departure, draft.landing)
   const validDraft = ScheduleSchema.safeParse(draft).success
   const score = validDraft ? demoDateScore(draft) : null
   const [formError, setFormError] = useState('')
@@ -50,17 +87,10 @@ export function DatePlanner({
       departure: iso(dayOf(a.departure) + step),
       landing: iso(dayOf(a.landing) + step),
     }))
-    setDraft((d) => ({
-      ...d,
-      departure: iso(dayOf(d.departure) + step),
-      landing: iso(dayOf(d.landing) + step),
-    }))
   }
+
   function selectLanding(landing: string) {
-    const departure =
-      dayOf(landing) > dayOf(draft.departure)
-        ? draft.departure
-        : iso(dayOf(landing) - 4)
+    const departure = draft.departure
     setDraft((d) => ({ ...d, departure, landing }))
     setAnchors({ departure, landing })
   }
@@ -104,7 +134,7 @@ export function DatePlanner({
             <div className="window-toolbar">
               <div>
                 <h3>출발일 × 착륙일</h3>
-                <p>500m 격자 평균 가격 · USD million</p>
+                <p>500m 격자 평균 예상 비용 · USD million</p>
               </div>
               <div className="week-nav">
                 <button
@@ -124,6 +154,19 @@ export function DatePlanner({
                 </button>
               </div>
             </div>
+            <LaunchDeparture
+              data={launchData}
+              error={launchError}
+              onRetry={() => setLaunchRevision((v) => v + 1)}
+              selectedId={draft.launchId ?? null}
+              onClear={() => setDraft((d) => ({ ...d, launchId: null }))}
+              onSelect={(launch) => {
+                const departure = launch.departure_date
+                if (!departure) return
+                setAnchors((a) => ({ ...a, departure }))
+                setDraft((d) => ({ ...d, departure, launchId: launch.id }))
+              }}
+            />
             <div className="date-anchors">
               <label>
                 기준 출발일 · UTC
@@ -177,10 +220,22 @@ export function DatePlanner({
               departures={departures}
               landings={landings}
               draft={draft}
+              availability={availability}
+              onDepartureStatus={setDepartureStatus}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
             />
+            {departureUnavailable ? (
+              <p className="hint" role="status">
+                선택한 출발일의 발사 일정이 없습니다.
+              </p>
+            ) : availability(draft.departure) !== 'scheduled' ? (
+              <p className="hint" role="status">
+                출발일의 발사 일정을 확인해야 일정을 적용할 수 있습니다.
+                날짜표는 공개된 발사 예정일만 활성화합니다.
+              </p>
+            ) : null}
             {formError ? (
               <p role="alert" className="hint">
                 {formError}
@@ -220,10 +275,10 @@ export function DatePlanner({
           <button
             type="button"
             id="applyWindow"
-            disabled={!validDraft}
+            disabled={!validDraft || !canApply}
             onClick={() => {
               const result = ScheduleSchema.safeParse(draft)
-              if (result.success) {
+              if (result.success && canApply) {
                 setFormError('')
                 onApply(result.data)
               } else

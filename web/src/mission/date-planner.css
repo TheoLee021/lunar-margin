@@ -1,4 +1,28 @@
 @layer components {
+  .launch-departure {
+    display: grid;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .launch-departure label {
+    display: grid;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .launch-departure select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    background: var(--glass);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+  }
+  .launch-departure a {
+    color: var(--accent, #ffbf00);
+  }
+
   .price-inputs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
