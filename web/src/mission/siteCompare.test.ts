@@ -8,7 +8,11 @@ import {
 } from './siteCompare'
 
 const config = {
-  window: { start: '2027-01-10T00:00:00Z', end: '2027-01-24T00:00:00Z', step_minutes: 30 },
+  window: {
+    start: '2027-01-10T00:00:00Z',
+    end: '2027-01-24T00:00:00Z',
+    step_minutes: 30,
+  },
   thresholds: { max_terrain_slope_degrees: 10, max_terrain_roughness_m: null },
 } as RunDetail['config']
 
@@ -21,29 +25,47 @@ function candidate(
   return {
     sun: { fraction: sun, longest_dark_hours: 12 },
     earth: { fraction: earth, longest_blackout_hours: 24 },
-    terrain: slope === null && roughness === null
-      ? null : { slope_p95_deg: slope, roughness_p95_m: roughness },
+    terrain:
+      slope === null && roughness === null
+        ? null
+        : { slope_p95_deg: slope, roughness_p95_m: roughness },
   } as Candidate
 }
 
 describe('lunar surface great-circle distance', () => {
   it('is zero for identical points and symmetric near the pole', () => {
     const a = { latitude: -89.83, longitude: -153.7 }
-    const b = { latitude: -89.70, longitude: 170 }
+    const b = { latitude: -89.7, longitude: 170 }
     expect(lunarSurfaceDistanceM(a, a)).toBe(0)
-    expect(lunarSurfaceDistanceM(a, b)).toBeCloseTo(lunarSurfaceDistanceM(b, a), 7)
+    expect(lunarSurfaceDistanceM(a, b)).toBeCloseTo(
+      lunarSurfaceDistanceM(b, a),
+      7,
+    )
     expect(lunarSurfaceDistanceM(a, b)).toBeGreaterThan(0)
   })
 
   it('uses shortest arc across the anti-meridian', () => {
     const a = { latitude: 0, longitude: 179 }
     const b = { latitude: 0, longitude: -179 }
-    expect(lunarSurfaceDistanceM(a, b)).toBeCloseTo((2 * Math.PI / 180) * 1_737_400, 5)
+    expect(lunarSurfaceDistanceM(a, b)).toBeCloseTo(
+      ((2 * Math.PI) / 180) * 1_737_400,
+      5,
+    )
   })
 
   it('rejects invalid geographic coordinates', () => {
-    expect(() => lunarSurfaceDistanceM({ latitude: 92, longitude: 0 }, { latitude: 0, longitude: 0 })).toThrow()
-    expect(() => lunarSurfaceDistanceM({ latitude: -89, longitude: Number.NaN }, { latitude: 0, longitude: 0 })).toThrow()
+    expect(() =>
+      lunarSurfaceDistanceM(
+        { latitude: 92, longitude: 0 },
+        { latitude: 0, longitude: 0 },
+      ),
+    ).toThrow()
+    expect(() =>
+      lunarSurfaceDistanceM(
+        { latitude: -89, longitude: Number.NaN },
+        { latitude: 0, longitude: 0 },
+      ),
+    ).toThrow()
   })
 
   it('reports metres and kilometres without implying traverse distance', () => {
