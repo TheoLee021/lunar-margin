@@ -6,11 +6,13 @@ the reference trajectory against a flown lunar landing.
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.descent_reference import (
     Lander,
+    R_M,
     evaluate_reference,
     pdi_from_target,
 )
@@ -33,7 +35,8 @@ def test_reference_samples_real_lola_terrain(data_dir: Path) -> None:
     assert result.samples
     assert result.samples[-1].altitude_agl_m == pytest.approx(0, abs=0.05)
     assert result.samples[0].altitude_agl_m is not None
-    assert abs(result.samples[0].altitude_agl_m - (15_000 - ground_m)) > 1
+    final_radius = float(np.linalg.norm(np.array(result.samples[-1].moon_me_xyz_m)))
+    assert final_radius - R_M == pytest.approx(ground_m, abs=0.1)
     # No requirement that a specific real location be "safe" or "landable".
     assert result.status in {
         "REFERENCE_FEASIBLE",
