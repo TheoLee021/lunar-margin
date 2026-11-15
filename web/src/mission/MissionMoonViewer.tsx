@@ -1,15 +1,21 @@
-import { useMemo, useRef } from 'react'
+import { useImperativeHandle, useMemo, useRef, type Ref } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import { gridCellCorners } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
 import type { CandidateSite, MissionSelection } from './types'
 
+export interface MissionMoonViewerHandle {
+  focusSite(siteId: string): void
+}
+
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
+  ref,
   selection,
   sites,
   onSelect,
 }: {
+  ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string) => void
@@ -31,6 +37,12 @@ export function MissionMoonViewer({
       { lat: site.latitude, lon: site.longitude },
       site.grid ? site.grid.spacing_m * 20 : undefined,
     )
+  useImperativeHandle(ref, () => ({
+    focusSite(siteId) {
+      const site = sites.find((candidate) => candidate.id === siteId)
+      if (site) focusSite(site)
+    },
+  }))
   return (
     <>
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">

@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
-import { MissionMoonViewer } from './MissionMoonViewer'
+import {
+  MissionMoonViewer,
+  type MissionMoonViewerHandle,
+} from './MissionMoonViewer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { useDashboardRun } from './useDashboardRun'
 
@@ -27,6 +30,7 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
+  const moon = useRef<MissionMoonViewerHandle>(null)
   const selected = sites.find((site) => site.id === selection.siteId)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
@@ -38,6 +42,7 @@ export function MissionWorkspace({
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
+        ref={moon}
         selection={selection}
         sites={sites}
         onSelect={onSelect}
@@ -140,7 +145,10 @@ export function MissionWorkspace({
                     <button
                       type="button"
                       aria-current={selection.siteId === site.id}
-                      onClick={() => onSelect(site.id)}
+                      onClick={() => {
+                        onSelect(site.id)
+                        moon.current?.focusSite(site.id)
+                      }}
                       className="flex w-full items-center gap-2 rounded border border-transparent p-2 text-left text-xs hover:bg-white/5 aria-[current=true]:border-white/20 aria-[current=true]:bg-white/5"
                     >
                       <span className="grid size-5 shrink-0 place-items-center rounded-full bg-neutral-100 font-mono text-neutral-950">
