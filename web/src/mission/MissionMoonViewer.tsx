@@ -1,7 +1,15 @@
-import { useImperativeHandle, useMemo, useRef, type Ref } from 'react'
+import {
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import { gridCellCorners } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
+import type { Vector3 } from '../moon/sun'
 import type { CandidateSite, MissionSelection } from './types'
 
 export interface MissionMoonViewerHandle {
@@ -14,13 +22,21 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
+  sunDirection,
 }: {
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string) => void
+  /** Moon-to-Sun direction (MOON_ME) at the shown time, or null while it is unknown. */
+  sunDirection: Vector3 | null
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
+  const [photo, setPhoto] = useState(false)
+  const lit = sunDirection !== null && !photo
+  useEffect(() => {
+    viewer.current?.setSunDirection(lit ? sunDirection : null)
+  }, [lit, sunDirection])
   const markers = useMemo<readonly MoonMarker[]>(
     () =>
       sites.map((site, index) => ({
@@ -59,6 +75,16 @@ export function MissionMoonViewer({
         />
       </div>
       <div className="absolute right-4 top-4 flex gap-2">
+        <button
+          type="button"
+          className="hud-button"
+          disabled={sunDirection === null}
+          aria-pressed={lit}
+          title="착륙 시각의 태양으로 조명과 지형 그림자를 그립니다"
+          onClick={() => setPhoto((value) => !value)}
+        >
+          {lit ? '사진으로 보기' : '착륙 시각 햇빛'}
+        </button>
         <button
           type="button"
           className="hud-button"
