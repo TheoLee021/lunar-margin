@@ -31,6 +31,7 @@ const STATE_LABELS = {
   quoted: '계산 완료',
   estimated: '모델 예상 비용',
   no_published_quote: '공개 견적 없음',
+  no_launch: '발사 일정 없음',
   search_required: '미계산',
   partial_coverage: '견적 일부',
   invalid_transit: '전이 불가',
@@ -154,7 +155,12 @@ export function PriceGrid({
   const minimum = Math.min(...prices)
   const hasMissing =
     data?.dates.some((row) => row.state !== 'completed') ?? true
-  function candidateHref(departure: number, landing: number, runId: string) {
+  function candidateHref(
+    departure: number,
+    landing: number,
+    runId: string,
+    launchId = draft.launchId,
+  ) {
     const url = new URL(window.location.href)
     url.pathname = '/'
     url.searchParams.set('view', 'search')
@@ -165,7 +171,7 @@ export function PriceGrid({
     url.searchParams.set('run', runId)
     url.searchParams.set('mass_kg', String(massNumber))
     url.searchParams.set('delivery', delivery)
-    if (draft.launchId) url.searchParams.set('launch_id', draft.launchId)
+    if (launchId) url.searchParams.set('launch_id', launchId)
     else url.searchParams.delete('launch_id')
     return `${url.pathname}${url.search}`
   }
@@ -374,10 +380,16 @@ export function PriceGrid({
           <tbody>
             {landings.map((l) => {
               const row = data?.dates.find((r) => r.landing_date === iso(l))
+              const rowOffer = data?.cells.find(
+                (c) =>
+                  c.landing_date === iso(l) &&
+                  c.departure_date === draft.departure,
+              )
               return (
                 <tr key={l}>
                   <th scope="row">
                     {row?.state === 'completed' &&
+                    rowOffer?.status !== 'no_launch' &&
                     availability(draft.departure) === 'scheduled' &&
                     isTransitPossible(draft.departure, iso(l)) ? (
                       <a
@@ -385,6 +397,7 @@ export function PriceGrid({
                           dayOf(draft.departure),
                           l,
                           row.run_id,
+                          rowOffer?.lowest_launch_id ?? draft.launchId,
                         )}
                         aria-label={`${short(l)} · 착륙 ${iso(l)} 후보지 탐색 열기`}
                       >
@@ -395,13 +408,21 @@ export function PriceGrid({
                     )}
                   </th>
                   {departures.map((d) => {
-                    const departureState = availability(iso(d))
                     const possible = isTransitPossible(iso(d), iso(l))
                     const offer = data?.cells.find(
                       (cell) =>
                         cell.landing_date === iso(l) &&
                         cell.departure_date === iso(d),
                     )
+                    const departureState =
+                      offer?.status === 'no_launch'
+                        ? 'no_launch'
+                        : availability(iso(d))
+                    const companyNames = offer?.lowest_company_names.length
+                      ? offer.lowest_company_names
+                      : data?.selection
+                        ? [data.selection.company_name]
+                        : []
                     const mean = offer?.mean_min_usd ?? null
                     const label = offer
                       ? STATE_LABELS[offer.status]
@@ -414,24 +435,15 @@ export function PriceGrid({
                       mean !== null && mean <= minimum * 1.05
                         ? 'low-cost'
                         : undefined
-                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `${draft.launchId ? '회사 모델 평균' : '최저가 평균'} ${formatPrice(mean)}` : label}`
+                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `${draft.launchId ? '회사 모델 평균' : '최저가 평균'} ${formatPrice(mean)}` : label}${mean !== null && companyNames.length ? `, ${companyNames.join(' · ')}` : ''}`
                     const completed = row?.state === 'completed'
                     const content = (
                       <>
                         <span>{mean !== null ? formatPrice(mean) : label}</span>
                         {mean !== null ? (
-                          <>
-                            <small>
-                              {offer!.quoted_grid_count.toLocaleString()}개 격자{' '}
-                              {draft.launchId
-                                ? '회사 모델 평균'
-                                : '최저 예상 비용 평균'}{' '}
-                              · {l - d}일 비행
-                              {offer!.terrain_unknown_count
-                                ? ' · 지형 미산정 포함'
-                                : ''}
-                            </small>
-                          </>
+                          companyNames.length > 0 ? (
+                            <small>{companyNames.join(' · ')}</small>
+                          ) : null
                         ) : (
                           <small>
                             {offer?.status === 'partial_coverage'
@@ -465,7 +477,12 @@ export function PriceGrid({
                           </div>
                         ) : completed ? (
                           <a
-                            href={candidateHref(d, l, row.run_id)}
+                            href={candidateHref(
+                              d,
+                              l,
+                              row.run_id,
+                              offer?.lowest_launch_id ?? draft.launchId,
+                            )}
                             aria-label={`${accessibleLabel}, 후보지 탐색 열기`}
                             aria-current={selected ? 'date' : undefined}
                             className={className}

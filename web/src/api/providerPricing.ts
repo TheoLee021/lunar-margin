@@ -186,6 +186,7 @@ const CalendarCell = z
     run_id: z.string(),
     status: z.enum([
       'no_published_quote',
+      'no_launch',
       'search_required',
       'quoted',
       'estimated',
@@ -194,6 +195,16 @@ const CalendarCell = z
       'invalid_transit',
       'unavailable',
     ]),
+    lowest_company_names: z
+      .array(z.string().trim().min(1).max(200))
+      .optional()
+      .default([]),
+    lowest_launch_id: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,160}$/)
+      .nullable()
+      .optional()
+      .default(null),
     mean_min_usd: Amount.nullable(),
     eligible_grid_count: z.number().int().nonnegative().nullable(),
     terrain_unknown_count: z
@@ -216,6 +227,13 @@ const CalendarCell = z
           (c.status === 'estimated' || c.eligible_provider_ids.length > 0)
         : c.mean_min_usd === null,
     'A partial or unknown quote cannot become a full-grid average',
+  )
+  .refine(
+    (c) =>
+      new Set(c.lowest_company_names).size === c.lowest_company_names.length &&
+      (c.mean_min_usd !== null || c.lowest_company_names.length === 0) &&
+      (c.lowest_launch_id === null || c.lowest_company_names.length === 1),
+    'Only priced, attributable cells may name a cheapest departure',
   )
 const CompanyModelSchema = z.object({
   launch_id: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/),
@@ -258,13 +276,27 @@ export const ProviderCalendarSchema = z
   .refine((r) => {
     if (r.selection && !r.estimate) return false
     return r.cells.every((c) => {
+      if (c.status === 'no_launch')
+        return (
+          c.eligible_provider_ids.length === 0 &&
+          c.lowest_company_names.length === 0
+        )
       if (r.selection)
         return (
           c.eligible_provider_ids.length === (r.selection.company_id ? 1 : 0) &&
           (!r.selection.company_id ||
-            c.eligible_provider_ids[0] === r.selection.company_id)
+            c.eligible_provider_ids[0] === r.selection.company_id) &&
+          c.lowest_company_names.every(
+            (name) => name === r.selection!.company_name,
+          ) &&
+          (c.lowest_launch_id === null ||
+            c.lowest_launch_id === r.selection.launch_id)
         )
-      return c.status !== 'estimated' || c.eligible_provider_ids.length > 0
+      return (
+        c.status !== 'estimated' ||
+        c.eligible_provider_ids.length > 0 ||
+        c.lowest_company_names.length > 0
+      )
     })
   }, 'Selected-company estimates require matching company metadata')
 export type ProviderCalendar = z.infer<typeof ProviderCalendarSchema>

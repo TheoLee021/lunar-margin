@@ -137,7 +137,7 @@ test('date prices open the saved candidate run without recalculating', async ({
   )
   await expect(row.locator('td').getByRole('link').nth(1)).toContainText('$31M')
   await expect(row.locator('td').getByRole('link').first()).toContainText(
-    '2개 격자 최저 예상 비용 평균',
+    'Blue Origin',
   )
   await expect(grid.getByText('적합 격자 없음').first()).toBeVisible()
   await expect(grid.getByText('전이 3~150일').first()).toBeVisible()

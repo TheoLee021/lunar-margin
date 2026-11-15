@@ -43,6 +43,8 @@ export function providerCalendarFixture(
           run_id: r.run_id,
           status: r.status,
           mean_min_usd: r.mean,
+          lowest_company_names: r.mean !== null ? ['Blue Origin'] : [],
+          lowest_launch_id: null,
           eligible_grid_count: r.eligible,
           quoted_grid_count: r.priced,
           eligible_provider_ids: r.status === 'quoted' ? ['blue_origin'] : [],

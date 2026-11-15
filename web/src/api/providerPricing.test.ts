@@ -109,6 +109,32 @@ it('requires selected-company metadata and rejects a calendar for a different la
   expect(
     ProviderCalendarSchema.safeParse({ ...response, estimate: false }).success,
   ).toBe(false)
+  const attributed = {
+    ...response,
+    selection: null,
+    cells: response.cells.map((c) => ({
+      ...c,
+      lowest_company_names: ['United Launch Alliance (ULA)'],
+      lowest_launch_id: 'ula-demo',
+    })),
+  }
+  expect(ProviderCalendarSchema.safeParse(attributed).success).toBe(true)
+  expect(
+    ProviderCalendarSchema.safeParse({
+      ...attributed,
+      cells: attributed.cells.map((c) => ({ ...c, lowest_company_names: [] })),
+    }).success,
+  ).toBe(false)
+  expect(
+    ProviderCalendarSchema.safeParse({
+      ...attributed,
+      cells: attributed.cells.map((c) => ({
+        ...c,
+        mean_min_usd: null,
+        status: 'no_launch',
+      })),
+    }).success,
+  ).toBe(false)
   const input = {
     estimate: true,
     selected_launch_id: 'spacex-demo',

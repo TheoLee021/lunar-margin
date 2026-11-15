@@ -218,7 +218,7 @@ test('selected launch operator reprices the same date and grids and survives nav
     requests++
     const launch = launches.find((l) => l.id === input.selected_launch_id)
     const rate = launch?.provider_id === 'spacex' ? 100000 : 1200000
-    const mean = launch ? 500000 + rate * input.mass_kg : 2000000
+    const mean = 500000 + (launch ? rate : 100000) * input.mass_kg
     return route.fulfill({
       json: {
         estimate: true,
@@ -261,13 +261,17 @@ test('selected launch operator reprices the same date and grids and survives nav
             run_id: `saved-${l}`,
             status: 'estimated',
             mean_min_usd: mean,
+            lowest_company_names: launch
+              ? [launch.launch_provider]
+              : ['SpaceX'],
+            lowest_launch_id: launch?.id ?? 'spacex-demo',
             eligible_grid_count: 110,
             quoted_grid_count: 110,
             eligible_provider_ids: launch
               ? launch.provider_id
                 ? [launch.provider_id]
                 : []
-              : ['blue_origin'],
+              : ['spacex'],
           })),
         ),
       },
@@ -287,6 +291,8 @@ test('selected launch operator reprices the same date and grids and survives nav
   await picker.selectOption('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
   await expect(table.getByText('$2.9M', { exact: true })).toHaveCount(4)
+  await expect(table.getByText('SpaceX', { exact: true })).toHaveCount(4)
+  await expect(table).not.toContainText('110개 격자')
   await expect(
     table.getByRole('link', { name: /2027-01-06.*2027-01-10/ }),
   ).toHaveAttribute('href', /launch_id=spacex-demo/)
@@ -297,13 +303,20 @@ test('selected launch operator reprices the same date and grids and survives nav
   )
   await expect(model).toContainText('공통 참조 단가')
   await expect(table.getByText('$29M', { exact: true })).toHaveCount(4)
+  await expect(
+    table.getByText('United Launch Alliance (ULA)', { exact: true }),
+  ).toHaveCount(4)
   expect(requests).toBeGreaterThan(before)
   await expect(
     dialog.getByLabel('기준 착륙일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-10')
   await picker.selectOption('')
   await expect(model).toHaveCount(0)
-  await expect(table.getByText('$2M', { exact: true })).toHaveCount(4)
+  await expect(table.getByText('$2.9M', { exact: true })).toHaveCount(4)
+  await expect(table.getByText('SpaceX', { exact: true })).toHaveCount(4)
+  await expect(
+    table.getByRole('link', { name: /2027-01-06.*2027-01-10/ }),
+  ).toHaveAttribute('href', /launch_id=spacex-demo/)
   await picker.selectOption('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
   await dialog.getByRole('button', { name: '일정 적용' }).click()
