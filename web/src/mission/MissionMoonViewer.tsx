@@ -1,3 +1,4 @@
+import { fetchViewshed, type Viewshed } from '../api/viewshed'
 import {
   useEffect,
   useImperativeHandle,
@@ -49,10 +50,37 @@ export function MissionMoonViewer({
     [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
+  const [detail, setDetail] = useState(false)
+  const [attempt, retry] = useState(0)
+  const lat = detail ? selected?.latitude : undefined
+  const lon = detail ? selected?.longitude : undefined
+  const key = JSON.stringify([lat, lon, attempt])
+  const [result, setResult] = useState<{
+    key: string
+    map: Viewshed | null
+  } | null>(null)
+  useEffect(() => {
+    if (lat === undefined || lon === undefined) return
+    viewer.current?.flyTo({ lat, lon }, 18000)
+    const controller = new AbortController()
+    void fetchViewshed(
+      lat,
+      lon,
+      AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+    )
+      .then((map) => {
+        if (!controller.signal.aborted) setResult({ key, map })
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResult({ key, map: null })
+      })
+    return () => controller.abort()
+  }, [key, lat, lon])
+  const current = result?.key === key ? result : null
   const focusSite = (site: CandidateSite) =>
     viewer.current?.flyTo(
       { lat: site.latitude, lon: site.longitude },
-      site.grid ? site.grid.spacing_m * 20 : undefined,
+      detail ? 18000 : site.grid ? site.grid.spacing_m * 20 : undefined,
     )
   useImperativeHandle(ref, () => ({
     focusSite(siteId) {
@@ -65,6 +93,7 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
+          viewshed={detail ? current?.map : null}
           markers={markers}
           selectedMarkerId={selection.siteId}
           onMarkerSelect={(siteId) => {
@@ -102,7 +131,10 @@ export function MissionMoonViewer({
         <button
           type="button"
           className="hud-button"
-          onClick={() => viewer.current?.flyToOverview()}
+          onClick={() => {
+            setDetail(false)
+            viewer.current?.flyToOverview()
+          }}
         >
           위에서 보기
         </button>
@@ -111,12 +143,35 @@ export function MissionMoonViewer({
           className="hud-button"
           disabled={!selected}
           onClick={() => {
-            if (selected) focusSite(selected)
+            setDetail(true)
+            if (detail && selected) focusSite(selected)
           }}
         >
           선택 지점 3D로 보기
         </button>
       </div>
+      {detail && selected && (
+        <div
+          role="status"
+          className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"
+        >
+          {selected.name} · 주변 가시권 · 5 km · 높이 2 m
+          <div>
+            {!current ? (
+              '지형 가시권 계산 중…'
+            ) : current.map ? (
+              <>
+                <span className="text-green-400">● 보임</span>　
+                <span className="text-red-400">● 가려짐</span>
+              </>
+            ) : (
+              <button type="button" onClick={() => retry((n) => n + 1)}>
+                계산 실패 · 다시 시도
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

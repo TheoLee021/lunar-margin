@@ -1,3 +1,4 @@
+import type { Viewshed } from '../api/viewshed'
 // Imperative Cesium scene for the Moon. Loaded lazily by MoonViewer; React never holds Cesium state.
 import {
   BoundingSphere,
@@ -183,6 +184,8 @@ function createMoonShader(): CustomShader {
         type: UniformType.VEC3,
         value: new Cartesian3(0, 0, 1),
       },
+      u_viewshed: { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
+      u_viewshedGrid: { type: UniformType.VEC3, value: new Cartesian3() },
       u_sunLit: { type: UniformType.FLOAT, value: 0 },
       u_overlayReady: { type: UniformType.FLOAT, value: 0 },
       u_horizon: { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
@@ -384,7 +387,7 @@ function createMoonShader(): CustomShader {
       return mix(2.0 * mu0 / (mu0 + 1.0), mu0, ${LAMBERT_SHARE.toFixed(2)});
     }
 
-    void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+    void shadeTerrain(FragmentInput fsInput, inout czm_modelMaterial material) {
       vec3 p = fsInput.attributes.positionWC;
       // Seen from behind: the far side through a hole in the near side (see HOLE_GREY).
       bool hole = !gl_FrontFacing;
@@ -520,6 +523,20 @@ ${sunWindowSlots
       vec3 sunlit = filmic(vec3(exposure * reflectance));
       material.diffuse = mix(photo, sunlit, weight);
     }
+    void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+      shadeTerrain(fsInput, material);
+      if (u_viewshedGrid.z < 0.5 || !gl_FrontFacing) return;
+      vec3 up = normalize(fsInput.attributes.positionWC);
+      if (up.z >= 0.0) return;
+      vec2 xy = 2.0 * 1737400.0 * up.yx / (1.0 - up.z);
+      vec2 offset = xy - u_viewshedGrid.xy;
+      if (length(offset) > 5000.0) return;
+      ivec2 cell = clamp(ivec2(floor(offset / 80.0 + 62.5)), ivec2(0), ivec2(124));
+      int code = int(round(texelFetch(u_viewshed, cell, 0).r * 255.0));
+      if (code == 0) return;
+      vec3 tint = code == 2 ? vec3(0.10, 0.78, 0.40) : vec3(0.88, 0.25, 0.20);
+      material.diffuse = mix(material.diffuse, tint, 0.52);
+    }
   `,
   })
 }
@@ -535,6 +552,7 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
+  setViewshed(map: Viewshed | null): void
   flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
@@ -900,6 +918,23 @@ export async function createMoonScene(
   camera.setView(overview)
 
   return {
+    setViewshed(map) {
+      if (!map) {
+        moonShader.setUniform('u_viewshedGrid', new Cartesian3())
+        return
+      }
+      const data = new Uint8Array(map.cells.length * 4)
+      for (let i = 0; i < map.cells.length; i++)
+        data[i * 4] = map.cells.charCodeAt(i) - 48
+      moonShader.setUniform(
+        'u_viewshed',
+        dataTexture({ width: 125, height: 125, data }),
+      )
+      moonShader.setUniform(
+        'u_viewshedGrid',
+        new Cartesian3(map.center_x_m, map.center_y_m, 1),
+      )
+    },
     flyTo(location, rangeM = SITE_RANGE_M) {
       const request = ++flight
       const position = Cartesian3.fromDegrees(location.lon, location.lat)

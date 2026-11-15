@@ -827,3 +827,11 @@ RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 �
 회사별 `/pricing/providers/compare`의 선택적 `source_run_id`는 저장 검색의 500 m 세밀 격자를
 식별한다. `terrain_excluded_reason: search_constraints_not_met`이면 그 검색의 제약 미충족이다.
 검색 실행을 전달하지 않은 지도 지점은 독립 가격 모델이며 검색 후보의 판정으로 간주하지 않는다.
+
+### GET /analysis/viewshed
+
+주어진 남극 좌표(`lat`, `lon`, 도)에서 2 m 높이 관측자가 반경 5 km 안의 표면을 볼 수
+있는지 80 m LOLA DEM으로 계산한다. 응답은 요청 좌표, 남극 극입체투영 중심
+`center_x_m`, `center_y_m`, 125×125 격자의 행 우선 문자열 `cells`이다.
+중심은 (62, 62), 열과 행이 증가할수록 각각 +x, +y 방향이다. 2는 가시,
+1은 차폐, 0은 범위 밖 또는 결측이다. 기존 분석 엔드포인트처럼 데이터 미설치 시 503을 반환한다.
