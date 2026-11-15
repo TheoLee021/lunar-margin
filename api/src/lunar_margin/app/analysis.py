@@ -17,6 +17,7 @@ from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.engine.metrics import SiteAnalysis, VisibilityMetrics, analyze_site, find_runs
 from lunar_margin.engine.site_characteristics import characterize_region
+from lunar_margin.engine.solar_continuity import summarize_solar_continuity
 from lunar_margin.pipeline.candidate_schema import TerrainMetrics
 from lunar_margin.pipeline.sources import DEM_SOURCES
 
@@ -85,6 +86,11 @@ class AnalysisResponse(BaseModel):
     dark_periods: list[Period]
 
 
+class SolarContinuityMetrics(BaseModel):
+    longest_sun_visible_hours: float
+    visibility_transitions: int
+
+
 class SiteAssessment(BaseModel):
     """후보 비교용 요약. 시계열 없이 일조·지구 지표와 250 m 지역 지형만 담는다."""
 
@@ -96,6 +102,7 @@ class SiteAssessment(BaseModel):
     observer_height_m: float
     sun: Metrics
     earth: Metrics
+    solar_continuity: SolarContinuityMetrics
     terrain: TerrainMetrics
 
 
@@ -243,6 +250,9 @@ def site_assessment(
         observer_height_m=query.observer_height_m,
         sun=_metrics(sun.metrics),
         earth=_metrics(earth.metrics),
+        solar_continuity=SolarContinuityMetrics(
+            **vars(summarize_solar_continuity(sun.visible, sun.step_minutes))
+        ),
         terrain=TerrainMetrics(
             slope_p95_deg=None if region.slope_p95_deg is None else round(region.slope_p95_deg, 3),
             coverage_fraction=round(region.coverage_fraction, 4),
