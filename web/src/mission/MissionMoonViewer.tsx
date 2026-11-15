@@ -8,7 +8,7 @@ import {
   type Ref,
 } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
-import { gridCellCorners } from '../moon/location'
+import { gridCellCorners, type LunarLocation } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { SunDirectionResult } from './useSunDirection'
@@ -28,7 +28,7 @@ export function MissionMoonViewer({
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
-  onSelect: (siteId: string) => void
+  onSelect: (siteId: string | null) => void
   /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
   sun: SunDirectionResult
 }) {
@@ -39,24 +39,31 @@ export function MissionMoonViewer({
   useEffect(() => {
     viewer.current?.setSunDirection(lit ? sunDirection : null)
   }, [lit, sunDirection])
+  const [picked, setPicked] = useState<LunarLocation | null>(null)
+  const observer = selection.siteId === null ? picked : null
   const markers = useMemo<readonly MoonMarker[]>(
-    () =>
-      sites.map((site, index) => ({
+    () => [
+      ...sites.map((site, index) => ({
         id: site.id,
         label: String(index + 1),
         location: { lat: site.latitude, lon: site.longitude },
         footprint: site.grid ? gridCellCorners(site.grid) : undefined,
       })),
-    [sites],
+      ...(observer
+        ? [{ id: 'picked-observer', label: '관측점', location: observer }]
+        : []),
+    ],
+    [sites, observer],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
   const [detail, setDetail] = useState(false)
   const [attempt, retry] = useState(0)
-  const lat = detail ? selected?.latitude : undefined
-  const lon = detail ? selected?.longitude : undefined
+  const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
+  const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
   const key = JSON.stringify([lat, lon, attempt])
   const [result, setResult] = useState<{
     key: string
+    distanceKm?: number
     map: Viewshed | null
   } | null>(null)
   useEffect(() => {
@@ -69,7 +76,8 @@ export function MissionMoonViewer({
       AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
     )
       .then((map) => {
-        if (!controller.signal.aborted) setResult({ key, map })
+        if (!controller.signal.aborted)
+          setResult({ key, map, distanceKm: maxVisibleDistanceKm(map.cells) })
       })
       .catch(() => {
         if (!controller.signal.aborted) setResult({ key, map: null })
@@ -84,6 +92,7 @@ export function MissionMoonViewer({
     )
   useImperativeHandle(ref, () => ({
     focusSite(siteId) {
+      setPicked(null)
       const site = sites.find((candidate) => candidate.id === siteId)
       if (site) focusSite(site)
     },
@@ -95,10 +104,16 @@ export function MissionMoonViewer({
           ref={viewer}
           viewshed={detail ? current?.map : null}
           markers={markers}
-          selectedMarkerId={selection.siteId}
+          selectedMarkerId={observer ? 'picked-observer' : selection.siteId}
+          onPick={(location) => {
+            onSelect(null)
+            setPicked(location)
+            setDetail(true)
+          }}
           onMarkerSelect={(siteId) => {
             const site = sites.find((candidate) => candidate.id === siteId)
             if (!site) return
+            setPicked(null)
             onSelect(siteId)
             focusSite(site)
           }}
@@ -132,6 +147,7 @@ export function MissionMoonViewer({
           type="button"
           className="hud-button"
           onClick={() => {
+            setPicked(null)
             setDetail(false)
             viewer.current?.flyToOverview()
           }}
@@ -141,7 +157,7 @@ export function MissionMoonViewer({
         <button
           type="button"
           className="hud-button"
-          disabled={!selected}
+          disabled={!selected && !observer}
           onClick={() => {
             setDetail(true)
             if (detail && selected) focusSite(selected)
@@ -150,23 +166,33 @@ export function MissionMoonViewer({
           선택 지점 3D로 보기
         </button>
       </div>
-      {detail && selected && (
+      {detail && lat !== undefined && lon !== undefined && (
         <div
           role="status"
           className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"
         >
-          {selected.name} · 주변 가시권 · 5 km · 높이 2 m
+          {observer ? '지도 관측점' : selected?.name} · 주변 가시권 · 5 km ·
+          높이 2 m
           <div>
             {!current ? (
               '지형 가시권 계산 중…'
             ) : current.map ? (
               <>
+                <div>
+                  {lat.toFixed(4)}°, {lon.toFixed(4)}°
+                </div>
+                <strong>
+                  반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
+                </strong>
+                <br />
                 <span className="text-green-400">● 보임</span>　
                 <span className="text-red-400">● 가려짐</span>
               </>
             ) : (
               <button type="button" onClick={() => retry((n) => n + 1)}>
-                계산 실패 · 다시 시도
+                {lat > -80
+                  ? '남위 80° 이남의 지점을 선택하세요'
+                  : '계산 실패 · 다시 시도'}
               </button>
             )}
           </div>
@@ -174,4 +200,18 @@ export function MissionMoonViewer({
       )}
     </>
   )
+}
+
+// Each character represents one 80 m cell in the south-polar projection.
+function maxVisibleDistanceKm(cells: string): number {
+  const side = Math.sqrt(cells.length)
+  const center = (side - 1) / 2
+  let maxSquared = 0
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i] !== '2') continue
+    const dx = (i % side) - center
+    const dy = Math.floor(i / side) - center
+    maxSquared = Math.max(maxSquared, dx * dx + dy * dy)
+  }
+  return Math.sqrt(maxSquared) * 0.08
 }
