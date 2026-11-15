@@ -75,7 +75,8 @@ export function LaunchDeparture({
       ) : null}
       {selected ? (
         <p className="hint">
-          {selected.name} · 예정/NET · 착륙일은 직접 선택합니다.{' '}
+          {selected.name} · 예정/NET · 착륙일은 직접 선택합니다. 표의 ±2일은
+          비교용 시나리오입니다.{' '}
           {selected.sources.map((source) => (
             <a
               key={source.url}

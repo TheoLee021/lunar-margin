@@ -141,19 +141,28 @@ export const ComparisonSchema = CompareInputSchema.extend({
   terrain_unknown: z.boolean().nullable(),
   demand_multiplier: z.literal(1),
   demand_unknown: z.literal(true),
-}).refine(
-  (r) =>
-    new Set(r.providers.map((p) => p.provider_id)).size === 6 &&
-    r.minimum_usd ===
-      (r.providers.some((p) => p.minimum_usd !== null)
-        ? Math.min(
-            ...r.providers.flatMap((p) =>
-              p.minimum_usd === null ? [] : [p.minimum_usd],
-            ),
-          )
-        : null),
-  'Inconsistent six-company comparison',
-)
+})
+  .refine(
+    (r) =>
+      new Set(r.providers.map((p) => p.provider_id)).size === 6 &&
+      r.minimum_usd ===
+        (r.providers.some((p) => p.minimum_usd !== null)
+          ? Math.min(
+              ...r.providers.flatMap((p) =>
+                p.minimum_usd === null ? [] : [p.minimum_usd],
+              ),
+            )
+          : null),
+    'Inconsistent six-company comparison',
+  )
+  .refine((r) => {
+    const amounts = r.providers.flatMap((p) =>
+      p.minimum_estimate_usd === null ? [] : [p.minimum_estimate_usd],
+    )
+    return (
+      r.minimum_estimate_usd === (amounts.length ? Math.min(...amounts) : null)
+    )
+  }, 'Inconsistent overall model estimate')
 export type Comparison = z.infer<typeof ComparisonSchema>
 export const ProviderCalendarInputSchema = CalendarInputSchema.extend({
   estimate: z.boolean().optional(),
