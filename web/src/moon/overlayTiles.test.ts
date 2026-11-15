@@ -3,6 +3,7 @@ import {
   decodeRgbaPng,
   HorizonMetaSchema,
   NormalMetaSchema,
+  NormalWideMetaSchema,
 } from './overlayTiles'
 
 // 백엔드 인코더(api/src/lunar_margin/pipeline/png.py)로 만든 2x2 RGBA PNG.
@@ -80,6 +81,50 @@ describe('tile meta schemas', () => {
         layer: 'horizon',
         levels: [level],
         encoding: { bias: 32768, scale: 16384 },
+      }),
+    ).toThrow()
+  })
+
+  // docs/api.md, Tiles: the layer that carries the slopes out to 60°S in one image.
+  const wide = {
+    version: 1,
+    layer: 'normal-wide',
+    levels: [
+      {
+        z: 0,
+        pixel_size_m: 960,
+        size_px: 1941,
+        center_px: 970,
+        tile_px: 1941,
+        tiles_per_side: 1,
+      },
+    ],
+    encoding: { bias: 32768, scale: 16384 },
+    sunlight: { pixel_size_m: 640, size_px: 2911, center_px: 1455 },
+  }
+
+  it('accept the documented normal-wide meta with the grid of its sunlight map', () => {
+    const meta = NormalWideMetaSchema.parse(wide)
+
+    expect(meta.levels[0]!.pixel_size_m).toBe(960)
+    expect(meta.sunlight).toEqual({
+      pixel_size_m: 640,
+      size_px: 2911,
+      center_px: 1455,
+    })
+  })
+
+  it('rejects a normal-wide meta without its sunlight grid or with another layer name', () => {
+    expect(() =>
+      NormalWideMetaSchema.parse({ ...wide, sunlight: undefined }),
+    ).toThrow()
+    expect(() =>
+      NormalWideMetaSchema.parse({ ...wide, layer: 'normal' }),
+    ).toThrow()
+    expect(() =>
+      NormalWideMetaSchema.parse({
+        ...wide,
+        sunlight: { pixel_size_m: 0, size_px: 2911, center_px: 1455 },
       }),
     ).toThrow()
   })

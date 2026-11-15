@@ -1,7 +1,8 @@
 // Sunlight map (docs/api.md, Sunlight): for one Sun direction, the fraction of the solar disc visible
 // from each point of the south-polar grid, computed by the backend from the DEM. The whole map is on
 // an 80 m grid; where 5 m regional DEMs exist the backend also computes windows of it on the grid of
-// a detail level of the normal tiles. No Cesium here.
+// a detail level of the normal tiles. A wide map covers the ground beyond it, out to 60°S, on a
+// coarser grid. No Cesium here.
 import { decodeRgbaPng, type RgbaImage } from './overlayTiles'
 import type { Vector3 } from './sun'
 
@@ -21,6 +22,14 @@ export interface SunlightWindowAddress {
 
 export function sunlightMapUrl(baseUrl: string, [x, y, z]: Vector3): string {
   return `${baseUrl}/sunlight/south-pole.png?x=${x}&y=${y}&z=${z}`
+}
+
+/** The map of the wider area (out to 60°S) on its own, coarser grid. */
+export function wideSunlightMapUrl(
+  baseUrl: string,
+  [x, y, z]: Vector3,
+): string {
+  return `${baseUrl}/sunlight/south-pole-wide.png?x=${x}&y=${y}&z=${z}`
 }
 
 export function sunlightWindowUrl(
@@ -57,8 +66,9 @@ function abortableWait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Fetches the map for one Sun direction, or one `window` of it. While the backend is busy (429) it
- * waits as long as the response asks and tries again, a few times; any other failure is thrown at once.
+ * Fetches the map for one Sun direction, one `window` of it, or the `wide` map. While the backend is
+ * busy (429) it waits as long as the response asks and tries again, a few times; any other failure
+ * is thrown at once.
  */
 export async function loadSunlightMap(
   sun: Vector3,
@@ -66,17 +76,21 @@ export async function loadSunlightMap(
   signal: AbortSignal,
   {
     window,
+    wide = false,
     fetchFn = fetch,
     wait = (ms: number) => abortableWait(ms, signal),
   }: {
     window?: SunlightWindowAddress
+    wide?: boolean
     fetchFn?: typeof fetch
     wait?: (ms: number) => Promise<void>
   } = {},
 ): Promise<SunlightMap> {
   const url = window
     ? sunlightWindowUrl(baseUrl, sun, window)
-    : sunlightMapUrl(baseUrl, sun)
+    : wide
+      ? wideSunlightMapUrl(baseUrl, sun)
+      : sunlightMapUrl(baseUrl, sun)
   let response = await fetchFn(url, { signal })
   for (
     let retry = 0;

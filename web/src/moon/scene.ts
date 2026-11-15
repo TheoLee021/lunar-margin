@@ -33,7 +33,13 @@ import {
   type NormalWindows,
 } from './normalWindows'
 import { DEFAULT_BASE_URL } from '../api/client'
-import { loadTerrainOverlays, type RgbaImage } from './overlayTiles'
+import {
+  fetchTile,
+  loadTerrainOverlays,
+  loadWideMeta,
+  type NormalWideMeta,
+  type RgbaImage,
+} from './overlayTiles'
 import { parseSunDirection, type Vector3 } from './sun'
 import { loadSunlightMap, type SunlightMap } from './sunlightMap'
 import { createSunlightWindows, type SunlightWindows } from './sunlightWindows'
@@ -62,7 +68,11 @@ const MAX_ZOOM_DISTANCE_M = 20_000_000
 // Neither the photo nor the tiles' triangles feed that lighting: the photo's shading belongs to
 // another Sun, and the triangles are tens of pixels wide at every zoom, so their faces show as facets.
 // The overlay fades into the photo over its outer OVERLAY_FADE_M.
-// Outside the overlay the photo still follows the Sun, but only as day and night: it dims towards
+// Where the backend holds a DEM out to 60°S, the same lighting goes on around that overlay out to
+// 60°S (the wide zone), from one image of coarser slopes and a coarser sunlight map (docs/api.md,
+// normal-wide), so that the first screen has no edge between computed light and photo. The wide
+// zone fades into the photo over its outer WIDE_FADE_M.
+// Outside both the photo still follows the Sun, but only as day and night: it dims towards
 // the terminator and is black beyond it, by the Sun's height over a smooth sphere.
 // The mosaic is darker than the Moon is usually shown; PHOTO_EXPOSURE is the gain in the darks,
 // rolling off so that white stays white. It puts sunlit highlands at about half of display white, as
@@ -84,10 +94,14 @@ const EXPOSURE_SUN_DEG = 3.5
 // The view term is taken as if looking straight down, so brightness does not change as the camera
 // tilts; on near-vertical slopes it is held at this cosine, where Lommel-Seeliger would blow up.
 const MIN_VIEW_COS = 0.2
-// Light reaching shadowed ground (scattered off sunlit terrain, earthshine), as a reflectance.
+// Light reaching shadowed ground (scattered off sunlit terrain), as a reflectance. It needs sunlit
+// ground nearby: it fades out to where the Sun is FILL_GONE_DEG below the horizon of a smooth
+// sphere, so the night side of the overlay is as black as the photo's.
 const SHADOW_FILL = 0.005
+const FILL_GONE_DEG = 3
 const SUN_RADIUS_DEG = 0.2665
 const OVERLAY_FADE_M = 10_000
+const WIDE_FADE_M = 300_000
 // Finer normal levels reach the shader as one window of tiles each, around the point the camera
 // looks at (normalWindows.ts). The shader has this many window slots, used for the finest levels.
 // A level is used where one of its texels covers at least FINE_FULL_PX screen pixels and fades out
@@ -182,6 +196,22 @@ function createMoonShader(): CustomShader {
       u_sunlight: { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
       // (pixel_size_m, center_px, size_px); size 0 while there is no map for the current Sun.
       u_sunlightGrid: {
+        type: UniformType.VEC3,
+        value: new Cartesian3(1, 0, 0),
+      },
+      // The wide zone: slopes out to 60°S in one image, in the encoding of u_normal.
+      u_wideNormal: {
+        type: UniformType.SAMPLER_2D,
+        value: placeholderTexture(),
+      },
+      // (pixel_size_m, center_px, size_px); size 0 while there is no such image.
+      u_wideGrid: { type: UniformType.VEC3, value: new Cartesian3(1, 0, 0) },
+      // The sunlight map of the wide zone and its grid, as u_sunlight and u_sunlightGrid.
+      u_wideSunlight: {
+        type: UniformType.SAMPLER_2D,
+        value: placeholderTexture(),
+      },
+      u_wideSunlightGrid: {
         type: UniformType.VEC3,
         value: new Cartesian3(1, 0, 0),
       },
@@ -301,6 +331,24 @@ function createMoonShader(): CustomShader {
       return mix(slope, sum.xy / sum.z, use * sum.z);
     }
 
+    // Slope of the wide zone at xy as a tile-plane gradient, times the weight of the texels with
+    // data in z (0 outside the image).
+    vec3 wideSlopeAt(vec2 xy) {
+      vec4 grid = vec4(u_wideGrid.xy, 0.0, 0.0);
+      vec2 pixel = vec2(grid.y + xy.x / grid.x, grid.y - xy.y / grid.x);
+      vec2 base = floor(pixel);
+      vec2 f = pixel - base;
+      float last = u_wideGrid.z - 1.0;
+      vec3 sum = vec3(0.0);
+      for (int j = 0; j < 4; j++) {
+        vec2 corner = base + vec2(float(j % 2), float(j / 2));
+        if (any(lessThan(corner, vec2(0.0))) || any(greaterThan(corner, vec2(last)))) continue;
+        vec2 w2 = mix(1.0 - f, f, corner - base);
+        sum += w2.x * w2.y * fineSlopeAt(u_wideNormal, grid, ivec2(corner));
+      }
+      return sum;
+    }
+
     // Blends a sunlight window over visible (the fraction of the solar disc in view), where the
     // window lies and by the same rule as the slopes of its level, so that shadow edges sharpen
     // together with the shading. The window is one byte per texel, so the GPU filters it.
@@ -344,51 +392,64 @@ function createMoonShader(): CustomShader {
       // South-polar stereographic metres, as in the tiles: x towards longitude 90°E, y towards
       // longitude 0°. Written without latitude: asin(up.z) loses all precision next to the pole,
       // where up.z is within rounding of -1, and scatters texel lookups by tens of metres.
-      vec2 xy = 2.0 * MOON_RADIUS_M * up.yx / (1.0 - up.z);
+      // The projection is only used south of the equator; north of it the denominator is held.
+      float south = step(up.z, 0.0);
+      vec2 xy = 2.0 * MOON_RADIUS_M * up.yx / (1.0 - min(up.z, 0.0));
       float rho = length(xy);
       float rhoMax = center * pixelSize;
-      float weight = u_overlayReady * (1.0 - smoothstep(rhoMax - ${OVERLAY_FADE_M.toFixed(1)}, rhoMax, rho));
+      float inner = south * u_overlayReady * (1.0 - smoothstep(rhoMax - ${OVERLAY_FADE_M.toFixed(1)}, rhoMax, rho));
+      float wideMax = u_wideGrid.y * u_wideGrid.x;
+      float wide = south * step(0.5, u_wideGrid.z) * (1.0 - smoothstep(wideMax - ${WIDE_FADE_M.toFixed(1)}, wideMax, rho));
       // Screen-space derivatives must be taken before the per-fragment returns.
       vec2 dxyDx = dFdx(xy);
       vec2 dxyDy = dFdy(xy);
       // Ground metres per screen pixel.
       float footprint = max(length(dxyDx), length(dxyDy));
-      if (weight <= 0.0) return;
+      if (inner <= 0.0 && wide <= 0.0) return;
 
       vec2 dir = lonDir(xy);
       vec3 east = vec3(-dir.x, dir.y, 0.0);
       vec3 north = cross(up, east);
       // The Sun's horizontal direction in the tile plane: the same for every texel around here.
       vec2 sunPlane = planeFromLocal(vec2(dot(sun, east), dot(sun, north)), dir);
-      float sunEl = asin(clamp(dot(sun, up), -1.0, 1.0)) / DEG;
+      float sunEl = asin(clamp(sunSin, -1.0, 1.0)) / DEG;
 
-      vec2 pixel = vec2(center + xy.x / pixelSize, center - xy.y / pixelSize);
-      vec2 base = floor(pixel);
-      vec2 f = pixel - base;
-      float last = u_overlayGrid.z - 1.0;
       float total = 0.0;
       float horizonSum = 0.0;
       vec2 slopeSum = vec2(0.0);
-      for (int j = 0; j < 4; j++) {
-        vec2 corner = base + vec2(float(j % 2), float(j / 2));
-        if (any(lessThan(corner, vec2(0.0))) || any(greaterThan(corner, vec2(last)))) continue;
-        ivec2 px = ivec2(corner);
-        vec2 cornerDir = lonDir((corner - center) * vec2(1.0, -1.0));
-        vec2 sunAtCorner = localFromPlane(sunPlane, cornerDir);
-        float horizon = horizonAt(px, mod(atan(sunAtCorner.x, sunAtCorner.y) / DEG + 360.0, 360.0));
-        vec3 slopes = slopesAt(px);
-        if (horizon < -999.0 || slopes.z < 0.5) continue;
-        vec2 w2 = mix(1.0 - f, f, corner - base);
-        float w = w2.x * w2.y;
-        total += w;
-        horizonSum += w * horizon;
-        slopeSum += w * planeFromLocal(slopes.xy, cornerDir);
+      if (inner > 0.0) {
+        vec2 pixel = vec2(center + xy.x / pixelSize, center - xy.y / pixelSize);
+        vec2 base = floor(pixel);
+        vec2 f = pixel - base;
+        float last = u_overlayGrid.z - 1.0;
+        for (int j = 0; j < 4; j++) {
+          vec2 corner = base + vec2(float(j % 2), float(j / 2));
+          if (any(lessThan(corner, vec2(0.0))) || any(greaterThan(corner, vec2(last)))) continue;
+          ivec2 px = ivec2(corner);
+          vec2 cornerDir = lonDir((corner - center) * vec2(1.0, -1.0));
+          vec2 sunAtCorner = localFromPlane(sunPlane, cornerDir);
+          float horizon = horizonAt(px, mod(atan(sunAtCorner.x, sunAtCorner.y) / DEG + 360.0, 360.0));
+          vec3 slopes = slopesAt(px);
+          if (horizon < -999.0 || slopes.z < 0.5) continue;
+          vec2 w2 = mix(1.0 - f, f, corner - base);
+          float w = w2.x * w2.y;
+          total += w;
+          horizonSum += w * horizon;
+          slopeSum += w * planeFromLocal(slopes.xy, cornerDir);
+        }
       }
+      float innerUse = total > 1e-4 ? inner : 0.0;
+      vec3 wideSlope = wide > 0.0 ? wideSlopeAt(xy) : vec3(0.0);
+      float wideUse = wideSlope.z > 1e-4 ? wide : 0.0;
+      float weight = max(innerUse, wideUse);
       // No overlay data here: keep the photo.
-      if (total <= 1e-4) return;
-      // Interpolate the horizon first, then take the disc fraction once: shadow edges follow
-      // smooth contours instead of 500 m steps.
-      vec2 slope = slopeSum / total;
+      if (weight <= 0.0) return;
+      // Where both have data the 85°S overlay lies over the wide zone, fading in over its own edge.
+      float top = wideUse > 0.0 ? innerUse : 1.0;
+      vec2 slope = mix(
+        wideUse > 0.0 ? wideSlope.xy / wideSlope.z : vec2(0.0),
+        innerUse > 0.0 ? slopeSum / total : vec2(0.0),
+        top);
 ${fineSlots
   .map(
     (slot) =>
@@ -397,15 +458,28 @@ ${fineSlots
   .join('\n')}
       vec2 eastNorth = localFromPlane(slope, dir);
       vec3 normalWC = normalize(up - eastNorth.x * east - eastNorth.y * north);
-      // Cast shadows: the backend's sunlight map for this Sun (80 m, terrain out to 200 km) once it
-      // has arrived, and until then the coarser estimate from the precomputed horizon.
-      float visible;
-      if (u_sunlightGrid.z > 0.5) {
-        vec2 mapPixel = vec2(u_sunlightGrid.y + xy.x / u_sunlightGrid.x, u_sunlightGrid.y - xy.y / u_sunlightGrid.x);
-        vec2 toUv = vec2(1.0, -1.0) / (u_sunlightGrid.x * u_sunlightGrid.z);
-        visible = textureGrad(u_sunlight, (mapPixel + 0.5) / u_sunlightGrid.z, dxyDx * toUv, dxyDy * toUv).r;
-      } else {
-        visible = discFraction(sunEl - horizonSum / total);
+      // Cast shadows of the wide zone: its sunlight map, and until that has arrived only the Sun
+      // setting behind a smooth sphere.
+      float visible = discFraction(sunEl);
+      if (u_wideSunlightGrid.z > 0.5) {
+        vec2 mapPixel = vec2(u_wideSunlightGrid.y + xy.x / u_wideSunlightGrid.x, u_wideSunlightGrid.y - xy.y / u_wideSunlightGrid.x);
+        vec2 toUv = vec2(1.0, -1.0) / (u_wideSunlightGrid.x * u_wideSunlightGrid.z);
+        visible = textureGrad(u_wideSunlight, (mapPixel + 0.5) / u_wideSunlightGrid.z, dxyDx * toUv, dxyDy * toUv).r;
+      }
+      if (top > 0.0) {
+        // Interpolate the horizon first, then take the disc fraction once: shadow edges follow
+        // smooth contours instead of 500 m steps.
+        // In the 85°S overlay: the backend's sunlight map for this Sun (80 m, terrain out to
+        // 200 km) once it has arrived, and until then the coarser estimate from the precomputed horizon.
+        float innerVisible;
+        if (u_sunlightGrid.z > 0.5) {
+          vec2 mapPixel = vec2(u_sunlightGrid.y + xy.x / u_sunlightGrid.x, u_sunlightGrid.y - xy.y / u_sunlightGrid.x);
+          vec2 toUv = vec2(1.0, -1.0) / (u_sunlightGrid.x * u_sunlightGrid.z);
+          innerVisible = textureGrad(u_sunlight, (mapPixel + 0.5) / u_sunlightGrid.z, dxyDx * toUv, dxyDy * toUv).r;
+        } else {
+          innerVisible = discFraction(sunEl - horizonSum / total);
+        }
+        visible = mix(visible, innerVisible, top);
       }
 ${sunWindowSlots
   .map(
@@ -417,7 +491,8 @@ ${sunWindowSlots
       float mu0 = max(dot(normalWC, sun), 0.0);
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
       float lommelSeeliger = 2.0 * mu0 / (mu0 + mu);
-      float reflectance = visible * mix(lommelSeeliger, mu0, ${LAMBERT_SHARE.toFixed(2)}) + ${SHADOW_FILL.toFixed(3)};
+      float fill = ${SHADOW_FILL.toFixed(3)} * smoothstep(${(-Math.sin(CesiumMath.toRadians(FILL_GONE_DEG))).toFixed(6)}, 0.0, sunSin);
+      float reflectance = visible * mix(lommelSeeliger, mu0, ${LAMBERT_SHARE.toFixed(2)}) + fill;
       float exposure = ${SUN_EXPOSURE.toFixed(2)} * min(1.0, ${flatGround(EXPOSURE_SUN_DEG).toFixed(6)} / max(flatGround(sunSin), 1e-6));
       vec3 sunlit = filmic(vec3(exposure * reflectance));
       material.diffuse = mix(photo, sunlit, weight);
@@ -483,32 +558,85 @@ export async function createMoonScene(
   let sunlightWindows: SunlightWindows | undefined
   // The sunlight map shares the grid of the finest full-coverage normal level (docs/api.md, Sunlight).
   let sunlightLevel: TileLevel | undefined
+  // The grid of the wide sunlight map, once the backend has said that it holds the wide zone.
+  let wideSunlight: NormalWideMeta['sunlight'] | undefined
   let sun: Vector3 | null = null
-  let sunlightRequest: AbortController | undefined
-  const refreshSunlightMap = () => {
-    sunlightRequest?.abort()
-    moonShader.setUniform('u_sunlightGrid', new Cartesian3(1, 0, 0))
-    const level = sunlightLevel
-    if (!sun || !level) return
-    const request = new AbortController()
-    sunlightRequest = request
-    options.signal.addEventListener('abort', () => request.abort(), {
-      signal: request.signal,
-    })
-    loadSunlightMap(sun, DEFAULT_BASE_URL, request.signal)
-      .then((map) => {
-        if (request.signal.aborted) return
-        if (map.width !== level.size_px || map.height !== level.size_px)
-          throw new Error('sunlight map size does not match the normal tiles')
-        moonShader.setUniform('u_sunlight', sunlightTexture(map))
-        moonShader.setUniform(
-          'u_sunlightGrid',
-          new Cartesian3(level.pixel_size_m, level.center_px, level.size_px),
-        )
+  // One of the two whole sunlight maps: asks the backend for the map of the current Sun and hands
+  // it to the shader when it arrives. Without it the shader's coarser shadows keep showing.
+  const sunlightMapSlot = (
+    wide: boolean,
+    textureUniform: string,
+    gridUniform: string,
+  ) => {
+    let pending: AbortController | undefined
+    const clear = () => {
+      pending?.abort()
+      moonShader.setUniform(gridUniform, new Cartesian3(1, 0, 0))
+    }
+    const load = (
+      grid:
+        | { pixel_size_m: number; center_px: number; size_px: number }
+        | undefined,
+    ): Promise<void> => {
+      clear()
+      if (!sun || !grid) return Promise.resolve()
+      const request = new AbortController()
+      pending = request
+      options.signal.addEventListener('abort', () => request.abort(), {
+        signal: request.signal,
       })
-      // The horizon-based shadows keep showing.
-      .catch(() => undefined)
+      return loadSunlightMap(sun, DEFAULT_BASE_URL, request.signal, { wide })
+        .then((map) => {
+          if (request.signal.aborted) return
+          if (map.width !== grid.size_px || map.height !== grid.size_px) return
+          moonShader.setUniform(textureUniform, sunlightTexture(map))
+          moonShader.setUniform(
+            gridUniform,
+            new Cartesian3(grid.pixel_size_m, grid.center_px, grid.size_px),
+          )
+        })
+        .catch(() => undefined)
+    }
+    return { clear, load }
   }
+  const sunlightMap = sunlightMapSlot(false, 'u_sunlight', 'u_sunlightGrid')
+  const wideSunlightMap = sunlightMapSlot(
+    true,
+    'u_wideSunlight',
+    'u_wideSunlightGrid',
+  )
+  // For a new Sun the wide map is asked for first: the backend computes one map at a time, and this
+  // one is quick and covers the whole first screen. The 80 m map then sharpens the middle.
+  const refreshSunlightMaps = () => {
+    sunlightMap.clear()
+    void wideSunlightMap
+      .load(wideSunlight)
+      .then(() => sunlightMap.load(sunlightLevel))
+  }
+  // The wide zone is there only on backends that hold a DEM out to 60°S. Without it the Moon keeps
+  // the 85°S overlay alone, so a failure here is not reported.
+  loadWideMeta(options.signal)
+    .then(async (meta) => {
+      if (options.signal.aborted) return
+      wideSunlight = meta.sunlight
+      void wideSunlightMap.load(wideSunlight)
+      const level = meta.levels[0]!
+      const image = await fetchTile(
+        'normal-wide',
+        { z: 0, x: 0, y: 0 },
+        DEFAULT_BASE_URL,
+        options.signal,
+      )
+      if (options.signal.aborted) return
+      if (image.width !== level.size_px || image.height !== level.size_px)
+        return
+      moonShader.setUniform('u_wideNormal', dataTexture(image))
+      moonShader.setUniform(
+        'u_wideGrid',
+        new Cartesian3(level.pixel_size_m, level.center_px, level.size_px),
+      )
+    })
+    .catch(() => undefined)
   // Overlays come from our API and are independent of the ion tileset, so both load in parallel.
   loadTerrainOverlays(options.signal)
     .then(({ horizon, normal }) => {
@@ -517,7 +645,7 @@ export async function createMoonScene(
       sunlightLevel = normal.meta.levels.findLast(
         (level) => level.tile_ranges === undefined,
       )
-      refreshSunlightMap()
+      void sunlightMap.load(sunlightLevel)
       sunlightWindows = createSunlightWindows({
         // The detail levels (sparse: only where a 5 m DEM is), coarse to fine as for the slopes.
         levels: normal.meta.levels
@@ -771,7 +899,7 @@ export async function createMoonScene(
       if (direction === null) {
         sun = null
         moonShader.setUniform('u_sunLit', 0)
-        refreshSunlightMap()
+        refreshSunlightMaps()
         followFocus()
         return
       }
@@ -783,7 +911,7 @@ export async function createMoonScene(
       moonShader.setUniform('u_sunDirectionWC', new Cartesian3(...next))
       moonShader.setUniform('u_sunLit', 1)
       if (changed) {
-        refreshSunlightMap()
+        refreshSunlightMaps()
         // Windows computed for the previous Sun come down at once, not at the next focus check.
         followFocus()
       }
