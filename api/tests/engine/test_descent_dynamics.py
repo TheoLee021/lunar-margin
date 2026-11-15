@@ -75,10 +75,7 @@ def test_reference_acceleration_reintegrates_in_inertial_frame() -> None:
         radius = float(np.linalg.norm(r[0]))
         gravity = -MU_M * r[0] / radius**3
         thrust_moon_fixed = (
-            a[0]
-            - gravity
-            + 2.0 * np.cross(omega, v[0])
-            + np.cross(omega, np.cross(omega, r[0]))
+            a[0] - gravity + 2.0 * np.cross(omega, v[0]) + np.cross(omega, np.cross(omega, r[0]))
         )
         return _rotation_z(OMEGA * t_s) @ thrust_moon_fixed
 
@@ -112,6 +109,4 @@ def test_reference_acceleration_reintegrates_in_inertial_frame() -> None:
     independent_final_mass = 1200.0 * math.exp(
         -float(np.trapezoid(acc, t_quadrature)) / (310.0 * G0)
     )
-    assert reference.propellant_kg == pytest.approx(
-        1200.0 - independent_final_mass, abs=0.05
-    )
+    assert reference.propellant_kg == pytest.approx(1200.0 - independent_final_mass, abs=0.05)
