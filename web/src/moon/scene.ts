@@ -530,6 +530,13 @@ ${sunWindowSlots
       if (up.z >= 0.0) return;
       vec2 xy = 2.0 * 1737400.0 * up.yx / (1.0 - up.z);
       vec2 offset = xy - u_viewshedGrid.xy;
+      // Draw the observer on the very same tile fragment and projection as the mask.
+      float pixelM = clamp(max(length(dFdx(offset)), length(dFdy(offset))), 0.1, 35.0);
+      float markerDistance = length(offset) / pixelM;
+      if (markerDistance < 5.5) {
+        material.diffuse = markerDistance < 3.5 ? vec3(1.0, 0.55, 0.02) : vec3(1.0);
+        return;
+      }
       if (length(offset) > 5000.0) return;
       ivec2 cell = clamp(ivec2(floor(offset / 80.0 + 62.5)), ivec2(0), ivec2(124));
       int code = int(round(texelFetch(u_viewshed, cell, 0).r * 255.0));

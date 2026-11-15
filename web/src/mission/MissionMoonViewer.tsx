@@ -42,18 +42,14 @@ export function MissionMoonViewer({
   const [picked, setPicked] = useState<LunarLocation | null>(null)
   const observer = selection.siteId === null ? picked : null
   const markers = useMemo<readonly MoonMarker[]>(
-    () => [
-      ...sites.map((site, index) => ({
+    () =>
+      sites.map((site, index) => ({
         id: site.id,
         label: String(index + 1),
         location: { lat: site.latitude, lon: site.longitude },
         footprint: site.grid ? gridCellCorners(site.grid) : undefined,
       })),
-      ...(observer
-        ? [{ id: 'picked-observer', label: '관측점', location: observer }]
-        : []),
-    ],
-    [sites, observer],
+    [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
   const [detail, setDetail] = useState(false)
@@ -104,7 +100,7 @@ export function MissionMoonViewer({
           ref={viewer}
           viewshed={detail ? current?.map : null}
           markers={markers}
-          selectedMarkerId={observer ? 'picked-observer' : selection.siteId}
+          selectedMarkerId={selection.siteId}
           onPick={(location) => {
             onSelect(null)
             setPicked(location)
@@ -185,6 +181,7 @@ export function MissionMoonViewer({
                   반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
                 </strong>
                 <br />
+                <span className="text-amber-400">⊙ 관측점</span>　
                 <span className="text-green-400">● 보임</span>　
                 <span className="text-red-400">● 가려짐</span>
               </>
