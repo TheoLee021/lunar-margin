@@ -57,5 +57,9 @@ export function fetchLandingGrid(
     lon: String(lon),
     max_slope_deg: String(maxSlopeDeg),
   })
-  return getJson('/analysis/landing-grid?' + qs.toString(), LandingGridSchema, options)
+  return getJson(
+    '/analysis/landing-grid?' + qs.toString(),
+    LandingGridSchema,
+    options,
+  )
 }
