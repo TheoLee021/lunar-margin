@@ -43,9 +43,7 @@ def test_dated_transfer_reaches_requested_arrival_and_captures(data_dir: Path) -
     et = spiceypy.str2et(arrival.strftime("%Y-%m-%dT%H:%M:%S"))
     matrix = spiceypy.sxform("J2000", "MOON_ME", et)
     expected_fixed = matrix @ (after * 1000)
-    assert np.asarray(handoff.post_loi_moon_me_m_mps) == pytest.approx(
-        expected_fixed, abs=1e-5
-    )
+    assert np.asarray(handoff.post_loi_moon_me_m_mps) == pytest.approx(expected_fixed, abs=1e-5)
     assert np.linalg.norm(handoff.post_loi_moon_me_m_mps[:3]) == pytest.approx(
         np.linalg.norm(after[:3]) * 1000, abs=1e-5
     )
