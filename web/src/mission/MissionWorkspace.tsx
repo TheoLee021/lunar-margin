@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
+import { SiteComparisonPanel } from './SiteComparisonPanel'
+import { nextComparisonIds } from './siteCompare'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -30,10 +32,20 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
+  const [compareState, setCompareState] = useState<{ runId: string; ids: string[] } | null>(null)
   const moon = useRef<MissionMoonViewerHandle>(null)
   const selected = sites.find((site) => site.id === selection.siteId)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
+  const compareIds = run?.id === compareState?.runId
+    ? compareState.ids.filter((id) => run.candidates.some((c) => c.id === id))
+    : []
+  const comparison = compareIds.map((id) => run?.candidates.find((c) => c.id === id)).filter((c) => c !== undefined)
+  function addComparison(id: string) {
+    if (!run || !run.candidates.some((candidate) => candidate.id === id)) return
+    const next = nextComparisonIds(compareIds, id, selection.siteId)
+    setCompareState({ runId: run.id, ids: next })
+  }
   const searchUrl = new URL(window.location.href)
   searchUrl.searchParams.set('view', 'search')
   searchUrl.searchParams.delete('planner')
@@ -46,6 +58,8 @@ export function MissionWorkspace({
         selection={selection}
         sites={sites}
         onSelect={onSelect}
+        onCompare={addComparison}
+        compareIds={compareIds}
       />
       <header className="pointer-events-none absolute left-4 top-4 flex max-w-[60%] flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold uppercase tracking-wide">
@@ -108,6 +122,7 @@ export function MissionWorkspace({
             ) : null}
             <section className="hud-section">
               <h2>TOP 5 후보</h2>
+              <p className="text-xs text-neutral-400">Ctrl/Shift+Click: 후보 A/B 비교 · 일반 클릭: 단일 후보 분석</p>
               <p className="text-xs text-neutral-400">
                 멀리서는 가까운 후보를 묶어 표시합니다. 묶음을 누르면 확대되고,
                 가까이서는 500m × 500m 격자가 보입니다.
@@ -145,7 +160,11 @@ export function MissionWorkspace({
                     <button
                       type="button"
                       aria-current={selection.siteId === site.id}
-                      onClick={() => {
+                      onClick={(event) => {
+                        if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                          addComparison(site.id)
+                          return
+                        }
                         onSelect(site.id)
                         moon.current?.focusSite(site.id)
                       }}
@@ -160,6 +179,14 @@ export function MissionWorkspace({
                       <span className="ml-auto font-mono">
                         {site.score == null ? '—' : site.score.toFixed(1)}
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="ml-8 text-xs text-cyan-300 underline underline-offset-2"
+                      onClick={() => addComparison(site.id)}
+                      aria-label={`후보 ${index + 1} 비교에 추가`}
+                    >
+                      {compareIds.includes(site.id) ? '비교에서 제거' : '비교에 추가'}
                     </button>
                   </li>
                 ))}
@@ -227,6 +254,15 @@ export function MissionWorkspace({
             </aside>
           ) : null}
         </>
+      ) : null}
+      {run && comparison.length > 0 ? (
+        <SiteComparisonPanel
+          a={comparison[0]!}
+          b={comparison[1] ?? null}
+          config={run.config}
+          onRemove={addComparison}
+          onClose={() => setCompareState({ runId: run.id, ids: [] })}
+        />
       ) : null}
       <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
         {apiStatus}
