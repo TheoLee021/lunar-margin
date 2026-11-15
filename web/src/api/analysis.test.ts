@@ -113,6 +113,10 @@ function assessment() {
       windows_per_24h: 0.9,
       mean_elevation_deg: 0.8,
     },
+    solar_continuity: {
+      longest_sun_visible_hours: 2,
+      visibility_transitions: 3,
+    },
     earth: {
       visible_fraction: 0.88,
       longest_dark_hours: 40,
