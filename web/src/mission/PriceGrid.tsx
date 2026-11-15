@@ -41,6 +41,11 @@ const STATE_LABELS = {
   failed: '탐색 실패',
   unavailable: '판단 불가',
 }
+export type DepartureStatus = {
+  departure: string
+  launchId: string | null
+  unavailable: boolean
+}
 
 export function PriceGrid({
   departures,
@@ -48,12 +53,14 @@ export function PriceGrid({
   draft,
   availability,
   onSelect,
+  onDepartureStatus,
 }: {
   departures: number[]
   landings: number[]
   draft: Schedule
   availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
+  onDepartureStatus: (status: DepartureStatus) => void
 }) {
   const [mass, setMass] = useState('24')
   const [delivery, setDelivery] = useState<Delivery>('surface')
@@ -148,6 +155,18 @@ export function PriceGrid({
       : null
   const calendar = useProviderCalendar(input)
   const data = calendar.data
+  useEffect(() => {
+    if (!data) return
+    const departureCells = data.cells.filter(
+      (cell) => cell.departure_date === draft.departure,
+    )
+    if (!departureCells.length) return
+    onDepartureStatus({
+      departure: draft.departure,
+      launchId: draft.launchId ?? null,
+      unavailable: departureCells.some((cell) => cell.status === 'no_launch'),
+    })
+  }, [data, draft.departure, draft.launchId, onDepartureStatus])
   const prices =
     data?.cells.flatMap((cell) =>
       cell.mean_min_usd === null ? [] : [cell.mean_min_usd],

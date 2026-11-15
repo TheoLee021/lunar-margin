@@ -4,7 +4,7 @@ import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
-import { PriceGrid } from './PriceGrid'
+import { PriceGrid, type DepartureStatus } from './PriceGrid'
 import { LaunchDeparture } from './LaunchDeparture'
 import {
   fetchLaunchSchedule,
@@ -43,6 +43,8 @@ export function DatePlanner({
   const [launchData, setLaunchData] = useState<LaunchSchedule | null>(null)
   const [launchError, setLaunchError] = useState('')
   const [launchRevision, setLaunchRevision] = useState(0)
+  const [departureStatus, setDepartureStatus] =
+    useState<DepartureStatus | null>(null)
   useEffect(() => {
     const controller = new AbortController()
     fetchLaunchSchedule({ signal: controller.signal })
@@ -60,7 +62,12 @@ export function DatePlanner({
   }, [launchRevision])
   const availability = (departure: string) =>
     departureAvailability(launchData, launchError, draft.launchId, departure)
+  const departureUnavailable =
+    departureStatus?.departure === draft.departure &&
+    departureStatus.launchId === (draft.launchId ?? null) &&
+    departureStatus.unavailable
   const canApply =
+    !departureUnavailable &&
     availability(draft.departure) === 'scheduled' &&
     isTransitPossible(draft.departure, draft.landing)
   const validDraft = ScheduleSchema.safeParse(draft).success
@@ -214,11 +221,16 @@ export function DatePlanner({
               landings={landings}
               draft={draft}
               availability={availability}
+              onDepartureStatus={setDepartureStatus}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
             />
-            {availability(draft.departure) !== 'scheduled' ? (
+            {departureUnavailable ? (
+              <p className="hint" role="status">
+                선택한 출발일의 발사 일정이 없습니다.
+              </p>
+            ) : availability(draft.departure) !== 'scheduled' ? (
               <p className="hint" role="status">
                 출발일의 발사 일정을 확인해야 일정을 적용할 수 있습니다.
                 날짜표는 공개된 발사 예정일만 활성화합니다.

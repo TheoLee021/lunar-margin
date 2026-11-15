@@ -409,3 +409,102 @@ test('dates without a published launch have no price, departure link, or applica
   await expect(dialog.getByRole('button', { name: '일정 적용' })).toBeDisabled()
   await expect(grid.getByRole('rowheader').getByRole('link')).toHaveCount(0)
 })
+
+test('a revised launch schedule blocks applying its old departure and recovers without a price calculation', async ({
+  page,
+}) => {
+  let noLaunch = true
+  await page.route('**/api/pricing/providers/launches', (route) =>
+    route.fulfill({
+      json: {
+        timezone: 'UTC',
+        sources: [],
+        launches: ['2027-01-06', '2027-01-07'].map((departure) => ({
+          id: `launch-${departure}`,
+          provider_id: 'spacex',
+          launch_provider: 'SpaceX',
+          name: `January flight ${departure}`,
+          departure_date: departure,
+          label: departure,
+          confirmed: false,
+          sources: [
+            {
+              name: 'Spaceflight Now',
+              url: 'https://spaceflightnow.com/launch-schedule/',
+              label: departure,
+            },
+          ],
+        })),
+      },
+    }),
+  )
+  await page.route('**/api/pricing/providers/calendar', (route) => {
+    const fixture = providerCalendarFixture(
+      route.request().postDataJSON(),
+      (date) => ({
+        run_id: `saved-${date}`,
+        state: 'not_computed',
+        status: 'search_required',
+        mean: null,
+        eligible: null,
+        priced: 0,
+      }),
+    )
+    return route.fulfill({
+      json: {
+        ...fixture,
+        cells: fixture.cells.map((cell) => ({
+          ...cell,
+          status:
+            noLaunch && cell.departure_date === '2027-01-06'
+              ? 'no_launch'
+              : cell.status,
+        })),
+      },
+    })
+  })
+  await page.goto(
+    '/?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
+  )
+  const dialog = page.getByRole('dialog')
+  const departure = dialog.getByLabel('기준 출발일 · UTC', { exact: true })
+  const landing = dialog.getByLabel('기준 착륙일 · UTC', { exact: true })
+  const apply = dialog.getByRole('button', { name: '일정 적용' })
+  await expect(
+    dialog.getByRole('table').getByLabel('출발 2027-01-06: 발사 일정 없음'),
+  ).toHaveCount(5)
+  await expect(apply).toBeDisabled()
+  await expect(departure).toHaveValue('2027-01-06')
+  await expect(landing).toHaveValue('2027-01-10')
+
+  for (let i = 0; i < 3; i++)
+    await dialog.getByRole('button', { name: '기준일 하루 이후' }).click()
+  await expect(
+    dialog.getByRole('table').getByRole('button', {
+      name: '출발 2027-01-07, 착륙 2027-01-13, 미계산',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(apply).toBeDisabled()
+  for (let i = 0; i < 3; i++)
+    await dialog.getByRole('button', { name: '기준일 하루 이전' }).click()
+
+  await departure.fill('2027-01-07')
+  await expect(apply).toBeEnabled()
+  await departure.fill('2027-01-06')
+  await expect(apply).toBeDisabled()
+
+  noLaunch = false
+  await dialog.getByRole('button', { name: '새로고침', exact: true }).click()
+  await expect(
+    dialog.getByRole('table').getByRole('button', {
+      name: '출발 2027-01-06, 착륙 2027-01-10, 미계산',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(apply).toBeEnabled()
+  await expect(landing).toHaveValue('2027-01-10')
+  await apply.click()
+  await expect(page).toHaveURL(/departure=2027-01-06&arrival=2027-01-10/)
+  await expect(dialog).toHaveCount(0)
+})
