@@ -57,8 +57,6 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
         clusterBadge.replace('CANDIDATE_COUNT', String(members.length)),
       )}`
       cluster.billboard.position = cluster.label.position
-      cluster.billboard.width = 128
-      cluster.billboard.height = 42
       cluster.billboard.pixelOffset = new Cartesian2(0, -14)
       cluster.billboard.disableDepthTestDistance = Number.POSITIVE_INFINITY
       cluster.label.show = false
