@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TerrainSchema } from './candidates'
 import { getJson, type RequestOptions } from './client'
 
 // 응답 스키마는 docs/api.md 의 /analysis/* 와 일치해야 한다.
@@ -9,6 +10,13 @@ const PeriodSchema = z.object({
   end: z.iso.datetime({ offset: true }),
 })
 
+const MetricsSchema = z.object({
+  visible_fraction: z.number(),
+  longest_dark_hours: z.number(),
+  windows_per_24h: z.number(),
+  mean_elevation_deg: z.number().nullable(),
+})
+
 export const AnalysisSchema = z
   .object({
     lat: z.number(),
@@ -17,12 +25,7 @@ export const AnalysisSchema = z
     end: z.iso.datetime({ offset: true }),
     step_minutes: z.number(),
     observer_height_m: z.number(),
-    metrics: z.object({
-      visible_fraction: z.number(),
-      longest_dark_hours: z.number(),
-      windows_per_24h: z.number(),
-      mean_elevation_deg: z.number().nullable(),
-    }),
+    metrics: MetricsSchema,
     horizon: z.object({
       azimuth_deg: z.array(z.number()),
       elevation_deg: z.array(z.number()),
@@ -48,6 +51,20 @@ export const AnalysisSchema = z
 export type Analysis = z.infer<typeof AnalysisSchema>
 export type Period = z.infer<typeof PeriodSchema>
 
+// 후보 비교용 요약: 위 두 분석의 metrics 와 후보 탐색과 같은 지역 지형
+export const SiteAssessmentSchema = z.object({
+  lat: z.number(),
+  lon: z.number(),
+  start: z.iso.datetime({ offset: true }),
+  end: z.iso.datetime({ offset: true }),
+  step_minutes: z.number(),
+  observer_height_m: z.number(),
+  sun: MetricsSchema,
+  earth: MetricsSchema,
+  terrain: TerrainSchema,
+})
+export type SiteAssessment = z.infer<typeof SiteAssessmentSchema>
+
 export interface AnalysisParams {
   lat: number
   lon: number
@@ -58,7 +75,7 @@ export interface AnalysisParams {
 }
 
 export function buildAnalysisPath(
-  kind: AnalysisKind,
+  kind: AnalysisKind | 'site-assessment',
   params: AnalysisParams,
 ): string {
   const query = new URLSearchParams({
@@ -82,4 +99,16 @@ export function fetchAnalysis(
     ...options,
     signal,
   })
+}
+
+export function fetchSiteAssessment(
+  params: AnalysisParams,
+  signal?: AbortSignal,
+  options: Omit<RequestOptions, 'signal'> = {},
+): Promise<SiteAssessment> {
+  return getJson(
+    buildAnalysisPath('site-assessment', params),
+    SiteAssessmentSchema,
+    { ...options, signal },
+  )
 }
