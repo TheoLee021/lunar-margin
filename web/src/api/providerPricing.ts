@@ -123,6 +123,11 @@ const ProviderOffer = z
   )
 export type ProviderOffer = z.infer<typeof ProviderOffer>
 export const CompareInputSchema = z.object({
+  source_run_id: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .nullable()
+    .optional(),
   estimate: z.boolean().optional(),
   departure_date: z.iso.date(),
   landing_date: z.iso.date(),
@@ -133,6 +138,7 @@ export const CompareInputSchema = z.object({
 })
 export type CompareInput = z.infer<typeof CompareInputSchema>
 export const ComparisonSchema = CompareInputSchema.extend({
+  terrain_excluded_reason: z.string().nullable().optional(),
   catalog_checked_on: z.iso.date(),
   minimum_estimate_usd: Amount.nullable().optional().default(null),
   minimum_usd: Amount.nullable(),
@@ -378,6 +384,8 @@ export async function fetchProviderComparison(
     result.landing_date !== request.landing_date ||
     result.mass_kg !== request.mass_kg ||
     result.delivery !== request.delivery ||
+    (request.source_run_id != null &&
+      result.source_run_id !== request.source_run_id) ||
     result.x_m !== request.x_m ||
     result.y_m !== request.y_m
   )

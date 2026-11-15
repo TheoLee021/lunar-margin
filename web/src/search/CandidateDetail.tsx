@@ -23,6 +23,7 @@ export type Selection =
 
 interface Props {
   selection: Selection
+  runId: string | undefined
   config: RunDetail['config']
   insideRoi: boolean
   onClose: () => void
@@ -56,6 +57,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export function CandidateDetail({
+  runId,
   selection,
   config,
   insideRoi,
@@ -152,6 +154,7 @@ export function CandidateDetail({
       />
 
       <ProviderComparison
+        sourceRunId={selection.kind === 'candidate' ? runId : undefined}
         x_m={
           selection.kind === 'candidate'
             ? selection.candidate.x_m

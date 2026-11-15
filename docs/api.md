@@ -434,15 +434,21 @@ ROI. Coarse-only samples, development (10km) runs, excluded and unevaluated poin
 are not included. A 500m cell is represented by its sample point; this does not
 certify conditions at every location inside that cell.
 
-For each eligible sample, native 80m DEM samples in a projected 500m-radius disk
-are used to derive slopes by centered height differences. `r` is the fraction
-with slope <=10 degrees. The price model adds landing-safety gates: no price if
-r<0.05 or the aim-point slope>10 degrees. These modeled lander limits are separate
-from the optional customer slope constraint enforced by the candidate search
-using the 250 m regional DEM slope P95.
-If terrain is unavailable or any required disk sample is missing, r is unknown:
-use destination multiplier 1.10 and count/label the fallback. A known unsafe aim
-point remains excluded even if r is unknown. Missing values are never zero-filled.
+Price eligibility is exactly the saved search eligibility above, including its
+250 m regional slope P95, 160 m baseline, DEM completeness and configured slope
+limit. Disabling the search slope filter also disables slope exclusion in price
+calculation. There is no extra 10-degree center-slope gate or 5% area gate for a
+saved search. The response includes `slope_policy` (basis `saved_search_eligibility`,
+`max_slope_degrees`, statistic `p95`, `assessment_radius_m:250`, `slope_baseline_m:160`).
+
+The existing 500 m-radius fraction of native 80 m DEM samples with slope ≤10°
+remains a **cost adjustment input only**, not an eligibility criterion. Its value
+may change the modeled price but cannot remove a search-qualified candidate.
+Missing cost terrain still uses the explicit destination multiplier 1.10 fallback.
+Legacy independent point quotes retain their existing policy; selected-candidate
+company comparisons send `source_run_id` and read the same saved fine-grid status.
+Unknown grids or mismatched landing dates return 409 instead of silently applying
+a different terrain policy.
 
 `P = F + c * m * (1 + 0.30 * (1-r)) * F_demand`, with default F=$500,000.
 The six-persona model is not connected, so F_demand=1.00 and demand_unknown=true.
@@ -788,3 +794,13 @@ RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 �
 해당 날짜에 발사편이 없거나 날짜가 미정이면 `status: no_launch`와 null 가격을
 반환하며 DEM을 계산하지 않는다. 월·연도를 임의의 출발일로 확장하지 않는다.
 회사당 지형 분석을 반복하지 않고 저장된 목적지 계수에 모델 가격 벡터를 적용한다.
+
+
+### 가격 제외 사유의 표시
+
+후보 표는 가격 API의 `excluded_reason`을 툴팁에만 숨기지 않고 가격 아래에 표시한다.
+과거 응답의 중심 경사 제외는 실제 `aim_slope_deg`와 기존 10° 한도, 저경사 면적 제외는
+`landable_fraction`과 기존 5% 한도를 함께 보여 준다. 가격 조회 실패·미산정과 구분한다.
+회사별 `/pricing/providers/compare`의 선택적 `source_run_id`는 저장 검색의 500 m 세밀 격자를
+식별한다. `terrain_excluded_reason: search_constraints_not_met`이면 그 검색의 제약 미충족이다.
+검색 실행을 전달하지 않은 지도 지점은 독립 가격 모델이며 검색 후보의 판정으로 간주하지 않는다.

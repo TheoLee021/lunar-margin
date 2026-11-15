@@ -188,3 +188,38 @@ test('aborting a busy calendar never starts another batch', async () => {
   ).rejects.toMatchObject({ name: 'AbortError' })
   expect(submissions).toBe(1)
 })
+
+test('preserves the shared search slope policy on price responses', async () => {
+  const policy = {
+    basis: 'saved_search_eligibility',
+    max_slope_degrees: 15,
+    statistic: 'p95',
+    assessment_radius_m: 250,
+    slope_baseline_m: 160,
+  }
+  const result = await fetchGridPrices('same-run', 24, 'surface', {
+    baseUrl: '',
+    fetchFn: async () =>
+      new Response(
+        JSON.stringify({
+          run_id: 'same-run',
+          landing_date: '2027-01-10',
+          mission_duration_days: 14,
+          grid_spacing_m: 500,
+          slope_policy: policy,
+          mean: null,
+          cells: [],
+          counts: {
+            fine: 0,
+            eligible: 0,
+            priced: 0,
+            terrain_excluded: 0,
+            terrain_unknown: 0,
+            unevaluated: 0,
+            coarse_ignored: 0,
+          },
+        }),
+      ),
+  })
+  expect(result).toHaveProperty('slope_policy', policy)
+})

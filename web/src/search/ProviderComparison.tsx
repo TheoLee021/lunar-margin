@@ -32,10 +32,12 @@ export function ProviderComparison({
   x_m,
   y_m,
   landingDate,
+  sourceRunId,
 }: {
   x_m: number
   y_m: number
   landingDate: string
+  sourceRunId: string | undefined
 }) {
   const params = new URLSearchParams(window.location.search)
   const candidateMass = Number(params.get('mass_kg') ?? 24)
@@ -52,6 +54,7 @@ export function ProviderComparison({
     .slice(0, 10)
   const departure = params.get('departure') ?? fallback
   const input: CompareInput = {
+    source_run_id: sourceRunId,
     estimate: true,
     departure_date: departure,
     landing_date: landingDate,
@@ -122,6 +125,22 @@ export function ProviderComparison({
               : `최저 예상 비용 ${formatPrice(data.minimum_estimate_usd)}`}
           </p>
           <div className="grid gap-2">
+            {data.terrain_excluded_reason ? (
+              <p className="text-xs text-amber-300">
+                산정 제외:{' '}
+                {data.terrain_excluded_reason === 'search_constraints_not_met'
+                  ? '선택한 탐색 실행의 후보 조건을 충족하지 않습니다.'
+                  : '독립 지점의 가격 모델 지형 조건을 충족하지 않습니다.'}
+              </p>
+            ) : data.source_run_id ? (
+              <p className="text-xs text-neutral-400">
+                지형 적격 판정: 선택한 검색 결과와 동일
+              </p>
+            ) : (
+              <p className="text-xs text-neutral-400">
+                독립 지점 가격 모델 · 저장된 임무 검색과 연동되지 않은 평가
+              </p>
+            )}
             {data.terrain_unknown ? (
               <p className="text-xs text-neutral-400">
                 지형 미산정 · 목적지 계수 ×1.10 적용

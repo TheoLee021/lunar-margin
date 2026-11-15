@@ -541,6 +541,7 @@ function RunBody({
               : `${selection.x_m.toFixed(0)},${selection.y_m.toFixed(0)}`
           }
           selection={selection}
+          runId={run.mission ? run.id : undefined}
           config={run.config}
           insideRoi={insideRoi}
           onClose={() => setSelection(null)}

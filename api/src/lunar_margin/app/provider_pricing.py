@@ -11,7 +11,14 @@ from pydantic import Field, model_validator
 
 from lunar_margin.app.candidates import SettingsDep
 from lunar_margin.app.launch_schedule import get_reader
-from lunar_margin.app.pricing import CalendarRequest, PricingDemDep, RunCargo, RunPrices, price_run
+from lunar_margin.app.pricing import (
+    CalendarRequest,
+    PricingDemDep,
+    RunCargo,
+    RunPrices,
+    price_run,
+    search_grid_eligible,
+)
 from lunar_margin.engine.candidates.mission import MissionRequest
 from lunar_margin.engine.pricing import Delivery, Terrain, terrain_at
 from lunar_margin.engine.provider_pricing import (
@@ -99,11 +106,14 @@ class ProviderCalendar(Model):
 
 
 class GridRequest(QuoteContext):
+    source_run_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     x_m: float = Field(ge=-350_000, le=350_000)
     y_m: float = Field(ge=-350_000, le=350_000)
 
 
 class GridComparison(Model):
+    source_run_id: str | None = None
+    terrain_excluded_reason: str | None = None
     catalog_checked_on: date
     departure_date: date
     landing_date: date
@@ -131,7 +141,15 @@ def get_grid_comparison(
     request: GridRequest,
     catalog: CatalogDep,
     dem: PricingDemDep,
+    settings: SettingsDep,
 ) -> GridComparison:
+    saved_eligible = (
+        search_grid_eligible(
+            request.source_run_id, settings.data_dir, request.landing_date, request.x_m, request.y_m
+        )
+        if request.source_run_id is not None
+        else None
+    )
     needs_terrain = any(
         (
             not estimate_blocked(flight, request)
@@ -152,6 +170,10 @@ def get_grid_comparison(
         (terrain.landable_fraction is not None and terrain.landable_fraction < 0.05)
         or (terrain.aim_slope_deg is not None and terrain.aim_slope_deg > 10)
     )
+    reason = "legacy_price_terrain_condition" if excluded else None
+    if saved_eligible is not None:
+        excluded = not saved_eligible
+        reason = "search_constraints_not_met" if excluded else None
     offers = compare_grid(
         catalog,
         request,
@@ -162,6 +184,8 @@ def get_grid_comparison(
     )
     values = [offer.minimum_usd for offer in offers if offer.minimum_usd is not None]
     return GridComparison(
+        source_run_id=request.source_run_id,
+        terrain_excluded_reason=reason,
         catalog_checked_on=catalog.checked_on,
         departure_date=request.departure_date,
         landing_date=request.landing_date,
