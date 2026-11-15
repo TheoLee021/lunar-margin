@@ -62,6 +62,10 @@ class ScheduleReader:
             files("lunar_margin").joinpath("launch_schedule.json").read_text()
         )
 
+    def peek(self) -> LaunchSchedule:
+        """Read the immutable last result without waiting for an external refresh."""
+        return self.data
+
     def read(self) -> LaunchSchedule:
         with self.lock:
             if time.monotonic() < self.expires:

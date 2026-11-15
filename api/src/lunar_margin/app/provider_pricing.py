@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from pydantic import Field, model_validator
 
 from lunar_margin.app.candidates import SettingsDep
+from lunar_margin.app.launch_schedule import get_reader
 from lunar_margin.app.pricing import CalendarRequest, PricingDemDep, RunCargo, RunPrices, price_run
 from lunar_margin.engine.candidates.mission import MissionRequest
 from lunar_margin.engine.pricing import Delivery, Terrain, terrain_at
@@ -26,6 +27,7 @@ from lunar_margin.engine.provider_pricing import (
     load_catalog,
     minimum_grid_prices,
 )
+from lunar_margin.engine.selected_company import CompanyModel, company_model
 from lunar_margin.pipeline.candidate_status import read_status
 
 router = APIRouter(prefix="/pricing/providers", tags=["provider pricing"])
@@ -34,11 +36,14 @@ CatalogDep = Annotated[Catalog, Depends(load_catalog)]
 
 class ProviderCalendarRequest(CalendarRequest):
     estimate: bool = False
+    selected_launch_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,160}$")
     departure_dates: list[date] = Field(min_length=1, max_length=5)
     source_run_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,120}$")
 
     @model_validator(mode="after")
     def unique_departures(self) -> Self:
+        if self.selected_launch_id is not None and not self.estimate:
+            raise ValueError("selected_launch_id is available only for demo estimates")
         if len(set(self.departure_dates)) != len(self.departure_dates):
             raise ValueError("departure_dates must be unique")
         return self
@@ -74,6 +79,7 @@ class CalendarCell(Model):
 
 class ProviderCalendar(Model):
     estimate: bool = False
+    selection: CompanyModel | None = None
     catalog_checked_on: date
     mass_kg: float
     delivery: Delivery
@@ -176,6 +182,24 @@ def get_provider_calendar(
     settings: SettingsDep,
     dem: PricingDemDep,
 ) -> ProviderCalendar:
+    selected: CompanyModel | None = None
+    if request.selected_launch_id:
+        launch = next(
+            (
+                item
+                for item in get_reader().peek().launches
+                if item.id == request.selected_launch_id
+            ),
+            None,
+        )
+        if launch is None:
+            raise HTTPException(
+                status_code=409,
+                detail="선택한 발사 일정을 찾을 수 없습니다. 목록에서 다시 선택하세요.",
+            )
+        selected = company_model(
+            catalog, launch, mass_kg=request.mass_kg, delivery=request.delivery
+        )
     dates: list[SearchDate] = []
     cells: list[CalendarCell] = []
     grids: dict[date, RunPrices] = {}
@@ -247,6 +271,8 @@ def get_provider_calendar(
                 for provider in estimate_catalog(catalog, context).providers
             }
             provider_ids: list[ProviderId] = [key for key, value in possible.items() if value]
+            if selected is not None:
+                provider_ids = [selected.company_id] if selected.company_id is not None else []
             cell = CalendarCell(
                 departure_date=departure,
                 landing_date=landing,
@@ -257,7 +283,7 @@ def get_provider_calendar(
             if not 3 <= (landing - departure).days <= 150:
                 cells.append(cell.model_copy(update={"status": "invalid_transit"}))
                 continue
-            if not provider_ids:
+            if not provider_ids and selected is None:
                 cells.append(cell)
                 continue  # Public terms are unknown: no DEM loop or six repeated searches.
             if state != "completed":
@@ -293,6 +319,13 @@ def get_provider_calendar(
                 landing,
                 tuple(sorted(flight for value in possible.values() for flight in value)),
             )
+            if selected is not None:
+                key = (landing, ("selected-company", selected.launch_id))
+            if key not in minima and selected is not None:
+                minima[key] = (
+                    selected.fixed_usd
+                    + selected.tariff_usd_per_kg * selected.billable_mass_kg * factors
+                )
             if key not in minima:
                 minima[key] = minimum_grid_prices(
                     catalog, context, x_m=x_m, y_m=y_m, destination_multipliers=factors
@@ -318,6 +351,7 @@ def get_provider_calendar(
             )
     return ProviderCalendar(
         estimate=request.estimate,
+        selection=selected,
         catalog_checked_on=catalog.checked_on,
         mass_kg=request.mass_kg,
         delivery=request.delivery,
