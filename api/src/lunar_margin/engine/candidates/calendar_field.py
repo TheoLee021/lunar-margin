@@ -22,6 +22,7 @@ from lunar_margin.engine.candidates.horizon_table import HorizonTable
 from lunar_margin.engine.dem import Dem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
 from lunar_margin.engine.metrics import visibility_series
+from lunar_margin.engine.rf import summarize_rf
 
 _contexts: list[FieldContext] = []
 _table: HorizonTable | None = None
@@ -91,6 +92,19 @@ def _rows(contexts: list[FieldContext], table: HorizonTable, job: Job) -> NDArra
             out[i, :, body * 4 : body * 4 + 4] = np.column_stack(
                 (vis.mean(axis=1), longest, windows / duration_days, means)
             )
+        if body == 1:
+            for i, ctx in enumerate(contexts):
+                if ctx.settings.rf is not None:
+                    for j, (a, b) in enumerate(zip(lat, lon, strict=True)):
+                        out[i, j, 14:17] = summarize_rf(
+                            ctx.settings.rf,
+                            ctx.earth_vectors,
+                            all_vis[j, int(cuts[i]) : int(cuts[i + 1])],
+                            ctx.settings.window,
+                            float(a),
+                            float(b),
+                            ctx.settings.observer_height_m,
+                        )
     for i, mask in enumerate(masks):
         out[i, ~mask] = MISSING_ROW
     return out

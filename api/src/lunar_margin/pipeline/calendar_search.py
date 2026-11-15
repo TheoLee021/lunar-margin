@@ -83,7 +83,12 @@ def run_search_batch(
                 config.thresholds,
                 exclude_incomplete_horizon=config.exclude_incomplete_horizon,
             )
-            scores = score_sites(field, config.weights)
+            scores = score_sites(
+                field,
+                config.weights,
+                rf=config.rf is not None,
+                duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+            )
             promoted = promotion_mask(
                 field, filtered, scores, config.thresholds, config.refine_fraction
             )

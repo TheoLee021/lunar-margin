@@ -434,15 +434,21 @@ ROI. Coarse-only samples, development (10km) runs, excluded and unevaluated poin
 are not included. A 500m cell is represented by its sample point; this does not
 certify conditions at every location inside that cell.
 
-For each eligible sample, native 80m DEM samples in a projected 500m-radius disk
-are used to derive slopes by centered height differences. `r` is the fraction
-with slope <=10 degrees. The price model adds landing-safety gates: no price if
-r<0.05 or the aim-point slope>10 degrees. These modeled lander limits are separate
-from the optional customer slope constraint enforced by the candidate search
-using the 250 m regional DEM slope P95.
-If terrain is unavailable or any required disk sample is missing, r is unknown:
-use destination multiplier 1.10 and count/label the fallback. A known unsafe aim
-point remains excluded even if r is unknown. Missing values are never zero-filled.
+Price eligibility is exactly the saved search eligibility above, including its
+250 m regional slope P95, 160 m baseline, DEM completeness and configured slope
+limit. Disabling the search slope filter also disables slope exclusion in price
+calculation. There is no extra 10-degree center-slope gate or 5% area gate for a
+saved search. The response includes `slope_policy` (basis `saved_search_eligibility`,
+`max_slope_degrees`, statistic `p95`, `assessment_radius_m:250`, `slope_baseline_m:160`).
+
+The existing 500 m-radius fraction of native 80 m DEM samples with slope ≤10°
+remains a **cost adjustment input only**, not an eligibility criterion. Its value
+may change the modeled price but cannot remove a search-qualified candidate.
+Missing cost terrain still uses the explicit destination multiplier 1.10 fallback.
+Legacy independent point quotes retain their existing policy; selected-candidate
+company comparisons send `source_run_id` and read the same saved fine-grid status.
+Unknown grids or mismatched landing dates return 409 instead of silently applying
+a different terrain policy.
 
 `P = F + c * m * (1 + 0.30 * (1-r)) * F_demand`, with default F=$500,000.
 The six-persona model is not connected, so F_demand=1.00 and demand_unknown=true.
@@ -677,6 +683,106 @@ be ranked; it does not introduce an arbitrary roughness score weight.
 RF communication changes are tracked separately; this roughness change preserves
 the existing geometric Earth-visibility metric and scoring.
 
+### 후보 상세의 지형 여유각·일조 연속성
+
+PR #43의 지형 여유각 계산과 PR #44의 일조 연속성 계산을 후보 상세에 연결한다.
+기존 API에 다음 선택 필드를 추가하며, 과거 응답에서 필드가 없을 때 프런트는 ‘미제공’으로 표시한다.
+
+- `/analysis/illumination`, `/analysis/earth-visibility`:
+  `series.terrain_clearance_deg`는 표본별 `천체 중심 고도 − 같은 방위각의 지형 수평선 고도` [°].
+  `visible_clearance_p10_deg`는 양의 여유각 표본만의 10백분위수이며, 가시 표본이 없으면 null.
+  새 필드는 계산 정밀도 그대로 제공한다. 기존 고도 배열의 표시용 반올림과 구분한다.
+- `/analysis/site-assessment`:
+  `terrain_clearance.sun_visible_p10_deg`, `earth_visible_p10_deg`로 두 천체의 여유각을 요약한다.
+  `solar_continuity.longest_sun_visible_hours` [h], `visibility_transitions` [회]를 추가한다.
+  마지막 표본은 `min(표본 간격, 요청 종료까지 남은 시간)`으로 집계한다. 예를 들어 10분 구간을
+  30분 간격으로 요청해도 연속 일조는 최대 10분이다. 중간에 차폐가 있으면 연속 구간을 분리하고,
+  시작과 끝의 가시 구간을 이어 붙이지 않는다. 전환 횟수는 실제 인접 표본 사이의 변화만 센다.
+
+후보 선택 시 요약 GET 한 번으로 두 천체의 진단을 가져온다. 상세 진단 기간은 기존 시계열과 같은
+‘임무 기간 전체 또는 시작부터 최대 1년’, 30분 간격이며 화면에 기간·간격·관측 높이를 표시한다.
+선택 변경·닫기 시 요청을 취소하고, 로딩·오류/재시도·미제공·가시 구간 없음·진짜 0을 구분한다.
+기존 시계열 보기 버튼과 분석 종류 탭은 유지한다.
+
+지형 여유각 [°]은 기하학적 LOS 진단이며 RF 링크마진 [dB]이나 신뢰구간·통신 성공률이 아니다.
+P10은 가시 구간에 조건부인 지표이므로 전체 기간의 가시율을 대체하지 않는다. 일조 연속성도
+발전량·배터리 용량·정확한 일출/일몰 시각을 예측하지 않는다.
+
+후보 결과에 PR #47의 선택적 `rf` 객체가 있으면, 저장된 `min_link_margin_db`를 별도 RF 항목에 표시한다.
+해당 객체가 없거나 값이 null이면 ‘미계산’으로 표시하며 각도에서 RF 마진을 계산하지 않는다.
+저장된 RF 값은 원래 탐색 기간의 명목 값이고, LOS 차폐 시에는 차폐 손실을 반영하지 않은 가상 LOS 값이다.
+RF 계산·필터·점수 계산은 아래의 명목 RF 통신 평가 계약을 따른다.
+### 명목 RF 통신 평가 (candidate search)
+
+새 임무 탐색은 지구 중심 방향의 지형 LOS와 RF 링크 예산을 함께 평가한다.
+`earth.*`, 지구 지도 레이어, `/analysis/earth-visibility`는 계속 **기하학적 LOS**다.
+`rf.*`는 별도 지표이며 `LOS && link_margin_db >= target_margin_db`인 시간만 통신 가능하다.
+실제 지상국 위치·가시성·일정, 지구 대기 감쇠, 멀티패스는 모델에 포함되지 않는다.
+
+`POST /candidates/search` 및 날짜별 탐색의 임무 입력에 다음 선택 필드를 추가한다.
+
+- `min_communication_fraction`: null 또는 0~1. RF 통신 가능 비율의 하한. 생략하면 하한 없음.
+- `rf`: 아래 기준값을 갖는 RF 조건 객체. 생략하면 팀에서 제공한 기준값으로 평가한다.
+  부분 객체도 가능하며 생략한 값은 기준값으로 채운다. null은 허용하지 않는다.
+
+| RF 조건 | 기준값 |
+| --- | ---: |
+| frequency_hz | 23170000000 |
+| tx_power_w | 1 |
+| tx_gain_dbi / rx_gain_dbi | 33.2 / 71.1 |
+| tx_system_loss_db / tx_pointing_loss_db | 1 / 0.3 |
+| rx_pointing_loss_db / rx_waveguide_loss_db | 0 / 0 |
+| system_noise_temp_k | 512 |
+| information_rate_bps | 230000 |
+| implementation_loss_db / target_margin_db | 3 / 3 |
+| required_esn0_db / eta_tot | -2.35 / 0.490243 |
+
+주파수·전력·잡음온도·정보율·효율은 양수, 손실·목표 마진은 0 이상이며 모든 값은 유한해야 한다.
+수신 요구전력은 `−228.60 + 10 log10(T) + 10 log10(Rb) + Es/N0 − 10 log10(eta_tot) + 구현 손실` [dBW].
+송수신 이득을 더하고 FSPL 및 시스템/지향 손실을 뺀 수신전력에서 이를 차감해 링크마진을 구한다.
+목표 마진은 판정에 한 번만 사용한다. 385,000 km 기준 링크마진은 15.688618 dB,
+목표 3 dB를 제외한 추가 손실 여유는 12.688618 dB다.
+
+기준 출처: [NASA/TM-20220013310 Fig. 5.33](https://ntrs.nasa.gov/api/citations/20220013310/downloads/TM-20220013310.pdf),
+[ETSI EN 302 307-1 V1.4.1 Table 13](https://www.etsi.org/deliver/etsi_en/302300_302399/30230701/01.04.01_60/en_30230701v010401p.pdf)
+(QPSK 1/4, normal FECFRAME, no pilots). 하드웨어·실제 링크 검증 결과를 뜻하지 않는다.
+
+`max_communication_blackout_hours`는 RF 최장 두절 한도로 적용한다.
+저장 설정에는 `thresholds.min_rf_fraction`, `thresholds.max_rf_blackout_hours`와
+모든 `config.rf` 값이 남는다. 기존 소비자용 `max_earth_blackout_hours`도 같은 한도로
+유지한다(전체 30분 구간인 임무 탐색에서 RF 한도가 이를 포함하므로 추가 탈락은 없다).
+
+각 후보의 선택적 `rf` 객체:
+
+- `fraction`: 구간 길이로 가중한 명목 통신 가능 비율.
+- `longest_blackout_hours`: LOS 차폐와 마진 부족을 합한 최장 연속 두절.
+- `evaluation_hours`, `available_hours`: 정확한 평가 시간과 통신 가능 시간.
+- `min_link_margin_db`: 전체 시점 중 최소 마진. LOS 차폐 시에도 가상 자유공간 LOS 값이며,
+  차폐를 통과하거나 실제 수신 가능한 전력을 뜻하지 않는다.
+- `required_ebn0_db`, `rx_required_dbw`: 사용한 수신 요구 조건.
+
+마지막 표본이 짧으면 남은 시간만 집계한다. 처음과 마지막의 두절을 이어 붙이지 않는다.
+`score.communication_component = (rf.fraction + 1 − rf.longest_blackout_hours / rf.evaluation_hours) / 2`.
+가능 비율과 연속성에 같은 비중을 주고, 기존 balanced/solar/earth 우선순위로 일조 성분과
+가중 평균한다. `score.earth_component`는 계속 원래 LOS 가시율이고,
+`score.communication_basis`가 `nominal_rf`일 때만 새 통신 성분을 점수에 사용한다.
+비율 하한·두절 상한 판정은 점수 계산과 별개이며 경계값을 포함한다.
+
+개별·날짜별 일괄 계산, coarse/fine 승격, 최종 순위와 공간 다양성 선정에 같은 RF 지표를 쓴다.
+JSON/CSV/simple JSON/`sites.npz`에 RF 지표를 보존한다. NPZ 실패/미적용 마스크는 uint16으로 확장한다.
+새 제외 사유는 `rf_fraction_below_min`, `rf_blackout_hours_above_max`, `rf_incomplete`다.
+RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 통과시키지 않는다.
+과거 결과는 `rf=null` 또는 필드 없음, 점수 기준은 `earth_los`다. 새 임무 캐시 버전은 `5-rf-roughness`로
+바뀌어 LOS만 평가한 결과를 재사용하지 않는다. RF 없이 직접 만든 기존 CLI `SearchConfig`는
+계속 LOS 방식으로 평가한다. 프런트 배포 전에 이 추가 API 계약을 백엔드와 함께 검토해야 한다.
+
+메인 대시보드의 TOP 5는 저장된 탐색 결과를 그대로 사용한다. RF로 계산한 실행이면
+`config.rf`의 조건, 최소 RF 가능 비율·최장 RF 두절 한도, 저장된 후보 RF 지표와 점수를 표시한다.
+과거 LOS 실행은 RF 실행으로 다시 해석하지 않는다. 선택 지점의 Earth 시계열과 타임라인은
+기존처럼 LOS를 나타내며, RF 지표는 저장된 탐색 결과임을 별도로 표시한다.
+
+최소 RF 통신 가능 비율 입력은 ‘RF 기준 조건’ 펼침 영역에 둔다. 기본 임무 입력은 기존 2줄 구성을 유지한다. RF와 거칠기 지표를 함께 보존하며, 신규 임무 캐시 버전은 `5-rf-roughness`이다.
+
 모델 날짜표 cell의 `lowest_company_names: string[]`는 각 적합 격자의 최저가 계산에
 기여한 발사사 이름이다. 동률·격자별 다른 최저가 회사는 모두 포함한다. 가격이 없는
 셀은 빈 배열이다. `lowest_launch_id: string|null`는 기여 회사가 하나일 때 해당 공개
@@ -688,3 +794,13 @@ the existing geometric Earth-visibility metric and scoring.
 해당 날짜에 발사편이 없거나 날짜가 미정이면 `status: no_launch`와 null 가격을
 반환하며 DEM을 계산하지 않는다. 월·연도를 임의의 출발일로 확장하지 않는다.
 회사당 지형 분석을 반복하지 않고 저장된 목적지 계수에 모델 가격 벡터를 적용한다.
+
+
+### 가격 제외 사유의 표시
+
+후보 표는 가격 API의 `excluded_reason`을 툴팁에만 숨기지 않고 가격 아래에 표시한다.
+과거 응답의 중심 경사 제외는 실제 `aim_slope_deg`와 기존 10° 한도, 저경사 면적 제외는
+`landable_fraction`과 기존 5% 한도를 함께 보여 준다. 가격 조회 실패·미산정과 구분한다.
+회사별 `/pricing/providers/compare`의 선택적 `source_run_id`는 저장 검색의 500 m 세밀 격자를
+식별한다. `terrain_excluded_reason: search_constraints_not_met`이면 그 검색의 제약 미충족이다.
+검색 실행을 전달하지 않은 지도 지점은 독립 가격 모델이며 검색 후보의 판정으로 간주하지 않는다.

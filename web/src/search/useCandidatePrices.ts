@@ -4,7 +4,11 @@ import { fetchGridPrices, type RunPrices } from '../api/pricing'
 
 export type CandidatePrices =
   | { status: 'loading' }
-  | { status: 'ok'; data: ReadonlyMap<string, RunPrices['cells'][number]> }
+  | {
+      status: 'ok'
+      data: ReadonlyMap<string, RunPrices['cells'][number]>
+      slopePolicy?: RunPrices['slope_policy']
+    }
   | { status: 'unavailable' }
   | { status: 'error' }
 
@@ -20,6 +24,7 @@ export function useCandidatePrices(runId: string) {
         if (!controller.signal.aborted)
           setState({
             status: 'ok',
+            slopePolicy: data.slope_policy,
             data: new Map(data.cells.map((cell) => [cell.id, cell])),
           })
       })

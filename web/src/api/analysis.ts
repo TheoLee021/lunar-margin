@@ -35,7 +35,9 @@ export const AnalysisSchema = z
       body_azimuth_deg: z.array(z.number()),
       body_elevation_deg: z.array(z.number()),
       visible: z.array(z.boolean()),
+      terrain_clearance_deg: z.array(z.number()).nullable().optional(),
     }),
+    visible_clearance_p10_deg: z.number().nonnegative().nullable().optional(),
     windows: z.array(PeriodSchema),
     dark_periods: z.array(PeriodSchema),
   })
@@ -44,7 +46,9 @@ export const AnalysisSchema = z
       horizon.azimuth_deg.length === horizon.elevation_deg.length &&
       series.times.length === series.body_azimuth_deg.length &&
       series.times.length === series.body_elevation_deg.length &&
-      series.times.length === series.visible.length,
+      series.times.length === series.visible.length &&
+      (series.terrain_clearance_deg == null ||
+        series.times.length === series.terrain_clearance_deg.length),
     { message: 'array lengths do not match' },
   )
 
@@ -53,6 +57,20 @@ export type Period = z.infer<typeof PeriodSchema>
 
 // 후보 비교용 요약: 위 두 분석의 metrics 와 후보 탐색과 같은 지역 지형
 export const SiteAssessmentSchema = z.object({
+  terrain_clearance: z
+    .object({
+      sun_visible_p10_deg: z.number().nonnegative().nullable(),
+      earth_visible_p10_deg: z.number().nonnegative().nullable(),
+    })
+    .nullable()
+    .optional(),
+  solar_continuity: z
+    .object({
+      longest_sun_visible_hours: z.number().nonnegative(),
+      visibility_transitions: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
   lat: z.number(),
   lon: z.number(),
   start: z.iso.datetime({ offset: true }),

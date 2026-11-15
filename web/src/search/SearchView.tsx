@@ -373,14 +373,16 @@ function RunBody({
         >
           <h3 className="font-semibold">입력한 임무 조건</h3>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            {missionSummaryItems(run.mission, run.config.thresholds).map(
-              (item) => (
-                <div key={item.label}>
-                  <dt className="text-xs text-neutral-400">{item.label}</dt>
-                  <dd className="text-sm">{item.value}</dd>
-                </div>
-              ),
-            )}
+            {missionSummaryItems(
+              run.mission,
+              run.config.thresholds,
+              run.config.rf != null,
+            ).map((item) => (
+              <div key={item.label}>
+                <dt className="text-xs text-neutral-400">{item.label}</dt>
+                <dd className="text-sm">{item.value}</dd>
+              </div>
+            ))}
           </dl>
         </section>
       ) : null}
@@ -539,6 +541,13 @@ function RunBody({
               : `${selection.x_m.toFixed(0)},${selection.y_m.toFixed(0)}`
           }
           selection={selection}
+          runId={
+            run.mission &&
+            run.config.grid_spacing_m === 500 &&
+            !run.id.startsWith('dev-')
+              ? run.id
+              : undefined
+          }
           config={run.config}
           insideRoi={insideRoi}
           onClose={() => setSelection(null)}

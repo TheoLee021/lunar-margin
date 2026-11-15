@@ -73,6 +73,14 @@ class Counts(BaseModel):
     coarse_ignored: int = 0
 
 
+class SearchSlopePolicy(BaseModel):
+    basis: Literal["saved_search_eligibility"] = "saved_search_eligibility"
+    max_slope_degrees: float | None
+    statistic: Literal["p95"] = "p95"
+    assessment_radius_m: float = 250.0
+    slope_baseline_m: float = 160.0
+
+
 class RunPrices(BaseModel):
     run_id: str
     landing_date: date
@@ -81,6 +89,7 @@ class RunPrices(BaseModel):
     counts: Counts
     mean: Price | None
     cells: list[GridPrice]
+    slope_policy: SearchSlopePolicy | None = None
 
 
 class CalendarDate(BaseModel):
@@ -127,9 +136,9 @@ def get_pricing_dem(settings: SettingsDep) -> PolarDem | None:
 PricingDemDep = Annotated[PolarDem | None, Depends(get_pricing_dem)]
 
 
-def price_run(
-    run_id: str, data_dir: Path, cargo: Cargo, dem: PolarDem | None, *, include_cells: bool
-) -> RunPrices:
+def read_search_price_samples(
+    run_id: str, data_dir: Path
+) -> tuple[MissionRequest, SearchConfig, dict[str, NDArray[np.float64]]]:
     root = data_dir / "candidates" / run_id
     if not root.is_dir():
         raise HTTPException(status_code=404, detail="search run not found")
@@ -167,6 +176,31 @@ def price_run(
         ) from error
     if any(arr.ndim != 1 or arr.shape != arrays["x_m"].shape for arr in arrays.values()):
         raise HTTPException(status_code=409, detail="invalid search sample arrays")
+    return mission, config, arrays
+
+
+def search_grid_eligible(
+    run_id: str, data_dir: Path, landing_date: date, x_m: float, y_m: float
+) -> bool:
+    mission, _, arrays = read_search_price_samples(run_id, data_dir)
+    if mission.landing_date != landing_date:
+        raise HTTPException(status_code=409, detail="selected search landing date does not match")
+    matches = np.flatnonzero(
+        (np.abs(arrays["x_m"] - x_m) < 0.001)
+        & (np.abs(arrays["y_m"] - y_m) < 0.001)
+        & (arrays["stage"] == 1)
+        & (arrays["spacing_m"] == 500)
+    )
+    if matches.size != 1:
+        raise HTTPException(status_code=409, detail="selected point is not a saved 500m fine grid")
+    index = int(matches[0])
+    return bool(arrays["status"][index] == 0 and arrays["skipped_mask"][index] == 0)
+
+
+def price_run(
+    run_id: str, data_dir: Path, cargo: Cargo, dem: PolarDem | None, *, include_cells: bool
+) -> RunPrices:
+    mission, config, arrays = read_search_price_samples(run_id, data_dir)
     fine = (arrays["stage"] == 1) & (arrays["spacing_m"] == 500)
     eligible = fine & (arrays["status"] == 0) & (arrays["skipped_mask"] == 0)
     counts = Counts(
@@ -186,10 +220,12 @@ def price_run(
             mass_kg=cargo.mass_kg,
             delivery=cargo.delivery,
             landable_fraction=terrain.landable_fraction,
+            terrain_eligibility_checked=True,
         )
-        reason = "landable_fraction_below_0.05" if price is None else None
-        if terrain.aim_slope_deg is not None and terrain.aim_slope_deg > 10:
-            price, reason = None, "aim_point_slope_above_10_deg"
+        # The saved search status is the sole eligibility decision, including its
+        # regional slope P95 limit (or the user explicitly disabling that limit).
+        # The legacy 500m low-slope fraction affects cost only, never eligibility.
+        reason = None
         if price is None:
             counts.terrain_excluded += 1
         else:
@@ -236,6 +272,9 @@ def price_run(
         counts=counts,
         mean=mean,
         cells=cells,
+        slope_policy=SearchSlopePolicy(
+            max_slope_degrees=config.thresholds.max_terrain_slope_degrees
+        ),
     )
 
 

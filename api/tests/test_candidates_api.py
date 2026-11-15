@@ -404,3 +404,31 @@ def test_status_exposes_recorded_timing_without_restarting_the_clock(tmp_path: P
     body = client_for(tmp_path).get("/candidates/runs/timed/status").json()
     assert body["elapsed_seconds"] == 12.25
     assert body["completed_at"] == "2026-11-14T20:00:12+00:00"
+
+
+def test_saved_rf_result_is_preserved_for_separate_margin_display(
+    served: Path, tmp_path: Path
+) -> None:
+    import json
+    import shutil
+
+    root = tmp_path / "input"
+    shutil.copytree(served, root)
+    path = root / "candidates/demo/candidates.json"
+    doc = json.loads(path.read_text())
+    doc["candidates"][0]["rf"] = {
+        "fraction": 0.8,
+        "longest_blackout_hours": 6,
+        "min_link_margin_db": 15.688618,
+        "required_ebn0_db": 0.745886,
+        "rx_required_dbw": -144.144136,
+        "evaluation_hours": 24,
+        "available_hours": 19.2,
+    }
+    doc["candidates"][0]["score"].update(
+        communication_basis="nominal_rf", communication_component=0.8
+    )
+    path.write_text(json.dumps(doc))
+    response = client_for(root).get("/candidates/runs/demo")
+    assert response.status_code == 200
+    assert response.json()["candidates"][0]["rf"]["min_link_margin_db"] == 15.688618

@@ -80,13 +80,14 @@ def quote(
     delivery: Delivery,
     landable_fraction: float | None,
     persona_count: int | None = None,
+    terrain_eligibility_checked: bool = False,
 ) -> Price | None:
     if not math.isfinite(mass_kg) or mass_kg <= 0:
         raise ValueError("mass_kg must be finite and positive")
     if landable_fraction is not None:
         if not math.isfinite(landable_fraction) or not 0 <= landable_fraction <= 1:
             raise ValueError("landable_fraction must be between 0 and 1")
-        if landable_fraction < 0.05:
+        if not terrain_eligibility_checked and landable_fraction < 0.05:
             return None
     if persona_count is not None and (not 1 <= persona_count <= 6):
         raise ValueError("persona_count must be 1..6, or None when unknown")

@@ -60,6 +60,16 @@ export const RunPricesSchema = z
     landing_date: z.iso.date(),
     mission_duration_days: z.number().int().positive(),
     grid_spacing_m: z.literal(500),
+    slope_policy: z
+      .object({
+        basis: z.literal('saved_search_eligibility'),
+        max_slope_degrees: z.number().positive().max(90).nullable(),
+        statistic: z.literal('p95'),
+        assessment_radius_m: z.number().positive(),
+        slope_baseline_m: z.number().positive(),
+      })
+      .nullable()
+      .optional(),
     counts: Counts,
     mean: PriceSchema.nullable(),
     cells: z.array(

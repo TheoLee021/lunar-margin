@@ -35,7 +35,7 @@ from lunar_margin.engine.candidates.grid import SitePoints, polar_grid, refine_p
 from lunar_margin.engine.candidates.horizon_table import find_table
 from lunar_margin.engine.candidates.mission import MissionRequest, plan_search
 from lunar_margin.engine.candidates.projection import polar_radius_m
-from lunar_margin.engine.candidates.ranking import RankScores, score_sites
+from lunar_margin.engine.candidates.ranking import RankScores, communication_component, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
 from lunar_margin.engine.ephemeris import load_kernels
@@ -55,6 +55,7 @@ from lunar_margin.pipeline.candidate_schema import (
     Eligibility,
     KernelSource,
     MapMeta,
+    RFMetrics,
     RunInfo,
     Score,
     Selection,
@@ -76,6 +77,9 @@ _REASON_KEYS = (
     "sun_dark_hours_above_max",
     "earth_fraction_below_min",
     "earth_blackout_hours_above_max",
+    "rf_incomplete",
+    "rf_fraction_below_min",
+    "rf_blackout_hours_above_max",
     "horizon_incomplete",
     "terrain_slope_above_max",
     "terrain_roughness_above_max",
@@ -152,6 +156,7 @@ def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettin
         azimuth_step_deg=azimuth_step_deg,
         max_range_m=config.max_range_m,
         observer_height_m=config.observer_height_m,
+        rf=config.rf,
         assess_terrain=(
             config.thresholds.max_terrain_slope_degrees is not None
             or config.thresholds.max_terrain_roughness_m is not None
@@ -306,7 +311,12 @@ def run_search(
             config.thresholds,
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
-        coarse_scores = score_sites(coarse_field, config.weights)
+        coarse_scores = score_sites(
+            coarse_field,
+            config.weights,
+            rf=config.rf is not None,
+            duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+        )
         promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
         )
@@ -341,7 +351,12 @@ def run_search(
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
     )
-    fine_scores = score_sites(fine_field, config.weights)
+    fine_scores = score_sites(
+        fine_field,
+        config.weights,
+        rf=config.rf is not None,
+        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+    )
     eligible_f = (fine_filter.status == Status.ELIGIBLE) & ~np.isnan(fine_scores.total)
     fine_region = label_regions(fine, eligible_f)
     selection = select_diverse(
@@ -398,8 +413,8 @@ def run_search(
     field = MetricField.concat(parts_field)
     stage: NDArray[np.int8] = np.concatenate(stage_parts)
     status: NDArray[np.int8] = np.concatenate(status_parts)
-    failed: NDArray[np.uint8] = np.concatenate(failed_parts)
-    skipped: NDArray[np.uint8] = np.concatenate(skipped_parts)
+    failed: NDArray[np.uint16] = np.concatenate(failed_parts)
+    skipped: NDArray[np.uint16] = np.concatenate(skipped_parts)
     scores = RankScores(
         total=np.concatenate([s.total for s in score_parts]),
         sun_component=np.concatenate([s.sun_component for s in score_parts]),
@@ -457,7 +472,14 @@ def run_search(
         )
 
     distributions: dict[str, dict[str, float]] = {}
-    names = ("sun_fraction", "sun_longest_dark_h", "earth_fraction", "earth_longest_blackout_h")
+    names = (
+        "sun_fraction",
+        "sun_longest_dark_h",
+        "earth_fraction",
+        "earth_longest_blackout_h",
+        "rf_fraction",
+        "rf_longest_blackout_h",
+    )
     for name in names:
         values: NDArray[np.float64] = getattr(field, name)[field.computed]
         values = values[~np.isnan(values)]
@@ -575,6 +597,24 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
             windows_per_24h=_json_float(f.sun_windows_per_24h[k]),
             mean_elevation_deg=_json_float(f.sun_mean_elevation_deg[k]),
         ),
+        rf=None
+        if outcome.config.rf is None
+        else RFMetrics(
+            fraction=_json_float(f.rf_fraction[k]),
+            longest_blackout_hours=_json_float(f.rf_longest_blackout_h[k]),
+            min_link_margin_db=_json_float(f.rf_min_link_margin_db[k]),
+            required_ebn0_db=outcome.config.rf.required_ebn0_db,
+            rx_required_dbw=outcome.config.rf.rx_required_dbw,
+            evaluation_hours=(
+                outcome.config.window.end - outcome.config.window.start
+            ).total_seconds()
+            / 3600,
+            available_hours=_json_float(
+                f.rf_fraction[k]
+                * (outcome.config.window.end - outcome.config.window.start).total_seconds()
+                / 3600
+            ),
+        ),
         earth=EarthMetrics(
             fraction=_json_float(f.earth_fraction[k]),
             longest_blackout_hours=_json_float(f.earth_longest_blackout_h[k]),
@@ -594,6 +634,17 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
             total=_json_float(sc.total[k]),
             sun_component=_json_float(sc.sun_component[k]),
             earth_component=_json_float(sc.earth_component[k]),
+            communication_basis="nominal_rf" if outcome.config.rf is not None else "earth_los",
+            communication_component=_json_float(
+                communication_component(
+                    f,
+                    rf=outcome.config.rf is not None,
+                    duration_hours=(
+                        outcome.config.window.end - outcome.config.window.start
+                    ).total_seconds()
+                    / 3600,
+                )[k]
+            ),
             components_used=int(sc.components_used[k]),
         ),
         region_id=int(outcome.region_id[k]),
@@ -670,6 +721,9 @@ def write_outputs(outcome: SearchOutcome, out_dir: Path) -> None:
         sun_longest_dark_h=outcome.field.sun_longest_dark_h,
         earth_fraction=outcome.field.earth_fraction,
         earth_longest_blackout_h=outcome.field.earth_longest_blackout_h,
+        rf_fraction=outcome.field.rf_fraction,
+        rf_longest_blackout_h=outcome.field.rf_longest_blackout_h,
+        rf_min_link_margin_db=outcome.field.rf_min_link_margin_db,
         horizon_complete=outcome.field.horizon_complete,
         terrain_slope_p95_deg=outcome.field.terrain_slope_p95_deg,
         terrain_roughness_p95_m=outcome.field.terrain_roughness_p95_m,

@@ -14,6 +14,7 @@ import {
   scoreText,
 } from './derive'
 import { thresholdsFor } from './stepCopy'
+import { CandidateDiagnostics } from './CandidateDiagnostics'
 import { ProviderComparison } from './ProviderComparison'
 
 export type Selection =
@@ -22,6 +23,7 @@ export type Selection =
 
 interface Props {
   selection: Selection
+  runId: string | undefined
   config: RunDetail['config']
   insideRoi: boolean
   onClose: () => void
@@ -55,6 +57,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export function CandidateDetail({
+  runId,
   selection,
   config,
   insideRoi,
@@ -134,7 +137,24 @@ export function CandidateDetail({
         </p>
       )}
 
+      <CandidateDiagnostics
+        params={{
+          lat: Number(lat.toFixed(6)),
+          lon: Number(lon.toFixed(6)),
+          ...detailPeriod(config.window),
+          step_minutes: 30,
+          observer_height_m: config.observer_height_m,
+        }}
+        enabled={analyzable}
+        rfMargin={
+          selection.kind === 'candidate'
+            ? selection.candidate.rf?.min_link_margin_db
+            : undefined
+        }
+      />
+
       <ProviderComparison
+        sourceRunId={selection.kind === 'candidate' ? runId : undefined}
         x_m={
           selection.kind === 'candidate'
             ? selection.candidate.x_m
@@ -246,7 +266,7 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
         </div>
         <div>
           <h4 className="mb-1 text-xs font-semibold text-sky-300">
-            지구 직접 통신
+            지구 가시성 · 지형 LOS
           </h4>
           <dl>
             <Row
@@ -254,11 +274,11 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
               value={fractionText(candidate.earth.fraction)}
             />
             <Row
-              label="최장 통신 두절"
+              label="최장 지구 차폐"
               value={hoursText(candidate.earth.longest_blackout_hours)}
             />
             <Row
-              label="24시간당 통신 가능 구간"
+              label="24시간당 지구 가시 구간"
               value={
                 candidate.earth.windows_per_24h === null
                   ? '—'
@@ -274,6 +294,39 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
       </div>
 
       <div className="flex flex-col gap-4 text-xs">
+        <div>
+          <h4 className="mb-1 font-semibold text-sky-300">명목 RF 통신</h4>
+          {candidate.rf ? (
+            <>
+              <dl>
+                <Row
+                  label="RF 통신 가능 비율"
+                  value={fractionText(candidate.rf.fraction)}
+                />
+                <Row
+                  label="최장 연속 두절"
+                  value={hoursText(candidate.rf.longest_blackout_hours)}
+                />
+                <Row
+                  label="통신 가능 시간"
+                  value={hoursText(candidate.rf.available_hours)}
+                />
+                <Row
+                  label="평가 시간"
+                  value={hoursText(candidate.rf.evaluation_hours)}
+                />
+              </dl>
+              <p className="mt-1 text-neutral-400">
+                LOS 차폐 시 통신 불가. 마진은 차폐 손실을 제외한 가상 LOS
+                값입니다. 실제 지상국·일정·대기·멀티패스는 반영하지 않습니다.
+              </p>
+            </>
+          ) : (
+            <p className="text-neutral-400">
+              이 실행은 RF를 평가하지 않았습니다.
+            </p>
+          )}
+        </div>
         <div>
           <h4 className="mb-1 font-semibold text-neutral-200">지역 지형</h4>
           {candidate.terrain ? (
@@ -316,7 +369,21 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
           <dl>
             <Row label="종합 점수" value={scoreText(score.total)} />
             <Row label="일조 성분" value={scoreText(score.sun_component)} />
-            <Row label="지구 성분" value={scoreText(score.earth_component)} />
+            <Row
+              label="지구 LOS 성분"
+              value={scoreText(score.earth_component)}
+            />
+            {score.communication_basis === 'nominal_rf' ? (
+              <>
+                <Row
+                  label="RF 통신 점수 성분"
+                  value={scoreText(score.communication_component ?? null)}
+                />
+                <p className="mt-1 text-neutral-400">
+                  통신 성분 = (RF 가능 비율 + 1 − 최장 두절 / 평가 시간) / 2
+                </p>
+              </>
+            ) : null}
           </dl>
           {score.components_used < 2 ? (
             <p className="mt-1 text-neutral-500">

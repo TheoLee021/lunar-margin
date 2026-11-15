@@ -319,3 +319,17 @@ it('sends an explicit roughness limit in meters and rejects invalid input', () =
     parseMissionForm({ ...DEFAULT_MISSION_VALUES, maxRoughnessM: '-1' }).ok,
   ).toBe(false)
 })
+
+it('sends and copies the RF fraction threshold when selected', () => {
+  const result = parseMissionForm({
+    ...DEFAULT_MISSION_VALUES,
+    minCommunicationPercent: '80',
+  })
+  expect(result.ok).toBe(true)
+  if (!result.ok) return
+  expect(result.request).toHaveProperty('min_communication_fraction', 0.8)
+  expect(JSON.parse(missionRequestJson(result.request))).toHaveProperty(
+    'min_communication_fraction',
+    0.8,
+  )
+})

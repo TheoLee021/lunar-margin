@@ -13,10 +13,12 @@ from numpy.typing import NDArray
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from lunar_margin.app.settings import Settings
+from lunar_margin.engine.clearance import terrain_clearance_diagnostics
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.engine.metrics import SiteAnalysis, VisibilityMetrics, analyze_site, find_runs
 from lunar_margin.engine.site_characteristics import characterize_region
+from lunar_margin.engine.solar_continuity import summarize_solar_continuity
 from lunar_margin.pipeline.candidate_schema import TerrainMetrics
 from lunar_margin.pipeline.sources import DEM_SOURCES
 
@@ -60,6 +62,7 @@ class Horizon(BaseModel):
 
 
 class Series(BaseModel):
+    terrain_clearance_deg: list[float] | None = None
     times: list[str]
     body_azimuth_deg: list[float]
     body_elevation_deg: list[float]
@@ -72,6 +75,7 @@ class Period(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
+    visible_clearance_p10_deg: float | None = None
     lat: float
     lon: float
     start: str
@@ -85,6 +89,16 @@ class AnalysisResponse(BaseModel):
     dark_periods: list[Period]
 
 
+class SolarContinuityMetrics(BaseModel):
+    longest_sun_visible_hours: float
+    visibility_transitions: int
+
+
+class TerrainClearanceMetrics(BaseModel):
+    sun_visible_p10_deg: float | None
+    earth_visible_p10_deg: float | None
+
+
 class SiteAssessment(BaseModel):
     """후보 비교용 요약. 시계열 없이 일조·지구 지표와 250 m 지역 지형만 담는다."""
 
@@ -94,6 +108,8 @@ class SiteAssessment(BaseModel):
     end: str
     step_minutes: int
     observer_height_m: float
+    terrain_clearance: TerrainClearanceMetrics | None = None
+    solar_continuity: SolarContinuityMetrics | None = None
     sun: Metrics
     earth: Metrics
     terrain: TerrainMetrics
@@ -182,9 +198,15 @@ def _metrics(metrics: VisibilityMetrics) -> Metrics:
 def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisResponse:
     try:
         analysis = analyzer(kind, query)
+        clearance = terrain_clearance_diagnostics(
+            analysis.horizon,
+            analysis.body_azimuth_deg,
+            analysis.body_elevation_deg,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return AnalysisResponse(
+        visible_clearance_p10_deg=clearance.visible_clearance_p10_deg,
         lat=query.lat,
         lon=query.lon,
         start=_utc(query.start),
@@ -197,6 +219,7 @@ def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisRe
             elevation_deg=_round(analysis.horizon.elevation_deg),
         ),
         series=Series(
+            terrain_clearance_deg=clearance.clearance_deg.tolist(),
             times=[_utc(t) for t in analysis.times],
             body_azimuth_deg=_round(analysis.body_azimuth_deg),
             body_elevation_deg=_round(analysis.body_elevation_deg),
@@ -232,6 +255,21 @@ def site_assessment(
         sun = analyzer("SUN", query)
         earth = analyzer("EARTH", query)
         region = characterize_region(dem, query.lat, query.lon)
+        sun_clearance = terrain_clearance_diagnostics(
+            sun.horizon,
+            sun.body_azimuth_deg,
+            sun.body_elevation_deg,
+        )
+        earth_clearance = terrain_clearance_diagnostics(
+            earth.horizon,
+            earth.body_azimuth_deg,
+            earth.body_elevation_deg,
+        )
+        continuity = summarize_solar_continuity(
+            sun.visible,
+            sun.step_minutes,
+            duration_minutes=(query.end - query.start).total_seconds() / 60,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return SiteAssessment(
@@ -241,6 +279,11 @@ def site_assessment(
         end=_utc(query.end),
         step_minutes=query.step_minutes,
         observer_height_m=query.observer_height_m,
+        terrain_clearance=TerrainClearanceMetrics(
+            sun_visible_p10_deg=sun_clearance.visible_clearance_p10_deg,
+            earth_visible_p10_deg=earth_clearance.visible_clearance_p10_deg,
+        ),
+        solar_continuity=SolarContinuityMetrics(**vars(continuity)),
         sun=_metrics(sun.metrics),
         earth=_metrics(earth.metrics),
         terrain=TerrainMetrics(

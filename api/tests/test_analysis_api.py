@@ -151,3 +151,31 @@ def test_real_data_end_to_end(data_dir: Path) -> None:
     assert body["metrics"]["visible_fraction"] > 0.9  # Malapert는 지구가 거의 항상 보인다
     assert len(body["series"]["times"]) == 31 * 24  # step_minutes=60
     assert len(body["horizon"]["azimuth_deg"]) == 360
+
+
+def test_clearance_series_and_p10_use_geometric_angles_without_rf() -> None:
+    def measured(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
+        return SiteAnalysis(
+            metrics=VisibilityMetrics(0.4, 1.0, 1.0, 1.0),
+            horizon=HorizonProfile(
+                np.array([0.0, 90.0, 180.0, 270.0]), np.array([0.0, 2.0, 4.0, 2.0])
+            ),
+            times=[query.start + timedelta(hours=i) for i in range(5)],
+            body_azimuth_deg=np.array([0.0, 90.0, 180.0, 315.0, -45.0]),
+            body_elevation_deg=np.array([-1.0, 4.0, 4.0, 2.0, 0.0]),
+            visible=np.array([False, True, False, True, False]),
+            step_minutes=60,
+        )
+
+    app = create_app(Settings())
+    app.dependency_overrides[get_analyzer] = lambda: measured
+    client = TestClient(app)
+    for target in ("illumination", "earth-visibility"):
+        response = client.get(
+            f"/analysis/{target}", params={**PARAMS, "end": "2027-01-01T05:00:00Z"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["series"]["terrain_clearance_deg"] == [-1.0, 2.0, 0.0, 1.0, -1.0]
+        assert body["visible_clearance_p10_deg"] == pytest.approx(1.1)
+        assert body["series"]["visible"] == [False, True, False, True, False]

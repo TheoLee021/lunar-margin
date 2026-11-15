@@ -35,6 +35,9 @@ export function MissionWorkspace({
   const selected = sites.find((site) => site.id === selection.siteId)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
+  const selectedCandidate = run?.candidates.find(
+    (candidate) => candidate.id === selected?.id,
+  )
   const searchUrl = new URL(window.location.href)
   searchUrl.searchParams.set('view', 'search')
   searchUrl.searchParams.delete('planner')
@@ -89,10 +92,14 @@ export function MissionWorkspace({
                       : '시간'}
                   </div>
                   <div>
-                    최장 지구 차폐 ≤{' '}
-                    {run.config.thresholds.max_earth_blackout_hours ??
+                    {run.config.rf ? 'RF 최장 두절' : '최장 지구 차폐'} ≤{' '}
+                    {(run.config.rf
+                      ? run.config.thresholds.max_rf_blackout_hours
+                      : run.config.thresholds.max_earth_blackout_hours) ??
                       '제한 없음'}
-                    {run.config.thresholds.max_earth_blackout_hours === null
+                    {(run.config.rf
+                      ? run.config.thresholds.max_rf_blackout_hours
+                      : run.config.thresholds.max_earth_blackout_hours) == null
                       ? ''
                       : '시간'}
                   </div>
@@ -102,10 +109,18 @@ export function MissionWorkspace({
                       ? '제한 없음'
                       : `${run.config.thresholds.max_terrain_slope_degrees}°`}
                   </div>
+                  {run.config.rf ? (
+                    <div>
+                      최소 RF 통신 가능 비율{' '}
+                      {run.config.thresholds.min_rf_fraction == null
+                        ? '제한 없음'
+                        : `${run.config.thresholds.min_rf_fraction * 100}%`}
+                    </div>
+                  ) : null}
                   <div>관측 높이 {run.config.observer_height_m} m</div>
                   <div>
-                    일조·지구 가시성 가중치 {run.config.weights.sun} :{' '}
-                    {run.config.weights.earth}
+                    일조·{run.config.rf ? 'RF 통신' : '지구 가시성'} 가중치{' '}
+                    {run.config.weights.sun} : {run.config.weights.earth}
                   </div>
                 </div>
               </section>
@@ -206,6 +221,31 @@ export function MissionWorkspace({
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
               <MissionMetrics result={analysis} />
+              {selectedCandidate?.rf ? (
+                <section
+                  aria-label="저장된 RF 통신 평가"
+                  className="mt-3 border-t border-white/10 pt-3 text-xs text-sky-300"
+                >
+                  <h3 className="font-semibold">
+                    명목 RF 통신 · 저장된 탐색 결과
+                  </h3>
+                  <p>
+                    통신 가능 비율{' '}
+                    {selectedCandidate.rf.fraction == null
+                      ? '—'
+                      : `${(selectedCandidate.rf.fraction * 100).toFixed(1)}%`}{' '}
+                    · 최장 두절{' '}
+                    {selectedCandidate.rf.longest_blackout_hours?.toFixed(1) ??
+                      '—'}
+                    시간
+                  </p>
+                  <p className="mt-1 text-[10px] text-neutral-400">
+                    LOS 차폐 시 통신 불가. 가능 비율과 최장 두절을 순위 점수에
+                    함께 반영합니다. 실제 지상국·일정·대기·멀티패스는 반영하지
+                    않습니다.
+                  </p>
+                </section>
+              ) : null}
               {analysis.kind === 'ready' ? (
                 <section
                   className="mission-timeline-panel mt-4 border-t border-white/10 pt-4"

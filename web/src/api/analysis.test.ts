@@ -158,3 +158,26 @@ describe('fetchSiteAssessment', () => {
     expect(result.terrain.slope_p95_deg).toBe(6.1)
   })
 })
+
+it('preserves candidate clearance and solar-continuity diagnostics from the API', async () => {
+  const body = {
+    ...assessment(),
+    terrain_clearance: {
+      sun_visible_p10_deg: 0.001,
+      earth_visible_p10_deg: null,
+    },
+    solar_continuity: {
+      longest_sun_visible_hours: 1 / 6,
+      visibility_transitions: 0,
+    },
+  }
+  const result = await fetchSiteAssessment(params, undefined, {
+    fetchFn: () => Promise.resolve(new Response(JSON.stringify(body))),
+  })
+  expect(result).toHaveProperty('terrain_clearance.earth_visible_p10_deg', null)
+  expect(result).toHaveProperty(
+    'solar_continuity.longest_sun_visible_hours',
+    1 / 6,
+  )
+  expect(result).toHaveProperty('solar_continuity.visibility_transitions', 0)
+})
