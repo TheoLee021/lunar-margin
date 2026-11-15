@@ -531,3 +531,72 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 ### POST /reservations/{id}/cancel
 
 운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+
+### 명목 RF 통신 평가 (candidate search)
+
+새 임무 탐색은 지구 중심 방향의 지형 LOS와 RF 링크 예산을 함께 평가한다.
+`earth.*`, 지구 지도 레이어, `/analysis/earth-visibility`는 계속 **기하학적 LOS**다.
+`rf.*`는 별도 지표이며 `LOS && link_margin_db >= target_margin_db`인 시간만 통신 가능하다.
+실제 지상국 위치·가시성·일정, 지구 대기 감쇠, 멀티패스는 모델에 포함되지 않는다.
+
+`POST /candidates/search` 및 날짜별 탐색의 임무 입력에 다음 선택 필드를 추가한다.
+
+- `min_communication_fraction`: null 또는 0~1. RF 통신 가능 비율의 하한. 생략하면 하한 없음.
+- `rf`: 아래 기준값을 갖는 RF 조건 객체. 생략하면 팀에서 제공한 기준값으로 평가한다.
+  부분 객체도 가능하며 생략한 값은 기준값으로 채운다. null은 허용하지 않는다.
+
+| RF 조건 | 기준값 |
+| --- | ---: |
+| frequency_hz | 23170000000 |
+| tx_power_w | 1 |
+| tx_gain_dbi / rx_gain_dbi | 33.2 / 71.1 |
+| tx_system_loss_db / tx_pointing_loss_db | 1 / 0.3 |
+| rx_pointing_loss_db / rx_waveguide_loss_db | 0 / 0 |
+| system_noise_temp_k | 512 |
+| information_rate_bps | 230000 |
+| implementation_loss_db / target_margin_db | 3 / 3 |
+| required_esn0_db / eta_tot | -2.35 / 0.490243 |
+
+주파수·전력·잡음온도·정보율·효율은 양수, 손실·목표 마진은 0 이상이며 모든 값은 유한해야 한다.
+수신 요구전력은 `−228.60 + 10 log10(T) + 10 log10(Rb) + Es/N0 − 10 log10(eta_tot) + 구현 손실` [dBW].
+송수신 이득을 더하고 FSPL 및 시스템/지향 손실을 뺀 수신전력에서 이를 차감해 링크마진을 구한다.
+목표 마진은 판정에 한 번만 사용한다. 385,000 km 기준 링크마진은 15.688618 dB,
+목표 3 dB를 제외한 추가 손실 여유는 12.688618 dB다.
+
+기준 출처: [NASA/TM-20220013310 Fig. 5.33](https://ntrs.nasa.gov/api/citations/20220013310/downloads/TM-20220013310.pdf),
+[ETSI EN 302 307-1 V1.4.1 Table 13](https://www.etsi.org/deliver/etsi_en/302300_302399/30230701/01.04.01_60/en_30230701v010401p.pdf)
+(QPSK 1/4, normal FECFRAME, no pilots). 하드웨어·실제 링크 검증 결과를 뜻하지 않는다.
+
+`max_communication_blackout_hours`는 RF 최장 두절 한도로 적용한다.
+저장 설정에는 `thresholds.min_rf_fraction`, `thresholds.max_rf_blackout_hours`와
+모든 `config.rf` 값이 남는다. 기존 소비자용 `max_earth_blackout_hours`도 같은 한도로
+유지한다(전체 30분 구간인 임무 탐색에서 RF 한도가 이를 포함하므로 추가 탈락은 없다).
+
+각 후보의 선택적 `rf` 객체:
+
+- `fraction`: 구간 길이로 가중한 명목 통신 가능 비율.
+- `longest_blackout_hours`: LOS 차폐와 마진 부족을 합한 최장 연속 두절.
+- `evaluation_hours`, `available_hours`: 정확한 평가 시간과 통신 가능 시간.
+- `min_link_margin_db`: 전체 시점 중 최소 마진. LOS 차폐 시에도 가상 자유공간 LOS 값이며,
+  차폐를 통과하거나 실제 수신 가능한 전력을 뜻하지 않는다.
+- `required_ebn0_db`, `rx_required_dbw`: 사용한 수신 요구 조건.
+
+마지막 표본이 짧으면 남은 시간만 집계한다. 처음과 마지막의 두절을 이어 붙이지 않는다.
+`score.communication_component = (rf.fraction + 1 − rf.longest_blackout_hours / rf.evaluation_hours) / 2`.
+가능 비율과 연속성에 같은 비중을 주고, 기존 balanced/solar/earth 우선순위로 일조 성분과
+가중 평균한다. `score.earth_component`는 계속 원래 LOS 가시율이고,
+`score.communication_basis`가 `nominal_rf`일 때만 새 통신 성분을 점수에 사용한다.
+비율 하한·두절 상한 판정은 점수 계산과 별개이며 경계값을 포함한다.
+
+개별·날짜별 일괄 계산, coarse/fine 승격, 최종 순위와 공간 다양성 선정에 같은 RF 지표를 쓴다.
+JSON/CSV/simple JSON/`sites.npz`에 RF 지표를 보존한다. NPZ 실패/미적용 마스크는 uint16으로 확장한다.
+새 제외 사유는 `rf_fraction_below_min`, `rf_blackout_hours_above_max`, `rf_incomplete`다.
+RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 통과시키지 않는다.
+과거 결과는 `rf=null` 또는 필드 없음, 점수 기준은 `earth_los`다. 새 임무 캐시 버전은 `4-rf`로
+바뀌어 LOS만 평가한 결과를 재사용하지 않는다. RF 없이 직접 만든 기존 CLI `SearchConfig`는
+계속 LOS 방식으로 평가한다. 프런트 배포 전에 이 추가 API 계약을 백엔드와 함께 검토해야 한다.
+
+메인 대시보드의 TOP 5는 저장된 탐색 결과를 그대로 사용한다. RF로 계산한 실행이면
+`config.rf`의 조건, 최소 RF 가능 비율·최장 RF 두절 한도, 저장된 후보 RF 지표와 점수를 표시한다.
+과거 LOS 실행은 RF 실행으로 다시 해석하지 않는다. 선택 지점의 Earth 시계열과 타임라인은
+기존처럼 LOS를 나타내며, RF 지표는 저장된 탐색 결과임을 별도로 표시한다.

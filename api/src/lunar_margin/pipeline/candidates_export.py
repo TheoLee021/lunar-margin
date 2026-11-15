@@ -32,11 +32,15 @@ class SimpleCandidate(BaseModel):
     score: float | None
     region_id: int
     horizon_complete: bool
+    rf_fraction: float | None = None
+    rf_longest_blackout_hours: float | None = None
 
 
 def simple_candidates(document: CandidatesDocument) -> list[SimpleCandidate]:
     return [
         SimpleCandidate(
+            rf_fraction=c.rf.fraction if c.rf else None,
+            rf_longest_blackout_hours=c.rf.longest_blackout_hours if c.rf else None,
             rank=c.rank,
             id=c.id,
             lat=round(c.lat_deg, 3),

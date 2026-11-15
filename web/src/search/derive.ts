@@ -139,6 +139,9 @@ export function funnelSteps(
 }
 
 const REASON_LABELS: Readonly<Record<string, string>> = {
+  rf_incomplete: 'RF 통신 지표를 계산하지 못함',
+  rf_fraction_below_min: 'RF 통신 가능 비율이 최소 기준보다 낮음',
+  rf_blackout_hours_above_max: 'RF 최장 두절이 허용 시간보다 김',
   sun_fraction_below_min: '일조율이 최소 기준보다 낮음',
   sun_dark_hours_above_max: '최장 암흑이 허용 시간보다 김',
   earth_fraction_below_min: '지구 가시율이 최소 기준보다 낮음',
@@ -294,7 +297,17 @@ export function nextStepIndex(
 // ---------- 후보 표 ----------
 
 export type SortKey =
-  'rank' | 'id' | 'lat' | 'lon' | 'sun' | 'earth' | 'slope' | 'score' | 'region'
+  | 'rank'
+  | 'id'
+  | 'lat'
+  | 'lon'
+  | 'sun'
+  | 'earth'
+  | 'rf'
+  | 'rfBlackout'
+  | 'slope'
+  | 'score'
+  | 'region'
 export type SortDir = 'asc' | 'desc'
 
 function sortValue(candidate: Candidate, key: SortKey): number | string | null {
@@ -311,6 +324,10 @@ function sortValue(candidate: Candidate, key: SortKey): number | string | null {
       return candidate.sun.fraction
     case 'earth':
       return candidate.earth.fraction
+    case 'rf':
+      return candidate.rf?.fraction ?? null
+    case 'rfBlackout':
+      return candidate.rf?.longest_blackout_hours ?? null
     case 'slope':
       return candidate.terrain?.slope_p95_deg ?? null
     case 'score':

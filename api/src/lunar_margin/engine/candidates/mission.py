@@ -19,6 +19,7 @@ from lunar_margin.engine.candidates.config import (
     Thresholds,
     Weights,
 )
+from lunar_margin.engine.rf import RFScenario
 
 # 우선순위별 점수 가중치 (일조, 지구).
 # 값이 바뀌면 같은 입력의 결과가 달라지므로 PLAN_VERSION도 함께 올린다
@@ -27,7 +28,7 @@ PRIORITY_WEIGHTS: dict[str, tuple[float, float]] = {
     "solar": (0.75, 0.25),
     "earth": (0.25, 0.75),
 }
-PLAN_VERSION = "2"  # Regional terrain slope is now enforced; never reuse pre-slope runs.
+PLAN_VERSION = "4-rf"  # RF communication scoring and filters must never reuse LOS-only runs.
 # 임무 기간은 짧으므로 30분 간격이면 24시간·6시간 한도를 충분히 가릴 수 있다
 MISSION_STEP_MINUTES = 30
 
@@ -35,6 +36,8 @@ MISSION_STEP_MINUTES = 30
 class MissionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    rf: RFScenario = RFScenario()
+    min_communication_fraction: float | None = Field(default=None, ge=0, le=1)
     landing_date: date
     mission_duration_days: int = Field(ge=1, le=365)
     max_continuous_darkness_hours: float | None = Field(default=None, ge=0.0)
@@ -78,6 +81,7 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
     sun_weight, earth_weight = PRIORITY_WEIGHTS[mission.optimization_priority]
     config = base.model_copy(
         update={
+            "rf": mission.rf,
             "window": AnalysisWindow(
                 start=start,
                 end=start + timedelta(days=mission.mission_duration_days),
@@ -85,7 +89,11 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
             ),
             "thresholds": Thresholds(
                 max_sun_dark_hours=mission.max_continuous_darkness_hours,
+                max_rf_blackout_hours=mission.max_communication_blackout_hours,
+                # Retain the historical LOS bound for existing consumers. RF is stricter
+                # (or equal); mission windows contain whole 30-minute samples.
                 max_earth_blackout_hours=mission.max_communication_blackout_hours,
+                min_rf_fraction=mission.min_communication_fraction,
                 max_terrain_slope_degrees=mission.max_terrain_slope_degrees,
             ),
             "weights": Weights(sun=sun_weight, earth=earth_weight),

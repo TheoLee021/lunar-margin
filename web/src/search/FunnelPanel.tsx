@@ -9,6 +9,18 @@ interface Props {
 
 const DISTRIBUTIONS = [
   {
+    key: 'rf_fraction',
+    title: 'RF 통신 가능 비율',
+    hint: 'LOS와 목표 링크마진을 모두 만족한 시간 비율',
+    unit: 'fraction',
+  },
+  {
+    key: 'rf_longest_blackout_h',
+    title: 'RF 최장 두절',
+    hint: 'LOS 차폐와 마진 부족을 합한 최장 연속 두절',
+    unit: 'hours',
+  },
+  {
     key: 'sun_fraction',
     title: '일조율',
     hint: '지점별 평균 일조율',
@@ -128,7 +140,9 @@ export function FunnelPanel({ summary, config }: Props) {
             적격으로 처리됐습니다. 아래 분포를 보고 정한 뒤 다시 실행하세요.
           </p>
         ) : null}
-        {DISTRIBUTIONS.map((item) => (
+        {DISTRIBUTIONS.filter(
+          (item) => !item.key.startsWith('rf_') || config.rf != null,
+        ).map((item) => (
           <Distribution
             key={item.key}
             title={item.title}

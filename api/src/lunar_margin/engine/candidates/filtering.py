@@ -17,7 +17,14 @@ HORIZON_INCOMPLETE = 1 << 4
 TERRAIN_SLOPE_HIGH = 1 << 5
 TERRAIN_INCOMPLETE = 1 << 6
 
+RF_FRACTION_LOW = 1 << 8
+RF_BLACKOUT_HIGH = 1 << 9
+RF_INCOMPLETE = 1 << 10
+
 _REASONS: tuple[tuple[int, str], ...] = (
+    (RF_INCOMPLETE, "rf_incomplete"),
+    (RF_FRACTION_LOW, "rf_fraction_below_min"),
+    (RF_BLACKOUT_HIGH, "rf_blackout_hours_above_max"),
     (SUN_FRACTION_LOW, "sun_fraction_below_min"),
     (SUN_DARK_HIGH, "sun_dark_hours_above_max"),
     (EARTH_FRACTION_LOW, "earth_fraction_below_min"),
@@ -37,8 +44,8 @@ class Status(IntEnum):
 @dataclass(frozen=True)
 class FilterResult:
     status: NDArray[np.int8]
-    failed: NDArray[np.uint8]  # 위반한 조건의 비트 마스크
-    skipped: NDArray[np.uint8]  # 임계값은 있지만 지표가 결측이라 적용하지 못한 조건
+    failed: NDArray[np.uint16]  # 위반한 조건의 비트 마스크
+    skipped: NDArray[np.uint16]  # 임계값은 있지만 지표가 결측이라 적용하지 못한 조건
 
 
 def reason_names(mask: int) -> list[str]:
@@ -53,11 +60,13 @@ def evaluate(
 ) -> FilterResult:
     """min 임계값은 `>=`, max 임계값은 `<=`를 통과한다 (경계값 포함)."""
     n = len(field)
-    failed = np.zeros(n, dtype=np.uint8)
-    skipped = np.zeros(n, dtype=np.uint8)
+    failed = np.zeros(n, dtype=np.uint16)
+    skipped = np.zeros(n, dtype=np.uint16)
     applied_any = np.zeros(n, dtype=np.bool_)
 
     criteria: tuple[tuple[float | None, NDArray[np.float64], int, bool], ...] = (
+        (thresholds.min_rf_fraction, field.rf_fraction, RF_FRACTION_LOW, True),
+        (thresholds.max_rf_blackout_hours, field.rf_longest_blackout_h, RF_BLACKOUT_HIGH, False),
         (thresholds.min_sun_fraction, field.sun_fraction, SUN_FRACTION_LOW, True),
         (thresholds.max_sun_dark_hours, field.sun_longest_dark_h, SUN_DARK_HIGH, False),
         (thresholds.min_earth_fraction, field.earth_fraction, EARTH_FRACTION_LOW, True),
@@ -75,6 +84,9 @@ def evaluate(
         any_threshold = True
         available = ~np.isnan(values)
         skipped[~available] |= bit
+        if bit in (RF_FRACTION_LOW, RF_BLACKOUT_HIGH):
+            failed[~available] |= RF_INCOMPLETE
+            applied_any |= field.computed
         applied_any |= available
         with np.errstate(invalid="ignore"):
             violated = (values < limit) if is_minimum else (values > limit)
@@ -109,6 +121,8 @@ def constraint_ratio(field: MetricField, thresholds: Thresholds) -> NDArray[np.f
     n = len(field)
     worst = np.full(n, -np.inf)
     criteria: tuple[tuple[float | None, NDArray[np.float64], bool], ...] = (
+        (thresholds.min_rf_fraction, field.rf_fraction, True),
+        (thresholds.max_rf_blackout_hours, field.rf_longest_blackout_h, False),
         (thresholds.min_sun_fraction, field.sun_fraction, True),
         (thresholds.max_sun_dark_hours, field.sun_longest_dark_h, False),
         (thresholds.min_earth_fraction, field.earth_fraction, True),

@@ -5,6 +5,9 @@ import { fractionText, reasonLabel } from './derive'
 // not_refined, within_min_separation, beyond_top_k 는 조건이 아니라 계산·선정 방식 때문이라 뺀다.
 
 const FILTER_REASON_KEYS = [
+  'rf_incomplete',
+  'rf_fraction_below_min',
+  'rf_blackout_hours_above_max',
   'sun_fraction_below_min',
   'sun_dark_hours_above_max',
   'earth_fraction_below_min',
@@ -48,6 +51,26 @@ export function dominantExclusion(
   if (top === undefined) return null
 
   switch (top.key) {
+    case 'rf_fraction_below_min':
+      return {
+        ...top,
+        limit:
+          thresholds.min_rf_fraction == null
+            ? null
+            : `RF 통신 가능 비율 ${fractionText(thresholds.min_rf_fraction)} 이상`,
+        advice: '최소 RF 비율을 낮추거나 RF 링크 조건을 확인하세요.',
+      }
+    case 'rf_blackout_hours_above_max':
+      return {
+        ...top,
+        limit:
+          thresholds.max_rf_blackout_hours == null
+            ? null
+            : `RF 최장 두절 ${thresholds.max_rf_blackout_hours}시간 이하`,
+        advice:
+          'RF 두절 한도와 링크 조건을 확인하세요. LOS 차폐는 RF 전력 증가로 해결되지 않습니다.',
+      }
+
     case 'sun_dark_hours_above_max': {
       const hours = thresholds.max_sun_dark_hours
       return {

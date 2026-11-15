@@ -545,3 +545,135 @@ def test_api_serves_applied_slope_and_terrain_from_a_saved_mission(
     assert body["config"]["thresholds"]["max_terrain_slope_degrees"] == 90
     assert body["candidates"][0]["terrain"]["slope_p95_deg"] > 0
     assert body["candidates"][0]["terrain"]["coverage_fraction"] == 1
+
+
+def test_rf_mission_keeps_los_and_saves_nominal_communications(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    from lunar_margin.pipeline.candidates import run_mission
+
+    run_mission(mission(), data_dir, tmp_path, base=MISSION_TINY, log=lambda _: None)
+    doc = load(tmp_path)
+    assert doc.candidates
+    first = doc.candidates[0].model_dump()
+    rf = first["rf"]
+    assert rf["fraction"] <= first["earth"]["fraction"]
+    assert rf["longest_blackout_hours"] >= first["earth"]["longest_blackout_hours"]
+    assert rf["required_ebn0_db"] == pytest.approx(0.7458859875)
+    assert rf["rx_required_dbw"] == pytest.approx(-144.1441360426)
+    assert rf["evaluation_hours"] == 168
+    assert rf["available_hours"] == pytest.approx(168 * rf["fraction"], abs=0.0001)
+    assert doc.config["rf"] is not None
+    assert first["score"]["communication_basis"] == "nominal_rf"
+
+
+def test_rf_power_changes_qualification_but_not_earth_los(data_dir: Path, tmp_path: Path) -> None:
+    import numpy as np
+
+    from lunar_margin.pipeline.candidates import run_mission
+
+    baseline = mission(mission_duration_days=28, min_communication_fraction=0.01)
+    weak = mission(
+        mission_duration_days=28, min_communication_fraction=0.01, rf={"tx_power_w": 1e-6}
+    )
+    for name, request in (("baseline", baseline), ("weak", weak)):
+        run_mission(request, data_dir, tmp_path / name, base=MISSION_TINY, log=lambda _: None)
+    normal, poor = load(tmp_path / "baseline"), load(tmp_path / "weak")
+    assert normal.candidates
+    assert poor.candidates == []
+    assert poor.summary.reasons["rf_fraction_below_min"] > 0
+    with np.load(tmp_path / "weak" / "sites.npz") as sites:
+        assert np.nanmax(sites["earth_fraction"]) > 0
+        assert np.nanmax(sites["rf_fraction"]) == 0
+
+
+def test_rf_ranking_rewards_both_availability_and_shorter_outages(data_dir: Path) -> None:
+    from dataclasses import replace
+
+    import numpy as np
+
+    from lunar_margin.engine.candidates.field import FieldSettings, MetricField
+    from lunar_margin.engine.candidates.grid import SitePoints
+    from lunar_margin.engine.rf import RFScenario
+
+    def measured(sites: SitePoints, _: FieldSettings) -> MetricField:
+        # Controlled public field provider: identical sun and LOS, different RF continuity.
+        n = len(sites)
+        fraction, outage = np.full(n, 0.75), np.full(n, 72.0)
+        fraction[0], outage[0] = 0.5, 24.0
+        return replace(
+            MetricField.missing(n),
+            computed=np.ones(n, dtype=np.bool_),
+            horizon_complete=np.ones(n, dtype=np.bool_),
+            sun_fraction=np.full(n, 0.5),
+            earth_fraction=np.ones(n),
+            rf_fraction=fraction,
+            rf_longest_blackout_h=outage,
+        )
+
+    config = SMALL.model_copy(
+        update={
+            "coarse_spacing_m": None,
+            "min_separation_m": 0,
+            "top_k": 100,
+            "rf": RFScenario(),
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC), end=datetime(2027, 1, 5, tzinfo=UTC)
+            ),
+        }
+    )
+    result = run_search(config, data_dir, field_provider=measured, log=lambda _: None)
+    best = int(np.flatnonzero(result.rank == 1)[0])
+    assert result.field.rf_fraction[best] == 0.5
+    assert result.field.rf_longest_blackout_h[best] == 24
+    assert result.scores.total[best] == pytest.approx(0.5625)
+    assert np.nanmin(result.scores.total) == pytest.approx(0.5)
+
+
+def test_rf_outage_uses_exact_window_including_partial_last_sample(data_dir: Path) -> None:
+    from lunar_margin.engine.rf import RFScenario
+
+    config = SMALL.model_copy(
+        update={
+            "rf": RFScenario(tx_power_w=1e-6),
+            "coarse_spacing_m": None,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 1, 1, 10, tzinfo=UTC),
+                step_minutes=30,
+            ),
+        }
+    )
+    result = run_search(config, data_dir, log=lambda _: None)
+    assert result.field.rf_longest_blackout_h == pytest.approx(7 / 6)
+    assert result.field.rf_fraction == pytest.approx(0)
+
+
+def test_missing_rf_metrics_cannot_pass_an_enabled_communications_filter(data_dir: Path) -> None:
+    from dataclasses import replace
+
+    import numpy as np
+
+    from lunar_margin.engine.candidates.field import FieldSettings, MetricField
+    from lunar_margin.engine.candidates.grid import SitePoints
+    from lunar_margin.engine.rf import RFScenario
+
+    def incomplete(sites: SitePoints, _: FieldSettings) -> MetricField:
+        n = len(sites)
+        return replace(
+            MetricField.missing(n),
+            computed=np.ones(n, dtype=np.bool_),
+            sun_fraction=np.ones(n),
+            sun_longest_dark_h=np.zeros(n),
+        )
+
+    config = SMALL.model_copy(
+        update={
+            "coarse_spacing_m": None,
+            "rf": RFScenario(),
+            "thresholds": Thresholds(max_sun_dark_hours=24, min_rf_fraction=0.5),
+        }
+    )
+    result = run_search(config, data_dir, field_provider=incomplete, log=lambda _: None)
+    assert result.summary.counts["eligible"] == 0
+    assert result.summary.reasons["rf_incomplete"] > 0
