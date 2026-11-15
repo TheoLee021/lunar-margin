@@ -22,7 +22,12 @@ export function lunarSurfaceDistanceM(
   const hav =
     Math.sin(deltaPhi / 2) ** 2 +
     Math.cos(phiA) * Math.cos(phiB) * Math.sin(deltaLambda / 2) ** 2
-  const angle = 2 * Math.atan2(Math.sqrt(Math.max(0, Math.min(1, hav))), Math.sqrt(Math.max(0, 1 - hav)))
+  const angle =
+    2 *
+    Math.atan2(
+      Math.sqrt(Math.max(0, Math.min(1, hav))),
+      Math.sqrt(Math.max(0, 1 - hav)),
+    )
   return MOON_RADIUS_M * angle
 }
 
@@ -49,13 +54,15 @@ export function comparisonMetrics(
   config: RunDetail['config'],
 ): ComparisonMetric[] {
   const timeHours =
-    (Date.parse(config.window.end) - Date.parse(config.window.start)) / 3_600_000
+    (Date.parse(config.window.end) - Date.parse(config.window.start)) /
+    3_600_000
   if (!Number.isFinite(timeHours) || timeHours <= 0)
     throw new Error('Invalid comparison time window')
   const slopeLimit = config.thresholds.max_terrain_slope_degrees
   const roughnessLimit = config.thresholds.max_terrain_roughness_m
   const slopeReference = slopeLimit != null && slopeLimit > 0 ? slopeLimit : 15
-  const roughnessReference = roughnessLimit != null && roughnessLimit > 0 ? roughnessLimit : 20
+  const roughnessReference =
+    roughnessLimit != null && roughnessLimit > 0 ? roughnessLimit : 20
 
   function metric(
     key: string,
@@ -70,7 +77,9 @@ export function comparisonMetrics(
     const aValue = safe(av)
     const bValue = safe(bv)
     const score = (n: number | null) =>
-      n === null ? null : bounded(100 * (higherIsBetter ? n / reference : 1 - n / reference))
+      n === null
+        ? null
+        : bounded(100 * (higherIsBetter ? n / reference : 1 - n / reference))
     return {
       key,
       label,
@@ -83,17 +92,77 @@ export function comparisonMetrics(
     }
   }
   return [
-    metric('sun', '일조율', '%', a.sun.fraction == null ? null : 100 * a.sun.fraction, b.sun.fraction == null ? null : 100 * b.sun.fraction, 100, true, '100%'),
-    metric('dark', '연속 암흑', 'h', a.sun.longest_dark_hours, b.sun.longest_dark_hours, timeHours, false, `전체 분석 기간 ${timeHours.toFixed(0)}h`),
-    metric('earth', '지구 LOS', '%', a.earth.fraction == null ? null : 100 * a.earth.fraction, b.earth.fraction == null ? null : 100 * b.earth.fraction, 100, true, '100%'),
-    metric('blackout', '연속 지구 차폐', 'h', a.earth.longest_blackout_hours, b.earth.longest_blackout_hours, timeHours, false, `전체 분석 기간 ${timeHours.toFixed(0)}h`),
-    metric('slope', '지역 경사 P95', '°', a.terrain?.slope_p95_deg, b.terrain?.slope_p95_deg, slopeReference, false, slopeLimit != null && slopeLimit > 0 ? `임무 한도 ${slopeReference}°` : '시각화 기준 15°'),
-    metric('roughness', '지역 거칠기 P95', 'm', a.terrain?.roughness_p95_m, b.terrain?.roughness_p95_m, roughnessReference, false, roughnessLimit != null && roughnessLimit > 0 ? `임무 한도 ${roughnessReference}m` : '시각화 기준 20m'),
+    metric(
+      'sun',
+      '일조율',
+      '%',
+      a.sun.fraction == null ? null : 100 * a.sun.fraction,
+      b.sun.fraction == null ? null : 100 * b.sun.fraction,
+      100,
+      true,
+      '100%',
+    ),
+    metric(
+      'dark',
+      '연속 암흑',
+      'h',
+      a.sun.longest_dark_hours,
+      b.sun.longest_dark_hours,
+      timeHours,
+      false,
+      `전체 분석 기간 ${timeHours.toFixed(0)}h`,
+    ),
+    metric(
+      'earth',
+      '지구 LOS',
+      '%',
+      a.earth.fraction == null ? null : 100 * a.earth.fraction,
+      b.earth.fraction == null ? null : 100 * b.earth.fraction,
+      100,
+      true,
+      '100%',
+    ),
+    metric(
+      'blackout',
+      '연속 지구 차폐',
+      'h',
+      a.earth.longest_blackout_hours,
+      b.earth.longest_blackout_hours,
+      timeHours,
+      false,
+      `전체 분석 기간 ${timeHours.toFixed(0)}h`,
+    ),
+    metric(
+      'slope',
+      '지역 경사 P95',
+      '°',
+      a.terrain?.slope_p95_deg,
+      b.terrain?.slope_p95_deg,
+      slopeReference,
+      false,
+      slopeLimit != null && slopeLimit > 0
+        ? `임무 한도 ${slopeReference}°`
+        : '시각화 기준 15°',
+    ),
+    metric(
+      'roughness',
+      '지역 거칠기 P95',
+      'm',
+      a.terrain?.roughness_p95_m,
+      b.terrain?.roughness_p95_m,
+      roughnessReference,
+      false,
+      roughnessLimit != null && roughnessLimit > 0
+        ? `임무 한도 ${roughnessReference}m`
+        : '시각화 기준 20m',
+    ),
   ]
 }
 
 export function formatComparisonDistance(meters: number): string {
-  return meters < 1000 ? `${meters.toFixed(1)} m` : `${(meters / 1000).toFixed(3)} km`
+  return meters < 1000
+    ? `${meters.toFixed(1)} m`
+    : `${(meters / 1000).toFixed(3)} km`
 }
 
 export function nextComparisonIds(
