@@ -99,3 +99,14 @@ def body_azel(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """(방위각°, 고각°). 방위각 0°=북, 시계방향. 빛 시간·광행차 보정(LT+S)."""
     return topocentric_azel(body_vectors(body, et), lat_deg, lon_deg, observer_height_m)
+
+
+def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Geometric Earth-centered J2000 Moon states, km and km/s (no light-time correction)."""
+    if start.tzinfo is None:
+        raise ValueError("start must include a timezone")
+    utc = start.astimezone(UTC).replace(tzinfo=None)
+    with _SPICE_LOCK:
+        et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+        states, _ = spiceypy.spkezr("MOON", (et + seconds).tolist(), "J2000", "NONE", "EARTH")
+    return np.asarray(states, dtype=np.float64)

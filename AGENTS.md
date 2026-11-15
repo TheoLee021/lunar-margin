@@ -31,6 +31,7 @@ docs/                  api.md (API 계약), data.md (데이터셋)
 ## Commands
 ```sh
 # 백엔드를 띄우기만 할 때 (repo 루트, Docker만 필요)
+docker compose run --rm api python -m lunar_margin.pipeline.fetch   # 처음 한 번: NASA 데이터를 api/data에 다운로드
 docker compose up --build                          # http://localhost:8000, api/src 변경 시 자동 재시작
 
 # 백엔드를 개발할 때 (api/, Python 3.14 + uv)
