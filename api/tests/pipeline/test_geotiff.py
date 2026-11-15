@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from lunar_margin.pipeline.geotiff import read_float_geotiff
+from lunar_margin.pipeline.geotiff import read_float_geotiff, read_geotiff_bounds
 
 
 def write_geotiff(
@@ -134,3 +134,12 @@ def test_a_layout_it_cannot_read_is_an_error_not_wrong_heights(
 
     with pytest.raises(ValueError, match="unsupported"):
         read_float_geotiff(tmp_path / "dem.tif")
+
+
+def test_where_a_raster_lies_can_be_read_without_its_heights(tmp_path: Path) -> None:
+    # 6행 10열, 5 m 픽셀: 왼쪽 위 모서리에서 오른쪽으로 50 m, 아래로 30 m
+    values = np.zeros((6, 10), dtype=np.float32)
+    write_geotiff(tmp_path / "dem.tif", values, left_m=-19_000.0, top_m=-4_000.0, pixel_size_m=5.0)
+
+    # (x 최소, y 최소, x 최대, y 최대)
+    assert read_geotiff_bounds(tmp_path / "dem.tif") == (-19_000.0, -4_030.0, -18_950.0, -4_000.0)

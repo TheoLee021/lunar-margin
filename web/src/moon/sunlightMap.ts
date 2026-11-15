@@ -1,5 +1,7 @@
 // Sunlight map (docs/api.md, Sunlight): for one Sun direction, the fraction of the solar disc visible
-// from each point of the south-polar grid, computed by the backend from the DEM. No Cesium here.
+// from each point of the south-polar grid, computed by the backend from the DEM. The whole map is on
+// an 80 m grid; where 5 m regional DEMs exist the backend also computes windows of it on the grid of
+// a detail level of the normal tiles. No Cesium here.
 import { decodeRgbaPng, type RgbaImage } from './overlayTiles'
 import type { Vector3 } from './sun'
 
@@ -10,8 +12,23 @@ export interface SunlightMap {
   data: Uint8Array
 }
 
+/** A window of the map: WINDOW_TILES x WINDOW_TILES tiles of normal level `z` from this tile on. */
+export interface SunlightWindowAddress {
+  z: number
+  tileX: number
+  tileY: number
+}
+
 export function sunlightMapUrl(baseUrl: string, [x, y, z]: Vector3): string {
   return `${baseUrl}/sunlight/south-pole.png?x=${x}&y=${y}&z=${z}`
+}
+
+export function sunlightWindowUrl(
+  baseUrl: string,
+  [x, y, z]: Vector3,
+  window: SunlightWindowAddress,
+): string {
+  return `${baseUrl}/sunlight/south-pole/${window.z}/${window.tileX}/${window.tileY}.png?x=${x}&y=${y}&z=${z}`
 }
 
 /** The map is grey (R = G = B); the shader needs one channel. */
@@ -40,22 +57,26 @@ function abortableWait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Fetches the map for one Sun direction. While the backend is busy (429) it waits as long as the
- * response asks and tries again, a few times; any other failure is thrown at once.
+ * Fetches the map for one Sun direction, or one `window` of it. While the backend is busy (429) it
+ * waits as long as the response asks and tries again, a few times; any other failure is thrown at once.
  */
 export async function loadSunlightMap(
   sun: Vector3,
   baseUrl: string,
   signal: AbortSignal,
   {
+    window,
     fetchFn = fetch,
     wait = (ms: number) => abortableWait(ms, signal),
   }: {
+    window?: SunlightWindowAddress
     fetchFn?: typeof fetch
     wait?: (ms: number) => Promise<void>
   } = {},
 ): Promise<SunlightMap> {
-  const url = sunlightMapUrl(baseUrl, sun)
+  const url = window
+    ? sunlightWindowUrl(baseUrl, sun, window)
+    : sunlightMapUrl(baseUrl, sun)
   let response = await fetchFn(url, { signal })
   for (
     let retry = 0;

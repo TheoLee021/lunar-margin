@@ -36,6 +36,7 @@ import { DEFAULT_BASE_URL } from '../api/client'
 import { loadTerrainOverlays, type RgbaImage } from './overlayTiles'
 import { parseSunDirection, type Vector3 } from './sun'
 import { loadSunlightMap, type SunlightMap } from './sunlightMap'
+import { createSunlightWindows, type SunlightWindows } from './sunlightWindows'
 import type { TileLevel } from './overlayTiles'
 
 /** Cesium Moon Terrain (3D Tiles). The ion account must have it under My Assets, or it 404s. */
@@ -56,7 +57,8 @@ const MAX_ZOOM_DISTANCE_M = 20_000_000
 // (85°S and poleward) replaces it with a uniform albedo lit from that Sun: slopes from the normal
 // tiles, and cast shadows from the backend's sunlight map for that Sun direction (docs/api.md,
 // Sunlight). While that map is on its way, or if it cannot be had, shadows come from the precomputed
-// horizon tiles instead: the same physics on a 500 m grid, so blunter edges.
+// horizon tiles instead: the same physics on a 500 m grid, so blunter edges. Close to the ground in
+// a region with a 5 m DEM, a sunlight window on that level's grid sharpens the shadows to match.
 // Neither the photo nor the tiles' triangles feed that lighting: the photo's shading belongs to
 // another Sun, and the triangles are tens of pixels wide at every zoom, so their faces show as facets.
 // The overlay fades into the photo over its outer OVERLAY_FADE_M.
@@ -85,6 +87,11 @@ const FINE_FULL_PX = 1
 const FINE_GONE_PX = 0.5
 // A window also fades in over this many of its texels from its edge.
 const FINE_FADE_PX = 64
+// Sunlight windows (sunlightWindows.ts) for the finest detail levels: the shader has this many slots.
+const SUN_WINDOW_SLOTS = 2
+// A sunlight window is asked for once the camera has rested over it this long: the backend computes
+// each for about a second and cannot be called off, so the ones a flight passes over are skipped.
+const SUN_WINDOW_SETTLE_MS = 400
 const FOCUS_CHECK_MS = 150
 // Cesium by default draws one canvas pixel per CSS pixel and lets the browser stretch it, which
 // blurs the terrain on high-density displays. Draw at the display's own density instead, up to this
@@ -124,6 +131,10 @@ function sunlightTexture(map: SunlightMap): TextureUniform {
 }
 
 const fineSlots = Array.from({ length: FINE_SLOTS }, (_, slot) => slot)
+const sunWindowSlots = Array.from(
+  { length: SUN_WINDOW_SLOTS },
+  (_, slot) => slot,
+)
 
 function createMoonShader(): CustomShader {
   return new CustomShader({
@@ -171,6 +182,20 @@ function createMoonShader(): CustomShader {
           ],
           // Window side in texels; 0 while the slot has no window.
           [`u_fineSize${slot}`, { type: UniformType.FLOAT, value: 0 }],
+        ]),
+      ),
+      // Sunlight windows: the same three per slot as the fine windows above.
+      ...Object.fromEntries(
+        sunWindowSlots.flatMap((slot) => [
+          [
+            `u_sunWindow${slot}`,
+            { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
+          ],
+          [
+            `u_sunWindowGrid${slot}`,
+            { type: UniformType.VEC4, value: new Cartesian4(1, 0, 0, 0) },
+          ],
+          [`u_sunWindowSize${slot}`, { type: UniformType.FLOAT, value: 0 }],
         ]),
       ),
     },
@@ -260,6 +285,20 @@ function createMoonShader(): CustomShader {
       return mix(slope, sum.xy / sum.z, use * sum.z);
     }
 
+    // Blends a sunlight window over visible (the fraction of the solar disc in view), where the
+    // window lies and by the same rule as the slopes of its level, so that shadow edges sharpen
+    // together with the shading. The window is one byte per texel, so the GPU filters it.
+    float withSunlightWindow(float visible, sampler2D window, vec4 grid, float size, vec2 xy, float footprint, vec2 dxyDx, vec2 dxyDy) {
+      if (size < 0.5) return visible;
+      vec2 local = vec2(grid.y + xy.x / grid.x, grid.y - xy.y / grid.x) - grid.zw;
+      vec2 fromEdge = min(local, size - 1.0 - local);
+      float use = smoothstep(0.0, ${FINE_FADE_PX.toFixed(1)}, min(fromEdge.x, fromEdge.y))
+        * smoothstep(${FINE_GONE_PX.toFixed(2)}, ${FINE_FULL_PX.toFixed(2)}, grid.x / footprint);
+      if (use <= 0.0) return visible;
+      vec2 toUv = vec2(1.0, -1.0) / (grid.x * size);
+      return mix(visible, textureGrad(window, (local + 0.5) / size, dxyDx * toUv, dxyDy * toUv).r, use);
+    }
+
     // Narkowicz's fit of the ACES filmic curve: linear scene value in, linear display value out.
     vec3 filmic(vec3 v) {
       return clamp(v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14), 0.0, 1.0);
@@ -342,6 +381,12 @@ ${fineSlots
       } else {
         visible = discFraction(sunEl - horizonSum / total);
       }
+${sunWindowSlots
+  .map(
+    (slot) =>
+      `      visible = withSunlightWindow(visible, u_sunWindow${slot}, u_sunWindowGrid${slot}, u_sunWindowSize${slot}, xy, footprint, dxyDx, dxyDy);`,
+  )
+  .join('\n')}
 
       float mu0 = max(dot(normalWC, sun), 0.0);
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
@@ -408,6 +453,7 @@ export async function createMoonScene(
 
   const moonShader = createMoonShader()
   let normalWindows: NormalWindows | undefined
+  let sunlightWindows: SunlightWindows | undefined
   // The sunlight map shares the grid of the finest full-coverage normal level (docs/api.md, Sunlight).
   let sunlightLevel: TileLevel | undefined
   let sun: Vector3 | null = null
@@ -445,6 +491,35 @@ export async function createMoonScene(
         (level) => level.tile_ranges === undefined,
       )
       refreshSunlightMap()
+      sunlightWindows = createSunlightWindows({
+        // The detail levels (sparse: only where a 5 m DEM is), coarse to fine as for the slopes.
+        levels: normal.meta.levels
+          .filter((level) => level.tile_ranges !== undefined)
+          .slice(-SUN_WINDOW_SLOTS),
+        minTexelPx: FINE_GONE_PX,
+        settleMs: SUN_WINDOW_SETTLE_MS,
+        signal: options.signal,
+        load: (window, direction, signal) =>
+          loadSunlightMap(direction, DEFAULT_BASE_URL, signal, { window }),
+        onWindow: (slot, window) => {
+          if (!window) {
+            moonShader.setUniform(`u_sunWindowSize${slot}`, 0)
+            return
+          }
+          const { level, origin, map } = window
+          moonShader.setUniform(`u_sunWindow${slot}`, sunlightTexture(map))
+          moonShader.setUniform(
+            `u_sunWindowGrid${slot}`,
+            new Cartesian4(
+              level.pixel_size_m,
+              level.center_px,
+              origin.tileX * level.tile_px,
+              origin.tileY * level.tile_px,
+            ),
+          )
+          moonShader.setUniform(`u_sunWindowSize${slot}`, map.width)
+        },
+      })
       normalWindows = createNormalWindows({
         // Coarse to fine, so a finer window is blended over a coarser one.
         levels: normal.meta.levels.slice(1).slice(-FINE_SLOTS),
@@ -526,23 +601,43 @@ export async function createMoonScene(
       camera.constrainedAxis = axisFree ? undefined : Cartesian3.UNIT_Z
     }
   })
+  // Moves the windows of fine slopes and shadows to where the camera looks.
+  const pixelDimensions = new Cartesian2()
+  const followFocus = () => {
+    // The ground at the centre of the screen, or under the camera when that is the sky.
+    const centre = camera.pickEllipsoid(
+      new Cartesian2(
+        scene.canvas.clientWidth / 2,
+        scene.canvas.clientHeight / 2,
+      ),
+      Ellipsoid.MOON,
+    )
+    const focus = polarXY(
+      toLunarLocation(
+        centre
+          ? Cartographic.fromCartesian(centre, Ellipsoid.MOON)
+          : camera.positionCartographic,
+      ),
+    )
+    normalWindows?.update(focus)
+    // Metres of ground one drawn pixel covers there, seen face-on.
+    const pixel = camera.frustum.getPixelDimensions(
+      scene.drawingBufferWidth,
+      scene.drawingBufferHeight,
+      centre
+        ? Cartesian3.distance(camera.position, centre)
+        : camera.positionCartographic.height,
+      1,
+      pixelDimensions,
+    )
+    sunlightWindows?.update(focus, Math.max(pixel.x, pixel.y), sun)
+  }
   let lastFocusCheck = 0
   const removePostRender = scene.postRender.addEventListener(() => {
     const now = performance.now()
-    if (normalWindows && now - lastFocusCheck >= FOCUS_CHECK_MS) {
+    if (now - lastFocusCheck >= FOCUS_CHECK_MS) {
       lastFocusCheck = now
-      // The ground at the centre of the screen, or under the camera when that is the sky.
-      const centre = camera.pickEllipsoid(
-        new Cartesian2(
-          scene.canvas.clientWidth / 2,
-          scene.canvas.clientHeight / 2,
-        ),
-        Ellipsoid.MOON,
-      )
-      const focus = centre
-        ? Cartographic.fromCartesian(centre, Ellipsoid.MOON)
-        : camera.positionCartographic
-      normalWindows.update(polarXY(toLunarLocation(focus)))
+      followFocus()
     }
     if (Math.abs(camera.heading - lastHeading) < 1e-3) return
     lastHeading = camera.heading
@@ -650,6 +745,7 @@ export async function createMoonScene(
         sun = null
         moonShader.setUniform('u_sunLit', 0)
         refreshSunlightMap()
+        followFocus()
         return
       }
       const next = parseSunDirection(direction)
@@ -659,7 +755,11 @@ export async function createMoonScene(
         !previous || next.some((value, i) => value !== previous[i])
       moonShader.setUniform('u_sunDirectionWC', new Cartesian3(...next))
       moonShader.setUniform('u_sunLit', 1)
-      if (changed) refreshSunlightMap()
+      if (changed) {
+        refreshSunlightMap()
+        // Windows computed for the previous Sun come down at once, not at the next focus check.
+        followFocus()
+      }
     },
     resetNorth() {
       const canvas = scene.canvas

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { greyChannel, loadSunlightMap, sunlightMapUrl } from './sunlightMap'
+import {
+  greyChannel,
+  loadSunlightMap,
+  sunlightMapUrl,
+  sunlightWindowUrl,
+} from './sunlightMap'
 
 describe('sunlightMapUrl', () => {
   it('asks for the map of one Sun direction (docs/api.md, Sunlight)', () => {
@@ -8,6 +13,25 @@ describe('sunlightMapUrl', () => {
     )
 
     expect(url.pathname).toBe('/base/sunlight/south-pole.png')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      x: '0.6',
+      y: '-0.8',
+      z: '0.0125',
+    })
+  })
+})
+
+describe('sunlightWindowUrl', () => {
+  it('asks for the window that starts at a tile of a detail level', () => {
+    const url = new URL(
+      sunlightWindowUrl('https://api.example/base', [0.6, -0.8, 0.0125], {
+        z: 4,
+        tileX: 87,
+        tileY: -1,
+      }),
+    )
+
+    expect(url.pathname).toBe('/base/sunlight/south-pole/4/87/-1.png')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       x: '0.6',
       y: '-0.8',
@@ -61,6 +85,20 @@ describe('loadSunlightMap', () => {
 
     expect(Array.from(map.data)).toEqual([10, 200, 1, 0])
     expect(waits).toEqual([7000, 7000])
+  })
+
+  it('fetches a window from its own address', async () => {
+    const urls: string[] = []
+
+    await loadSunlightMap([1, 0, 0], '/api', new AbortController().signal, {
+      window: { z: 4, tileX: 87, tileY: 105 },
+      fetchFn: (url) => {
+        urls.push(String(url))
+        return Promise.resolve(ok())
+      },
+    })
+
+    expect(urls).toEqual(['/api/sunlight/south-pole/4/87/105.png?x=1&y=0&z=0'])
   })
 
   it('gives up when the server stays busy', async () => {
