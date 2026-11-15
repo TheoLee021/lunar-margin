@@ -5,6 +5,7 @@ import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
 import { PriceGrid } from './PriceGrid'
+import { LaunchDeparture } from './LaunchDeparture'
 import './date-planner.css'
 
 type Props = {
@@ -104,7 +105,7 @@ export function DatePlanner({
             <div className="window-toolbar">
               <div>
                 <h3>출발일 × 착륙일</h3>
-                <p>500m 격자 평균 가격 · USD million</p>
+                <p>500m 격자 평균 예상 비용 · USD million</p>
               </div>
               <div className="week-nav">
                 <button
@@ -124,6 +125,13 @@ export function DatePlanner({
                 </button>
               </div>
             </div>
+            <LaunchDeparture
+              departure={anchors.departure}
+              onSelect={(departure) => {
+                setAnchors((a) => ({ ...a, departure }))
+                setDraft((d) => ({ ...d, departure }))
+              }}
+            />
             <div className="date-anchors">
               <label>
                 기준 출발일 · UTC

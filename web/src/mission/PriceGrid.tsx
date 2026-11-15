@@ -28,6 +28,7 @@ const DELIVERY_LABELS: Record<Delivery, string> = {
 }
 const STATE_LABELS = {
   quoted: '계산 완료',
+  estimated: '모델 예상 비용',
   no_published_quote: '공개 견적 없음',
   search_required: '미계산',
   partial_coverage: '견적 일부',
@@ -122,6 +123,7 @@ export function PriceGrid({
   const input: ProviderCalendarInput | null =
     valid && sourceReady
       ? {
+          estimate: true,
           mass_kg: massNumber,
           delivery,
           landing_dates: landings.map(iso),
@@ -293,8 +295,8 @@ export function PriceGrid({
       ) : null}
       {calendar.calculating ? <p role="status">날짜별 가격 계산 중…</p> : null}
       <p className="mb-3 text-xs text-neutral-400">
-        6개 회사의 공개 일정·조건 비교 · 각 500m 적합 격자의 최저가를 평균 ·
-        미정 항목 제외
+        공개 단가 우선 · 미공개 시 공통 비용 모델 · 각 500m 적합 격자의 최저
+        예상 비용 평균 · 실제 견적 아님
       </p>
       <div className="grid-scroll">
         <table className="cost-grid" aria-label="출발일과 착륙일별 평균 가격">
@@ -368,7 +370,7 @@ export function PriceGrid({
                           <>
                             <small>
                               {offer!.quoted_grid_count.toLocaleString()}개 격자
-                              최저가 평균 · {l - d}일 비행
+                              최저 예상 비용 평균 · {l - d}일 비행
                               {offer!.terrain_unknown_count
                                 ? ' · 지형 미산정 포함'
                                 : ''}
@@ -425,7 +427,7 @@ export function PriceGrid({
       <div className="grid-key">
         <span>
           <i />
-          낮은 평균 가격
+          낮은 평균 예상 비용
         </span>
         <span>
           <i />

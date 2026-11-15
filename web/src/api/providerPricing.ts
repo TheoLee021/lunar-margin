@@ -61,6 +61,16 @@ const FlightOffer = z
     available_payload_kg: Amount.nullable(),
     issues: z.array(IssueSchema),
     sources: z.array(Source).min(1),
+    estimate_usd: Amount.nullable().optional().default(null),
+    estimate_basis: z
+      .enum(['public_tariff', 'common_model'])
+      .nullable()
+      .optional()
+      .default(null),
+    estimate_assumptions: z.array(z.string()).optional().default([]),
+    estimate_tariff_usd_per_kg: Amount.nullable().optional().default(null),
+    estimate_fixed_usd: Amount.nullable().optional().default(null),
+    estimate_tariff_source: Source.nullable().optional().default(null),
     price_usd: Amount.nullable(),
     price_grade: z.literal('modeled_from_published_terms').nullable(),
   })
@@ -73,6 +83,16 @@ const FlightOffer = z
           f.tariff_usd_per_kg !== null,
     'Unqualified provider quote',
   )
+  .refine(
+    (f) =>
+      f.estimate_usd === null
+        ? f.estimate_basis === null
+        : f.estimate_basis !== null &&
+          f.estimate_tariff_usd_per_kg !== null &&
+          f.estimate_fixed_usd !== null &&
+          f.estimate_assumptions.length > 0,
+    'Model estimates require their rate basis and assumptions',
+  )
 const ProviderOffer = z
   .object({
     provider_id: ProviderIdSchema,
@@ -80,6 +100,7 @@ const ProviderOffer = z
     source: Source,
     issues: z.array(IssueSchema),
     flights: z.array(FlightOffer),
+    minimum_estimate_usd: Amount.nullable().optional().default(null),
     minimum_usd: Amount.nullable(),
   })
   .refine((p) => {
@@ -88,8 +109,21 @@ const ProviderOffer = z
     )
     return p.minimum_usd === (prices.length ? Math.min(...prices) : null)
   }, 'Inconsistent company minimum')
+  .refine(
+    (p) =>
+      p.minimum_estimate_usd ===
+        Math.min(
+          ...p.flights.flatMap((f) =>
+            f.estimate_usd === null ? [] : [f.estimate_usd],
+          ),
+        ) ||
+      (p.minimum_estimate_usd === null &&
+        p.flights.every((f) => f.estimate_usd === null)),
+    'Inconsistent company estimate',
+  )
 export type ProviderOffer = z.infer<typeof ProviderOffer>
 export const CompareInputSchema = z.object({
+  estimate: z.boolean().optional(),
   departure_date: z.iso.date(),
   landing_date: z.iso.date(),
   mass_kg: z.number().positive().max(1000000),
@@ -100,6 +134,7 @@ export const CompareInputSchema = z.object({
 export type CompareInput = z.infer<typeof CompareInputSchema>
 export const ComparisonSchema = CompareInputSchema.extend({
   catalog_checked_on: z.iso.date(),
+  minimum_estimate_usd: Amount.nullable().optional().default(null),
   minimum_usd: Amount.nullable(),
   providers: z.array(ProviderOffer).length(6),
   destination_multiplier: z.number().min(1).max(1.3).nullable(),
@@ -121,6 +156,7 @@ export const ComparisonSchema = CompareInputSchema.extend({
 )
 export type Comparison = z.infer<typeof ComparisonSchema>
 export const ProviderCalendarInputSchema = CalendarInputSchema.extend({
+  estimate: z.boolean().optional(),
   departure_dates: z.array(z.iso.date()).min(1).max(5),
   source_run_id: z
     .string()
@@ -138,6 +174,7 @@ const CalendarCell = z
       'no_published_quote',
       'search_required',
       'quoted',
+      'estimated',
       'partial_coverage',
       'no_eligible',
       'invalid_transit',
@@ -157,7 +194,7 @@ const CalendarCell = z
   })
   .refine(
     (c) =>
-      c.status === 'quoted'
+      c.status === 'quoted' || c.status === 'estimated'
         ? c.mean_min_usd !== null &&
           c.eligible_grid_count !== null &&
           c.eligible_grid_count > 0 &&
@@ -167,6 +204,7 @@ const CalendarCell = z
     'A partial or unknown quote cannot become a full-grid average',
   )
 export const ProviderCalendarSchema = z.object({
+  estimate: z.boolean().optional().default(false),
   catalog_checked_on: z.iso.date(),
   mass_kg: z.number().positive(),
   delivery: DeliverySchema,

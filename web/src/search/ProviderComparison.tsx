@@ -52,6 +52,7 @@ export function ProviderComparison({
     .slice(0, 10)
   const departure = params.get('departure') ?? fallback
   const input: CompareInput = {
+    estimate: true,
     departure_date: departure,
     landing_date: landingDate,
     mass_kg: mass,
@@ -116,9 +117,9 @@ export function ProviderComparison({
       ) : (
         <>
           <p className="text-sm text-neutral-200">
-            {data.minimum_usd === null
-              ? '비교 가능한 공개 견적 없음'
-              : `최저 ${formatPrice(data.minimum_usd)}`}
+            {data.minimum_estimate_usd === null
+              ? '이 조건에서 계산 가능한 예상 비용 없음'
+              : `최저 예상 비용 ${formatPrice(data.minimum_estimate_usd)}`}
           </p>
           <div className="grid gap-2">
             {data.terrain_unknown ? (
@@ -137,15 +138,16 @@ export function ProviderComparison({
                   </h5>
                   <span
                     className={
-                      provider.minimum_usd !== null &&
-                      provider.minimum_usd === data.minimum_usd
+                      provider.minimum_estimate_usd !== null &&
+                      provider.minimum_estimate_usd ===
+                        data.minimum_estimate_usd
                         ? 'text-xs font-mono text-emerald-300'
                         : 'text-xs text-neutral-400'
                     }
                   >
-                    {provider.minimum_usd === null
-                      ? '총액 미정'
-                      : formatPrice(provider.minimum_usd)}
+                    {provider.minimum_estimate_usd === null
+                      ? '이 조건 계산 불가'
+                      : `예상 ${formatPrice(provider.minimum_estimate_usd)}`}
                   </span>
                 </div>
                 {provider.issues.length ? (
@@ -181,6 +183,35 @@ export function ProviderComparison({
                           ? `공개 단가 $${flight.tariff_usd_per_kg.toLocaleString('en-US')}/kg · 총액 미정`
                           : '가격 미공개'}
                     </span>
+                    {flight.estimate_usd !== null ? (
+                      <div className="grid gap-1 border-l-2 border-amber-400/60 pl-2">
+                        <span className="text-amber-200">
+                          {formatPrice(flight.estimate_usd)} ·{' '}
+                          {flight.estimate_basis === 'public_tariff'
+                            ? '공개 단가 기반 예상'
+                            : '공통 모델 예상'}
+                        </span>
+                        <span>
+                          적용 단가 $
+                          {flight.estimate_tariff_usd_per_kg?.toLocaleString(
+                            'en-US',
+                          )}
+                          /kg · 고정비 $
+                          {flight.estimate_fixed_usd?.toLocaleString('en-US')}
+                        </span>
+                        <span>{flight.estimate_assumptions.join(' · ')}</span>
+                        {flight.estimate_tariff_source ? (
+                          <a
+                            className="text-sky-300 hover:underline"
+                            href={flight.estimate_tariff_source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            단가 근거 ↗
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {flight.maximum_payload_kg !== null ? (
                       <span>
                         기체 적재 상한{' '}
@@ -232,8 +263,9 @@ export function ProviderComparison({
             ))}
           </div>
           <p className="text-[11px] text-neutral-500">
-            {data.catalog_checked_on} 등록된 공개 자료 기준 · 미정 항목은
-            최저가에서 제외 · 실제 견적 아님
+            {data.catalog_checked_on} 등록된 공개 자료와 기존 가격 모델 기준 ·
+            회사 단가 미공개 시 공통 모델을 사용하므로 동일 예상 비용이 나올 수
+            있습니다 · 실제 견적·운항 보장 아님
           </p>
         </>
       )}

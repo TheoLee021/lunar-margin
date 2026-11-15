@@ -100,25 +100,25 @@ This is terrain screening, not certified landing safety.
 
 ## Provider prices from the 500m candidate search
 
-The date planner compares Blue Origin, ispace-U.S., SpaceX, Lockheed Martin Space,
-Northrop Grumman Space Systems and Voyager Technologies using versioned public
-mission/price sources. Each date combination shows the mean of each eligible
-500m grid’s **lowest qualifying provider price**, using all original grids before
-Top-K selection. Unknown schedules, remaining capacity, delivery coverage or
-billing terms never become a zero price or an invented company fare. Partial
-quote coverage is labeled and does not become a full-grid mean.
+The date planner compares six companies using a planning model. Public company
+rates take priority; missing rates use the existing delivery-mode reference tariff,
+with the modeled $500,000 fixed fee when no fee is published. The UI distinguishes
+public-rate estimates from the common model and lists the assumptions. These are
+not bookable company quotes. Each date combination averages each original eligible
+500m grid's lowest estimated cost, before Top-K selection. Partial grid coverage
+never becomes a full-grid mean.
 
-Clicking a completed date opens its saved candidate search and carries departure,
-landing, duration, mass and delivery mode. Candidate details show all six providers,
-including unavailable and unpublished entries, their official sources and reasons.
-Exact-day availability is never inferred from a month, year or “not before” date.
-The initial catalog contains no complete bookable-day quotes, so the current
-calendar honestly shows “공개 견적 없음”. The historical Astrobotic benchmark
-endpoints remain available for existing clients but do not supply company quotes.
+Choose a lunar mission's tentative departure from Spaceflight Now and Space Launch
+Schedule, then choose the landing date independently. Month-only or conflicting
+dates cannot be auto-selected. Source precision, update time and stale fallback
+are visible. Clicking a completed date opens its saved candidate search and carries
+departure, landing, duration, mass and delivery mode. Details display all six companies.
+The strict public-quote API remains available separately and never fills unknown
+quotes with model estimates. See [schedule integration and assumptions](docs/launch-schedule.md).
 
 There is no Top-100 shortcut or company-specific terrain recomputation. The
 calendar assesses mission terms first, reads each landing date’s terrain once only
-when a qualifying public offer exists, and compares provider costs with vector
+when a comparable estimate exists, and compares provider costs with vector
 operations. Saved runs selected as the mission template are reused across search
 hash versions only while their mission conditions match. Missing dates still start
 one batch through `POST /pricing/calculate`; completed dates are excluded.
@@ -132,3 +132,8 @@ continues to require its matching precomputed horizon table.
 ## 착륙 격자 예약
 
 500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
+
+출발일은 날짜 계획의 **발사 일정에서 출발일 선택**에서 Spaceflight Now와
+Space Launch Schedule의 달 임무 예정일을 고를 수 있습니다. 착륙일은 별도로 직접
+선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
+실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).
