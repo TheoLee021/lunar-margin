@@ -7,7 +7,7 @@ profile search, NOT a flight-certified guidance law or global optimum.
 
 import math
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -266,8 +266,8 @@ def evaluate_reference(
     # quadrature of the acceleration norm remains a numerical approximation.
     mass = lander.wet_mass_kg * np.exp(-integrated_acc / (lander.isp_s * G0))
     thrust = mass * acceleration_mag
-    sample_mass: Vec = np.asarray(np.interp(t, propulsion_t, mass), dtype=np.float64)
-    sample_thrust: Vec = np.asarray(np.interp(t, propulsion_t, thrust), dtype=np.float64)
+    sample_mass = cast(Vec, np.interp(t, propulsion_t, mass))
+    sample_thrust = cast(Vec, np.interp(t, propulsion_t, thrust))
     propellant = float(lander.wet_mass_kg - mass[-1])
     min_agl = (
         float(np.min(dense_agl[np.isfinite(dense_agl)])) if np.isfinite(dense_agl).any() else None
