@@ -92,6 +92,10 @@ def test_site_assessment_combines_sun_earth_and_regional_terrain(
         "mean_elevation_deg": 1.0,
     }
     assert body["earth"]["visible_fraction"] == 0.75
+    assert body["solar_continuity"] == {
+        "longest_sun_visible_hours": 1.0,
+        "visibility_transitions": 0,
+    }
     assert body["earth"]["mean_elevation_deg"] is None
     terrain = body["terrain"]
     assert terrain["slope_p95_deg"] == pytest.approx(10.0, abs=0.05)

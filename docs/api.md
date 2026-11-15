@@ -73,6 +73,7 @@
 ```
 
 - `sun`, `earth`: 같은 쿼리로 `illumination`, `earth-visibility`를 부른 응답의 `metrics`와 같은 값.
+- `solar_continuity`: `longest_sun_visible_hours`는 기간 내 태양 중심이 지형 수평선 위에 있는 최장 연속 표본 구간(h); `visibility_transitions`는 0↔1 가시성 상태 전환 횟수. 기존 분석의 동일한 표본 간격을 사용하며 이벤트 시각 보간은 하지 않는다. 이 지표는 태양광 발전량·배터리 용량을 예측하지 않고, DTE/RF 통신 조건에도 사용하지 않는다.
 - `terrain`: 후보 탐색 결과의 `terrain`과 같은 형태·계산(후보 중심 250 m 원의 DEM 경사 P95, 80 m 주 DEM). 판정은 하지 않는다. DEM 결측으로 `coverage_fraction < 1`이어도 그대로 돌려주며, 결측을 통과로 해석하지 않는 것은 호출하는 쪽의 몫이다. `slope_p95_deg`는 유효 표본이 없으면 `null`.
 - 지점이 DEM 밖이면 422.
 
