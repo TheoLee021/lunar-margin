@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSkyDirection, rayOffsetEnu } from './lineOfSight'
+import { parseSkyDirection, rayOffsetEnu, sightMarginDeg } from './lineOfSight'
 
 const CLOSE = 1e-9
 
@@ -53,9 +53,15 @@ describe('parseSkyDirection', () => {
       parseSkyDirection({
         azimuthDeg: 212.4,
         elevationDeg: 0.7,
+        horizonDeg: 0.2,
         visible: true,
       }),
-    ).toEqual({ azimuthDeg: 212.4, elevationDeg: 0.7, visible: true })
+    ).toEqual({
+      azimuthDeg: 212.4,
+      elevationDeg: 0.7,
+      horizonDeg: 0.2,
+      visible: true,
+    })
   })
 
   it('rejects an impossible elevation', () => {
@@ -63,6 +69,7 @@ describe('parseSkyDirection', () => {
       parseSkyDirection({
         azimuthDeg: 0,
         elevationDeg: 91,
+        horizonDeg: 0,
         visible: true,
       }),
     ).toThrow()
@@ -70,7 +77,31 @@ describe('parseSkyDirection', () => {
 
   it('rejects a missing verdict', () => {
     expect(() =>
-      parseSkyDirection({ azimuthDeg: 0, elevationDeg: 1 }),
+      parseSkyDirection({ azimuthDeg: 0, elevationDeg: 1, horizonDeg: 0 }),
     ).toThrow()
+  })
+})
+
+describe('sightMarginDeg', () => {
+  it('is how far the body clears the terrain that would block it', () => {
+    expect(
+      sightMarginDeg({
+        azimuthDeg: 212.4,
+        elevationDeg: 4,
+        horizonDeg: 1.5,
+        visible: true,
+      }),
+    ).toBeCloseTo(2.5, 6)
+  })
+
+  it('goes negative once the terrain is in the way', () => {
+    expect(
+      sightMarginDeg({
+        azimuthDeg: 212.4,
+        elevationDeg: 0.4,
+        horizonDeg: 1.5,
+        visible: false,
+      }),
+    ).toBeCloseTo(-1.1, 6)
   })
 })

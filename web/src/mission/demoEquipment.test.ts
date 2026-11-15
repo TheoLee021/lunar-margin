@@ -16,8 +16,18 @@ const SITE: CandidateSite = {
   latitude: -89.83,
   longitude: -153.7,
 }
-const CLEAR = { azimuthDeg: 212.4, elevationDeg: 0.7, visible: true }
-const BLOCKED = { azimuthDeg: 212.4, elevationDeg: -0.4, visible: false }
+const CLEAR = {
+  azimuthDeg: 212.4,
+  elevationDeg: 0.7,
+  horizonDeg: 0.2,
+  visible: true,
+}
+const BLOCKED = {
+  azimuthDeg: 212.4,
+  elevationDeg: -0.4,
+  horizonDeg: 0.9,
+  visible: false,
+}
 const TERRA = companyById('terra-nova-works')
 const MERIDIAN = companyById('meridian-relay')
 const TRENCH = TERRA.mobile!.path

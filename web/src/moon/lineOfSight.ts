@@ -10,14 +10,26 @@ export interface SkyDirection {
   azimuthDeg: number
   /** Degrees above the local horizontal. */
   elevationDeg: number
+  /** Terrain horizon height at that azimuth, degrees. What the body has to clear. */
+  horizonDeg: number
   visible: boolean
 }
 
 const SkyDirectionSchema = z.object({
   azimuthDeg: z.number().finite(),
   elevationDeg: z.number().min(-90).max(90),
+  horizonDeg: z.number().min(-90).max(90),
   visible: z.boolean(),
 })
+
+/**
+ * How far the body sits above the terrain that would block it, degrees. Negative when
+ * blocked. A small positive margin is the interesting case: a hundred metres sideways
+ * can take it away.
+ */
+export function sightMarginDeg(direction: SkyDirection): number {
+  return direction.elevationDeg - direction.horizonDeg
+}
 
 /** Validates one sky direction taken from an analysis response. Throws on invalid input. */
 export function parseSkyDirection(input: unknown): SkyDirection {

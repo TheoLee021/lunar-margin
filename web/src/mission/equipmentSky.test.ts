@@ -26,10 +26,20 @@ const response = {
 }
 
 describe('skyFromAnalysis', () => {
+  it('reads the horizon height at the azimuth of the body itself', () => {
+    const tilted = {
+      ...response,
+      horizon: { azimuth_deg: [0, 180], elevation_deg: [0, 4] },
+    }
+    // 212.4 deg sits between the 180 deg sample and the 0 deg one wrapped to 360.
+    expect(skyFromAnalysis(tilted).horizonDeg).toBeCloseTo(3.28, 2)
+  })
+
   it('takes the first sample of the series', () => {
     expect(skyFromAnalysis(response)).toEqual({
       azimuthDeg: 212.4,
       elevationDeg: 1.2,
+      horizonDeg: 0.5,
       visible: true,
     })
   })
@@ -46,6 +56,7 @@ describe('skyFromAnalysis', () => {
     expect(skyFromAnalysis(blocked)).toEqual({
       azimuthDeg: 212.4,
       elevationDeg: -0.3,
+      horizonDeg: 0.5,
       visible: false,
     })
   })

@@ -1,4 +1,5 @@
 import type { Analysis } from '../api/analysis'
+import { horizonAtAzimuth } from '../analysis/derive'
 import { parseSkyDirection, type SkyDirection } from '../moon/lineOfSight'
 
 /**
@@ -8,9 +9,16 @@ import { parseSkyDirection, type SkyDirection } from '../moon/lineOfSight'
  */
 export function skyFromAnalysis(analysis: Analysis): SkyDirection {
   const { series } = analysis
+  const azimuthDeg = series.body_azimuth_deg[0]
   return parseSkyDirection({
-    azimuthDeg: series.body_azimuth_deg[0],
+    azimuthDeg,
     elevationDeg: series.body_elevation_deg[0],
+    // The response carries the whole horizon profile; the height that matters is the
+    // one at the body's own azimuth, which is also what the API judged `visible` on.
+    horizonDeg:
+      azimuthDeg === undefined
+        ? undefined
+        : horizonAtAzimuth(analysis.horizon, azimuthDeg),
     visible: series.visible[0],
   })
 }

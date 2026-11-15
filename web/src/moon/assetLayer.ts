@@ -10,6 +10,7 @@ import {
   Ellipsoid,
   Entity,
   HeadingPitchRoll,
+  HorizontalOrigin,
   Material,
   Math as CesiumMath,
   Matrix4,
@@ -20,6 +21,7 @@ import {
   VerticalOrigin,
   type Viewer,
 } from 'cesium'
+import { assetCardText } from './assetCard'
 import { assetSymbolImage, type AssetSymbol } from './assetSymbol'
 import type { LunarLocation } from './location'
 import { rayOffsetEnu, type SkyDirection } from './lineOfSight'
@@ -122,7 +124,8 @@ interface Live {
   orientation: Quaternion
   mast: Cartesian3
   color: Color
-  label: string
+  /** The lines drawn beside the unit, rebuilt whenever its verdict changes. */
+  card: string
   /**
    * Terrain height under the unit, metres above the reference sphere, re-read every
    * frame from whatever tiles have streamed in. The last clean reading is kept so a
@@ -211,7 +214,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       orientation: Quaternion.IDENTITY,
       mast: positionAt(asset.location, asset.observerHeightM / 2),
       color: SIGHT_CLEAR,
-      label: asset.label,
+      card: assetCardText(asset),
       ground: 0,
     }
     live.orientation = facing(asset, live.body)
@@ -219,14 +222,17 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
     const body = viewer.entities.add({
       position: new CallbackPositionProperty(() => live.body, false),
       label: {
-        text: new CallbackProperty(() => live.label, false),
-        font: '600 13px monospace',
+        // A card beside the unit, not just a name. The ray that carries the same
+        // verdict is often buried in terrain, so the numbers have to stand on their
+        // own: whether the Earth is up, by how much, and from what height.
+        text: new CallbackProperty(() => live.card, false),
+        font: '500 12px monospace',
         showBackground: true,
         backgroundColor: LABEL_BACKGROUND,
-        // The ray itself can be buried in terrain; the name always shows, so it
-        // carries the verdict too.
+        backgroundPadding: new Cartesian2(8, 6),
         fillColor: new CallbackProperty(() => live.color, false),
-        pixelOffset: new Cartesian2(0, -18),
+        horizontalOrigin: HorizontalOrigin.LEFT,
+        pixelOffset: new Cartesian2(16, 0),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         distanceDisplayCondition: NEAR_BODY,
       },
@@ -304,7 +310,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
 
   const paint = (asset: MoonAsset, entities: Drawn): void => {
     const { live, sight } = entities
-    live.label = asset.label
+    live.card = assetCardText(asset)
     const ground = groundAt(asset.location, live)
     live.body = positionAt(asset.location, ground + anchorHeight(asset))
     live.orientation = facing(asset, live.body)
