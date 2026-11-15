@@ -32,15 +32,21 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [compareState, setCompareState] = useState<{ runId: string; ids: string[] } | null>(null)
+  const [compareState, setCompareState] = useState<{
+    runId: string
+    ids: string[]
+  } | null>(null)
   const moon = useRef<MissionMoonViewerHandle>(null)
   const selected = sites.find((site) => site.id === selection.siteId)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
-  const compareIds = run?.id === compareState?.runId
-    ? compareState.ids.filter((id) => run.candidates.some((c) => c.id === id))
-    : []
-  const comparison = compareIds.map((id) => run?.candidates.find((c) => c.id === id)).filter((c) => c !== undefined)
+  const compareIds =
+    run?.id === compareState?.runId
+      ? compareState.ids.filter((id) => run.candidates.some((c) => c.id === id))
+      : []
+  const comparison = compareIds
+    .map((id) => run?.candidates.find((c) => c.id === id))
+    .filter((c) => c !== undefined)
   function addComparison(id: string) {
     if (!run || !run.candidates.some((candidate) => candidate.id === id)) return
     const selectedInRun = run.candidates.some((c) => c.id === selection.siteId)
@@ -125,7 +131,9 @@ export function MissionWorkspace({
             ) : null}
             <section className="hud-section">
               <h2>TOP 5 후보</h2>
-              <p className="text-xs text-neutral-400">Ctrl/Shift+Click: 후보 A/B 비교 · 일반 클릭: 단일 후보 분석</p>
+              <p className="text-xs text-neutral-400">
+                Ctrl/Shift+Click: 후보 A/B 비교 · 일반 클릭: 단일 후보 분석
+              </p>
               <p className="text-xs text-neutral-400">
                 멀리서는 가까운 후보를 묶어 표시합니다. 묶음을 누르면 확대되고,
                 가까이서는 500m × 500m 격자가 보입니다.
@@ -189,7 +197,9 @@ export function MissionWorkspace({
                       onClick={() => addComparison(site.id)}
                       aria-label={`비교에 추가: ${index + 1}번 지점`}
                     >
-                      {compareIds.includes(site.id) ? '비교에서 제거' : '비교에 추가'}
+                      {compareIds.includes(site.id)
+                        ? '비교에서 제거'
+                        : '비교에 추가'}
                     </button>
                   </li>
                 ))}
