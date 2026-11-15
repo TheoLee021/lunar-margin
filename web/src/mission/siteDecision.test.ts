@@ -115,7 +115,5 @@ it('does not confuse center slope with regional slope', () => {
     50,
   )
   expect(result.pass).toBe(false)
-  expect(result.checks.find((check) => check.id === 'slope')?.pass).toBe(
-    false,
-  )
+  expect(result.checks.find((check) => check.id === 'slope')?.pass).toBe(false)
 })

@@ -277,12 +277,11 @@ export function MissionWorkspace({
                 </p>
                 <p className="mt-1 text-neutral-400">
                   지역 유효 표본{' '}
-                  {(selectedEvaluation.data.region.coverage_fraction * 100).toFixed(
-                    1,
-                  )}
+                  {(
+                    selectedEvaluation.data.region.coverage_fraction * 100
+                  ).toFixed(1)}
                   % ({selectedEvaluation.data.region.valid_samples}/
-                  {selectedEvaluation.data.region.total_samples}) ·
-                  DEM{' '}
+                  {selectedEvaluation.data.region.total_samples}) · DEM{' '}
                   {selectedEvaluation.data.region.sample_step_m.toFixed(0)} m
                   간격 · 착륙 안전성 UNVERIFIED
                 </p>
