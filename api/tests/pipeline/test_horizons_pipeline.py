@@ -93,3 +93,66 @@ def test_building_reports_progress_and_replaces_nothing_when_it_already_exists(
 def test_build_requires_the_dem_files(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"pipeline\.fetch"):
         build_for_config(TINY, tmp_path, workers=1, log=lambda _: None)
+
+
+# --- Storage 올리기·받기 (설정에서 table id를 정한다) ----------------------------------------
+
+
+def test_upload_uses_the_table_id_of_the_current_config(
+    data_copy: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import lunar_margin.pipeline.horizons as horizons
+    from lunar_margin.pipeline.table_storage import StorageConfig
+
+    built = build_for_config(TINY, data_copy, workers=1, log=lambda _: None)
+    seen: list[Path] = []
+
+    def fake_upload(directory: Path, cfg: StorageConfig, **kw: object) -> str:
+        seen.append(directory)
+        return directory.name
+
+    monkeypatch.setattr(horizons, "upload_table", fake_upload)
+
+    result = horizons.upload_for_config(
+        TINY, data_copy, StorageConfig("http://x", "k", "b"), log=lambda _: None
+    )
+
+    assert seen == [built] and result == built.name
+
+
+def test_upload_without_a_local_table_says_to_build_it_first(data_copy: Path) -> None:
+    import lunar_margin.pipeline.horizons as horizons
+    from lunar_margin.pipeline.table_storage import StorageConfig
+
+    with pytest.raises(FileNotFoundError, match=r"pipeline\.horizons"):
+        horizons.upload_for_config(
+            TINY, data_copy, StorageConfig("http://x", "k", "b"), log=lambda _: None
+        )
+
+
+def test_download_asks_for_the_table_id_of_the_current_config(
+    data_copy: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import lunar_margin.pipeline.horizons as horizons
+    from lunar_margin.pipeline.table_storage import StorageConfig
+
+    calls: list[tuple[str, Path]] = []
+
+    def fake(table_id: str, dest: Path, cfg: StorageConfig, **kw: object) -> Path:
+        calls.append((table_id, dest))
+        return dest / table_id
+
+    monkeypatch.setattr(horizons, "download_table", fake)
+
+    horizons.download_for_config(
+        TINY, data_copy, StorageConfig("http://x", "k", "b"), log=lambda _: None
+    )
+
+    assert calls == [(table_spec_for(TINY, data_copy).table_id(), data_copy / "horizons")]
+
+
+def test_a_search_without_a_table_points_to_both_ways_of_getting_one(data_copy: Path) -> None:
+    outcome = run_search(TINY, data_copy, log=lambda _: None)
+
+    warning = next(w for w in outcome.summary.warnings if "수평선 테이블" in w)
+    assert "pipeline.horizons --download" in warning and "pipeline.horizons`" in warning

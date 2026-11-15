@@ -175,6 +175,18 @@ uv run python -m lunar_margin.pipeline.horizons --workers 12   # 기본 설정�
 - 테이블을 쓰면 거친·세밀 단계가 모두 테이블의 방위 간격(기본 1°)을 쓴다.
 - `meta.json`이 마지막에 쓰이므로 만들던 중인 테이블은 열리지 않는다.
 
+**Storage로 공유**: 테이블은 git에 넣지 않고(`api/data/`는 무시됨) Supabase Storage의 비공개 버킷에 둔다.
+
+```sh
+uv run python -m lunar_margin.pipeline.horizons --upload     # service_role 키 필요 (백엔드·로컬에서만)
+uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 받기
+```
+
+- 파일은 32 MiB 조각으로 나눠 올린다 (플랜별 파일 크기 한도를 피하기 위해). 전체 sha256을 적은 `manifest.json`을 **마지막에** 올려서, manifest가 보이면 모든 조각이 올라가 있다.
+- 받을 때는 임시 폴더에 조립해 sha256을 검증한 뒤에만 제자리로 옮긴다. 이미 있고 sha256이 맞으면 다시 받지 않는다.
+- Storage 경로: `horizons/{table_id}/{파일}.partNNNN`, `horizons/{table_id}/manifest.json`. id는 설정이 정한다 (12자리 소문자 16진수만 허용).
+- 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`. 테스트는 가짜 서버로 했고 **실제 Supabase 프로젝트로는 아직 확인하지 않았다** (버킷 생성과 플랜별 한도 확인은 팀에서).
+
 ## 7. 검증으로 확인한 것
 
 - **DEM 가장자리**: 80°S DEM(극에서 304 km)은 극에서 104 km보다 먼 점(ROI 면적의 약 절반)에서 200 km 탐색이 DEM 밖으로 나간다.

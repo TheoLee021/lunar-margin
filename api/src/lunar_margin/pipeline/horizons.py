@@ -1,6 +1,8 @@
 """수평선 테이블 사전 계산: 한 번 계산해 DATA_DIR/horizons/{id}/에 두면 이후 탐색이 읽기만 한다.
 
 실행: uv run python -m lunar_margin.pipeline.horizons [--config cfg.json] [--workers N]
+     uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 Storage에서 받기
+     uv run python -m lunar_margin.pipeline.horizons --upload     # 만든 테이블을 Storage에 올리기
 기본 설정(ROI 85°S 이남, 500 m 격자, 방위 1°)이면 약 29만 지점이고 14코어에서 20분 안팎이 걸린다.
 """
 
@@ -18,6 +20,11 @@ from lunar_margin.engine.candidates.horizon_table import (
     build_horizon_table,
 )
 from lunar_margin.pipeline.sources import DEM_SOURCES, Source
+from lunar_margin.pipeline.table_storage import (
+    StorageConfig,
+    download_table,
+    upload_table,
+)
 
 TABLES_DIR = "horizons"
 
@@ -102,15 +109,58 @@ def build_for_config(
     return directory
 
 
+def upload_for_config(
+    config: SearchConfig,
+    data_dir: Path,
+    storage: StorageConfig,
+    *,
+    log: Callable[[str], None] = print,
+) -> str:
+    """로컬에 만들어 둔 테이블(설정의 table id)을 Storage에 올린다."""
+    spec = table_spec_for(config, data_dir)
+    directory = data_dir / TABLES_DIR / spec.table_id()
+    if not (directory / "meta.json").exists():
+        raise FileNotFoundError(
+            f"horizon table {spec.table_id()} not found in {data_dir / TABLES_DIR}; "
+            "build it first with `uv run python -m lunar_margin.pipeline.horizons`"
+        )
+    return upload_table(directory, storage, log=log)
+
+
+def download_for_config(
+    config: SearchConfig,
+    data_dir: Path,
+    storage: StorageConfig,
+    *,
+    log: Callable[[str], None] = print,
+) -> Path:
+    """Storage에서 설정의 table id에 해당하는 테이블을 받는다 (sha256을 확인한다)."""
+    spec = table_spec_for(config, data_dir)
+    return download_table(spec.table_id(), data_dir / TABLES_DIR, storage, log=log)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="SearchConfig JSON (생략하면 기본값)")
     parser.add_argument("--workers", type=int, help="프로세스 수 (기본: CPU 코어 수)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--download", action="store_true", help="계산하지 않고 Supabase Storage에서 받는다"
+    )
+    mode.add_argument(
+        "--upload", action="store_true", help="만들어 둔 테이블을 Supabase Storage에 올린다"
+    )
     args = parser.parse_args()
     config = (
         SearchConfig.model_validate_json(args.config.read_text()) if args.config else SearchConfig()
     )
-    build_for_config(config, Settings().data_dir, workers=args.workers)
+    settings = Settings()
+    if args.download:
+        download_for_config(config, settings.data_dir, StorageConfig.from_settings(settings))
+    elif args.upload:
+        upload_for_config(config, settings.data_dir, StorageConfig.from_settings(settings))
+    else:
+        build_for_config(config, settings.data_dir, workers=args.workers)
 
 
 if __name__ == "__main__":
