@@ -74,6 +74,8 @@ def test_illumination_returns_contract_schema(client: TestClient) -> None:
         "2027-01-01T02:00:00Z",
     ]
     assert body["series"]["visible"] == [True, False, False]
+    assert len(body["series"]["terrain_clearance_deg"]) == 3
+    assert body["visible_clearance_p10_deg"] is None
     assert len(body["series"]["body_azimuth_deg"]) == 3
     assert body["windows"] == [{"start": "2027-01-01T00:00:00Z", "end": "2027-01-01T01:00:00Z"}]
     assert body["dark_periods"] == [

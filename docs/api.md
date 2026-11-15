@@ -50,6 +50,8 @@
 
 - `metrics`: illumination은 평균 일조율, 최장 연속 암흑 시간, 24시간당 일조 창 횟수. earth-visibility는 평균 지구 가시율, 최장 통신 두절 시간, 가시 구간 평균 지구 고도각 (`mean_elevation_deg`는 가시 구간이 없으면 `null`).
 - `horizon`: 방위각별 지형 수평선 고각(도). 관측점 기준.
+- `visible_clearance_p10_deg`: 지형 수평선 위에 있는 시각들에서 천체 중심 고도와 지형 수평선의 각도 차이(°)의 10백분위수. 가시 시각이 없으면 null. 기하학적 여유이며 RF 링크 마진/신뢰구간이 아니다.
+- `series.terrain_clearance_deg`: 표본별 `body_elevation_deg - horizon.at(body_azimuth_deg)` (°). 양수이면 기하학적 가시. 전송 손실이나 지상국 가시성을 뜻하지 않는다.
 - `series`: 시간 배열과 같은 길이의 배열들. `visible` = `body_elevation_deg > horizon(body_azimuth_deg)`.
 - `windows`, `dark_periods`: `visible` 연속 구간(`end` 미포함). 기간 경계에서 잘린 구간도 포함.
 

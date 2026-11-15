@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from lunar_margin.app.settings import Settings
+from lunar_margin.engine.clearance import terrain_clearance_diagnostics
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.engine.metrics import SiteAnalysis, VisibilityMetrics, analyze_site, find_runs
@@ -60,6 +61,7 @@ class Horizon(BaseModel):
 
 
 class Series(BaseModel):
+    terrain_clearance_deg: list[float]
     times: list[str]
     body_azimuth_deg: list[float]
     body_elevation_deg: list[float]
@@ -83,6 +85,7 @@ class AnalysisResponse(BaseModel):
     series: Series
     windows: list[Period]
     dark_periods: list[Period]
+    visible_clearance_p10_deg: float | None
 
 
 class SiteAssessment(BaseModel):
@@ -184,6 +187,9 @@ def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisRe
         analysis = analyzer(kind, query)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    diagnostics = terrain_clearance_diagnostics(
+        analysis.horizon, analysis.body_azimuth_deg, analysis.body_elevation_deg
+    )
     return AnalysisResponse(
         lat=query.lat,
         lon=query.lon,
@@ -197,6 +203,7 @@ def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisRe
             elevation_deg=_round(analysis.horizon.elevation_deg),
         ),
         series=Series(
+            terrain_clearance_deg=_round(diagnostics.clearance_deg),
             times=[_utc(t) for t in analysis.times],
             body_azimuth_deg=_round(analysis.body_azimuth_deg),
             body_elevation_deg=_round(analysis.body_elevation_deg),
@@ -204,6 +211,11 @@ def _respond(kind: Kind, query: AnalysisQuery, analyzer: Analyzer) -> AnalysisRe
         ),
         windows=_periods(analysis, True),
         dark_periods=_periods(analysis, False),
+        visible_clearance_p10_deg=(
+            None
+            if diagnostics.visible_clearance_p10_deg is None
+            else round(diagnostics.visible_clearance_p10_deg, 3)
+        ),
     )
 
 
