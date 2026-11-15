@@ -490,3 +490,28 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 ### POST /reservations/{id}/cancel
 
 운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+
+
+### Optional regional roughness filtering
+
+`POST /candidates/search`, `/search/dev` and calendar mission inputs accept
+`max_terrain_roughness_m`: a finite number ≥ 0, or `null`/omitted to disable.
+This is the maximum 95th-percentile roughness in a 250 m radius, not slope in
+degrees. Local roughness is the RMS elevation residual after removing a best-fit
+plane over a 400 m window. The primary LOLA DEM resolution remains 80 m.
+
+Coarse promotion and fine eligibility enforce the limit inclusively. An enabled
+roughness filter requires 100% valid regional coverage; missing terrain never
+passes as zero roughness. Excess roughness yields `terrain_roughness_above_max`;
+incomplete/missing regional terrain yields `terrain_incomplete`.
+
+Candidate `terrain.roughness_p95_m` is additive and nullable for historical runs.
+It is also exported in CSV, `candidates_simple.json`, and `sites.npz` (as
+`terrain_roughness_p95_m`). `/analysis/site-assessment` exposes the same regional
+roughness field. The candidate table/detail and input summary show meters and
+whether the saved run applied the limit. Mission cache version 3 prevents reuse
+of runs that ignored this filter. This hard filter changes which candidates can
+be ranked; it does not introduce an arbitrary roughness score weight.
+
+RF communication changes are tracked separately; this roughness change preserves
+the existing geometric Earth-visibility metric and scoring.

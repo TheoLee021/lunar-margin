@@ -303,3 +303,16 @@ uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 받
 세밀 528개, 중복 제거 후 총 659개 지점을 평가해 3개를 선정했고,
 4개 워커로 결과 저장까지 **28.07초**가 걸렸다. 같은 컴퓨터에서 별도 정밀 탐색이
 진행 중이었으므로 성능 보장값은 아니다. 실행 ID: `dev-v1-m-371188c132`.
+
+
+## Regional roughness constraint
+
+The optional maximum regional roughness input is in meters. It filters the
+250 m regional P95 of plane-detrended RMS roughness (400 m local windows),
+independently of the slope constraint. Blank means disabled. Incomplete terrain
+is excluded when either terrain constraint is enabled. Roughness is calculated
+with the existing terrain pass, including batched calendar search, so it does not
+repeat horizon or SPICE calculations. Candidate JSON, exports and the UI preserve
+this measurement; historic runs without it show no value rather than zero.
+The filter affects eligibility before ranking; the existing visibility weights
+are unchanged. It cannot resolve boulders or certify landing safety.

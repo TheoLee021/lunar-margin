@@ -13,6 +13,7 @@ export interface MissionFormValues {
   durationDays: string
   maxDarknessHours: string
   maxBlackoutHours: string
+  maxRoughnessM?: string
   slopeEnabled: boolean
   slopeDegrees: string
   priority: Priority
@@ -38,6 +39,7 @@ export type MissionField =
   | 'durationDays'
   | 'maxDarknessHours'
   | 'maxBlackoutHours'
+  | 'maxRoughnessM'
   | 'slopeDegrees'
   | 'observerHeightM'
 export type MissionErrors = Partial<Record<MissionField, string>>
@@ -119,6 +121,13 @@ export function parseMissionForm(values: MissionFormValues): MissionParse {
     errors.maxBlackoutHours =
       '0 이상의 숫자를 입력하세요 (비워 두면 조건 없음).'
 
+  const roughness = optionalNonNegative(values.maxRoughnessM ?? '')
+  if (
+    roughness === undefined ||
+    (roughness !== null && !Number.isFinite(roughness))
+  )
+    errors.maxRoughnessM = '지역 거칠기는 0 이상의 유한한 숫자(m)여야 합니다.'
+
   let slope: number | null = null
   if (values.slopeEnabled) {
     const text = values.slopeDegrees.trim()
@@ -151,6 +160,7 @@ export function parseMissionForm(values: MissionFormValues): MissionParse {
       max_continuous_darkness_hours: darkness,
       max_communication_blackout_hours: blackout,
       max_terrain_slope_degrees: slope,
+      ...(roughness != null ? { max_terrain_roughness_m: roughness } : {}),
       search_region: 'south',
       optimization_priority: values.priority,
       observer_height_m: observer,
@@ -168,6 +178,9 @@ export function missionRequestJson(request: MissionRequest): string {
       max_communication_blackout_hours:
         request.max_communication_blackout_hours,
       max_terrain_slope_degrees: request.max_terrain_slope_degrees,
+      ...(request.max_terrain_roughness_m != null
+        ? { max_terrain_roughness_m: request.max_terrain_roughness_m }
+        : {}),
       search_region: request.search_region,
       optimization_priority: request.optimization_priority,
       observer_height_m: request.observer_height_m,
@@ -261,6 +274,16 @@ export function missionSummaryItems(
               mission.max_terrain_slope_degrees
             ? `${mission.max_terrain_slope_degrees}° 이하 (250 m 지역 P95)`
             : `${mission.max_terrain_slope_degrees}° (적용되지 않음)`,
+    },
+    {
+      label: '최대 지역 거칠기',
+      value:
+        mission.max_terrain_roughness_m == null
+          ? '지정하지 않음'
+          : thresholds?.max_terrain_roughness_m ===
+              mission.max_terrain_roughness_m
+            ? `${mission.max_terrain_roughness_m} m 이하 (250 m 지역 P95)`
+            : `${mission.max_terrain_roughness_m} m (적용되지 않음)`,
     },
     {
       label: '최적화 우선순위',

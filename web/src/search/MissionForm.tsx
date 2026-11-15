@@ -231,6 +231,22 @@ export function MissionForm({
               지점은 제외합니다. 착륙 안전 인증은 아닙니다.
             </span>
           </div>
+          <label className="flex flex-col gap-2 text-xs text-neutral-300">
+            최대 지역 거칠기 (m)
+            <input
+              aria-label="최대 지역 거칠기"
+              className={inputClass}
+              type="number"
+              min="0"
+              step="any"
+              value={values.maxRoughnessM ?? ''}
+              onChange={(event) => update('maxRoughnessM', event.target.value)}
+            />
+            <span>
+              250 m 지역의 거칠기 P95 · 400 m 창에서 전체 기울기를 제거한
+              RMS입니다. 비우면 거칠기로 필터링하지 않습니다.
+            </span>
+          </label>
           <div className="flex flex-col gap-2 text-xs text-neutral-300">
             <label>
               <input

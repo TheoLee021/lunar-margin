@@ -46,6 +46,7 @@ const EarthMetricsSchema = z.object({
 
 // 후보 중심 250 m 원의 지역 지형. /analysis/site-assessment 도 같은 형태를 쓴다.
 export const TerrainSchema = z.object({
+  roughness_p95_m: z.number().nonnegative().nullable().optional(),
   slope_p95_deg: NullableNumber,
   coverage_fraction: z.number().min(0).max(1).nullable(),
   assessment_radius_m: z.number().positive(),
@@ -95,6 +96,7 @@ const ThresholdsSchema = z.object({
   min_earth_fraction: NullableNumber,
   max_earth_blackout_hours: NullableNumber,
   max_terrain_slope_degrees: NullableNumber.optional(),
+  max_terrain_roughness_m: z.number().nonnegative().nullable().optional(),
 })
 export type SearchThresholds = z.infer<typeof ThresholdsSchema>
 
@@ -126,6 +128,7 @@ export const MissionRequestSchema = z.object({
   max_continuous_darkness_hours: NullableNumber,
   max_communication_blackout_hours: NullableNumber,
   max_terrain_slope_degrees: NullableNumber,
+  max_terrain_roughness_m: z.number().nonnegative().nullable().optional(),
   search_region: z.literal('south'),
   optimization_priority: PrioritySchema,
   observer_height_m: NullableNumber,

@@ -49,6 +49,7 @@ class Selection(_Model):
 
 
 class TerrainMetrics(_Model):
+    roughness_p95_m: float | None = None
     slope_p95_deg: float | None
     coverage_fraction: float | None
     assessment_radius_m: float = 250.0
