@@ -24,7 +24,9 @@ interface MoonViewerProps {
   /** Labelled points such as candidate landing sites. */
   markers?: readonly MoonMarker[]
   selectedMarkerId?: string | null
+  comparedMarkerIds?: readonly string[]
   onMarkerSelect?: (id: string) => void
+  onMarkerCompare?: (id: string) => void
   /** Click on the surface (not on a marker). */
   onPick?: (location: LunarLocation) => void
 }
@@ -44,7 +46,9 @@ export default function MoonViewer({
   ref,
   markers = NO_MARKERS,
   selectedMarkerId = null,
+  comparedMarkerIds = [],
   onMarkerSelect,
+  onMarkerCompare,
   onPick,
 }: MoonViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -54,13 +58,13 @@ export default function MoonViewer({
     fly?: { location: LunarLocation; rangeM?: number }
     sun?: Vector3 | null
   }>({})
-  const callbacks = useRef({ onPick, onMarkerSelect })
+  const callbacks = useRef({ onPick, onMarkerSelect, onMarkerCompare })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const ready = state.kind === 'ready'
 
   useEffect(() => {
-    callbacks.current = { onPick, onMarkerSelect }
-  }, [onPick, onMarkerSelect])
+    callbacks.current = { onPick, onMarkerSelect, onMarkerCompare }
+  }, [onPick, onMarkerSelect, onMarkerCompare])
 
   useEffect(() => {
     if (ready) sceneRef.current?.setMarkers(markers)
@@ -69,6 +73,10 @@ export default function MoonViewer({
   useEffect(() => {
     if (ready) sceneRef.current?.setSelectedMarker(selectedMarkerId)
   }, [ready, selectedMarkerId])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setComparedMarkers(comparedMarkerIds)
+  }, [ready, comparedMarkerIds])
 
   useImperativeHandle(
     ref,
@@ -103,6 +111,7 @@ export default function MoonViewer({
           signal: controller.signal,
           onPick: (location) => callbacks.current.onPick?.(location),
           onMarkerSelect: (id) => callbacks.current.onMarkerSelect?.(id),
+          onMarkerCompare: (id) => callbacks.current.onMarkerCompare?.(id),
           onHeadingChange: (heading) => {
             if (compassRef.current)
               compassRef.current.style.transform = `rotate(${-heading}rad)`
