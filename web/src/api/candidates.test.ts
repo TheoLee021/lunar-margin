@@ -245,3 +245,19 @@ it('preserves regional terrain measurements and the applied slope threshold', ()
     10,
   )
 })
+
+it('preserves a saved RF margin separately from geometric diagnostics', () => {
+  const parsed = CandidateSchema.parse({
+    ...candidate,
+    rf: {
+      fraction: 0.8,
+      longest_blackout_hours: 6,
+      min_link_margin_db: 15.688618,
+      required_ebn0_db: 0.745886,
+      rx_required_dbw: -144.144136,
+      evaluation_hours: 24,
+      available_hours: 19.2,
+    },
+  })
+  expect(parsed).toHaveProperty('rf.min_link_margin_db', 15.688618)
+})

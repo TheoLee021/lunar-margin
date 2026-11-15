@@ -58,6 +58,19 @@ export const TerrainSchema = z.object({
 export type Terrain = z.infer<typeof TerrainSchema>
 
 export const CandidateSchema = z.object({
+  // Saved nominal RF evaluation (PR #47). Never derive dB from geometric degrees.
+  rf: z
+    .object({
+      fraction: NullableNumber,
+      longest_blackout_hours: NullableNumber,
+      min_link_margin_db: NullableNumber,
+      required_ebn0_db: z.number(),
+      rx_required_dbw: z.number(),
+      evaluation_hours: z.number().positive(),
+      available_hours: NullableNumber,
+    })
+    .nullable()
+    .optional(),
   id: z.string(),
   rank: z.number(),
   lat_deg: z.number(),

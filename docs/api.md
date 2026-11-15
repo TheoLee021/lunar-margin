@@ -556,3 +556,33 @@ be ranked; it does not introduce an arbitrary roughness score weight.
 
 RF communication changes are tracked separately; this roughness change preserves
 the existing geometric Earth-visibility metric and scoring.
+
+### 후보 상세의 지형 여유각·일조 연속성
+
+PR #43의 지형 여유각 계산과 PR #44의 일조 연속성 계산을 후보 상세에 연결한다.
+기존 API에 다음 선택 필드를 추가하며, 과거 응답에서 필드가 없을 때 프런트는 ‘미제공’으로 표시한다.
+
+- `/analysis/illumination`, `/analysis/earth-visibility`:
+  `series.terrain_clearance_deg`는 표본별 `천체 중심 고도 − 같은 방위각의 지형 수평선 고도` [°].
+  `visible_clearance_p10_deg`는 양의 여유각 표본만의 10백분위수이며, 가시 표본이 없으면 null.
+  새 필드는 계산 정밀도 그대로 제공한다. 기존 고도 배열의 표시용 반올림과 구분한다.
+- `/analysis/site-assessment`:
+  `terrain_clearance.sun_visible_p10_deg`, `earth_visible_p10_deg`로 두 천체의 여유각을 요약한다.
+  `solar_continuity.longest_sun_visible_hours` [h], `visibility_transitions` [회]를 추가한다.
+  마지막 표본은 `min(표본 간격, 요청 종료까지 남은 시간)`으로 집계한다. 예를 들어 10분 구간을
+  30분 간격으로 요청해도 연속 일조는 최대 10분이다. 중간에 차폐가 있으면 연속 구간을 분리하고,
+  시작과 끝의 가시 구간을 이어 붙이지 않는다. 전환 횟수는 실제 인접 표본 사이의 변화만 센다.
+
+후보 선택 시 요약 GET 한 번으로 두 천체의 진단을 가져온다. 상세 진단 기간은 기존 시계열과 같은
+‘임무 기간 전체 또는 시작부터 최대 1년’, 30분 간격이며 화면에 기간·간격·관측 높이를 표시한다.
+선택 변경·닫기 시 요청을 취소하고, 로딩·오류/재시도·미제공·가시 구간 없음·진짜 0을 구분한다.
+기존 시계열 보기 버튼과 분석 종류 탭은 유지한다.
+
+지형 여유각 [°]은 기하학적 LOS 진단이며 RF 링크마진 [dB]이나 신뢰구간·통신 성공률이 아니다.
+P10은 가시 구간에 조건부인 지표이므로 전체 기간의 가시율을 대체하지 않는다. 일조 연속성도
+발전량·배터리 용량·정확한 일출/일몰 시각을 예측하지 않는다.
+
+후보 결과에 PR #47의 선택적 `rf` 객체가 있으면, 저장된 `min_link_margin_db`를 별도 RF 항목에 표시한다.
+해당 객체가 없거나 값이 null이면 ‘미계산’으로 표시하며 각도에서 RF 마진을 계산하지 않는다.
+저장된 RF 값은 원래 탐색 기간의 명목 값이고, LOS 차폐 시에는 차폐 손실을 반영하지 않은 가상 LOS 값이다.
+이 PR은 RF 결과를 읽기 위한 기존 필드 계약만 수용하며 RF 계산·필터·점수 계산을 추가하지 않는다.

@@ -14,6 +14,7 @@ import {
   scoreText,
 } from './derive'
 import { thresholdsFor } from './stepCopy'
+import { CandidateDiagnostics } from './CandidateDiagnostics'
 
 export type Selection =
   | { kind: 'candidate'; candidate: Candidate }
@@ -133,6 +134,22 @@ export function CandidateDetail({
         </p>
       )}
 
+      <CandidateDiagnostics
+        params={{
+          lat: Number(lat.toFixed(6)),
+          lon: Number(lon.toFixed(6)),
+          ...detailPeriod(config.window),
+          step_minutes: 30,
+          observer_height_m: config.observer_height_m,
+        }}
+        enabled={analyzable}
+        rfMargin={
+          selection.kind === 'candidate'
+            ? selection.candidate.rf?.min_link_margin_db
+            : undefined
+        }
+      />
+
       <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -231,7 +248,7 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
         </div>
         <div>
           <h4 className="mb-1 text-xs font-semibold text-sky-300">
-            지구 직접 통신
+            지구 가시성 · 지형 LOS
           </h4>
           <dl>
             <Row
@@ -239,11 +256,11 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
               value={fractionText(candidate.earth.fraction)}
             />
             <Row
-              label="최장 통신 두절"
+              label="최장 지구 차폐"
               value={hoursText(candidate.earth.longest_blackout_hours)}
             />
             <Row
-              label="24시간당 통신 가능 구간"
+              label="24시간당 지구 가시 구간"
               value={
                 candidate.earth.windows_per_24h === null
                   ? '—'
