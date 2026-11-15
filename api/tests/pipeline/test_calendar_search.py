@@ -16,7 +16,7 @@ def test_batch_keeps_each_dates_exact_adaptive_grids_and_results(
     data_dir: Path, tmp_path: Path
 ) -> None:
     for folder in ("dem", "spice"):
-        (tmp_path / folder).symlink_to(data_dir / folder, target_is_directory=True)
+        (tmp_path / folder).symlink_to((data_dir / folder).resolve(), target_is_directory=True)
     base = SearchConfig(roi=Roi(max_lat_deg=-89.95), coarse_spacing_m=1000, workers=1)
     configs = [
         plan_search(
