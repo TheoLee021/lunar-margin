@@ -1,6 +1,7 @@
 name: lunar-margin
 
 # 백엔드를 띄우기만 할 때: docker compose up --build
+# 분석 API용 NASA 데이터(처음 한 번): docker compose run --rm api python -m lunar_margin.pipeline.fetch
 # 백엔드를 개발할 때는 api/에서 uv run fastapi dev (AGENTS.md 참고)
 services:
   api:
@@ -13,3 +14,5 @@ services:
         required: false
     volumes:
       - ./api/src:/app/src
+      # NASA 데이터(DEM, SPICE). 컨테이너의 DATA_DIR 기본값 data = /app/data
+      - ./api/data:/app/data

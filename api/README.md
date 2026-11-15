@@ -12,6 +12,7 @@
 | SPICE 태양·지구 방위각/고도 (`engine/ephemeris.py`) | 완료 |
 | 일조·지구 가시성 지표 (`engine/metrics.py`) | 완료 |
 | API `GET /analysis/illumination`, `GET /analysis/earth-visibility` | 완료 (`docs/api.md` 계약 반영) |
+| 착륙 후보지 탐색 (남극, 거친→세밀) | 구현 (`docs/candidates.md`) |
 | 오버레이 타일 사전 계산 (`/tiles/...`) | 미착수 |
 | CI에서 SPICE 커널 캐시 | 미착수 (아래 "알려진 한계") |
 
@@ -36,9 +37,9 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 첫 `pytest` 실행은 데이터를 내려받는다(네트워크 필요).
 
-## 사용하는 NASA 데이터 (두 가지)
+## 사용하는 NASA 데이터
 
-`uv run python -m lunar_margin.pipeline.fetch`가 `DATA_DIR`(기본 `api/data/`, git 제외)에 합계 약 269 MB를 받는다.
+`uv run python -m lunar_margin.pipeline.fetch`가 `DATA_DIR`(기본 `api/data/`, git 제외)에 합계 약 501 MB를 받는다.
 크기와 sha256을 `manifest.json`에 기록하고, 다시 실행하면 손상된 파일을 검증해 새로 받는다.
 선정은 잠정이며 D 확정 대기다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
 
@@ -55,14 +56,54 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 | --- | --- | --- |
 | `ldem_80s_80m_float.img` | 231 MB | LOLA 높이 값 본체 |
 | `ldem_80s_80m_float.lbl` | 4.8 KB | 격자 크기·투영 정보 (PDS3 라벨) |
+| `ldem_75s_120m_float.img` | 232 MB | 보충 DEM: 남위 75°~90°, 120 m 간격 7624×7624 |
+| `ldem_75s_120m_float.lbl` | 4.9 KB | 보충 DEM의 격자·투영 정보 |
 | `de440s.bsp` | 32.7 MB | 태양·지구·달 위치 (JPL DE440 천체력, 축약형) |
 | `moon_pa_de440_200625.bpc` | 12.9 MB | 달의 정밀한 자전·방향 |
 | `moon_de440_250416.tf` | 19 KB | 달 좌표계 `MOON_ME` 정의 (LOLA DEM과 같은 좌표계) |
 | `pck00011.tpc` | 131 KB | 천체 크기 등 기본 상수 |
 | `naif0012.tls` | 5 KB | 윤초 정보 (UTC 시각 변환) |
 
+### 보충 DEM (합성 DEM)
+
+주 DEM(80 m)은 남위 80°까지만 덮어서, ROI 바깥쪽(남위 85° 부근) 지점이 극 반대쪽을 볼 때 수평선 탐색이 DEM 밖으로 나간다.
+그래서 **80 m 값을 우선 쓰고, 그 밖이나 결측인 곳만 120 m 값으로 메우는 합성 DEM**(`CompositeDem`)을 쓴다.
+두 파일이 같은 극 입체투영·같은 구(반경 1737.4 km)라 좌표 변환 없이 겹친다.
+120 m 격자는 더 거칠어서 약 120 m보다 작은 지형은 뭉개지지만, 보충 영역은 먼 지형이라 수평선에 거의 영향이 없었다
+(80°S 바깥을 가려 비교한 수평선 차이 0.000°, 같은 지점을 두 DEM으로 계산했을 때 해상도 차이는 평균 0.12~0.15°).
+두 DEM은 80 m DEM과 보충 DEM 모두 `fetch`가 함께 받고, 파일이 없으면 탐색이 오류와 함께 `fetch` 실행을 안내한다.
+
+### 수평선 테이블 (파생 데이터)
+
+수평선은 지점과 DEM으로만 정해지고 날짜·제약과 무관해서, 한 번 계산해 `DATA_DIR/horizons/`에 저장해 두고 이후 탐색이 읽는다 (약 210 MB, git 제외).
+`uv run python -m lunar_margin.pipeline.horizons`로 만든다. 자세한 내용은 [docs/candidates.md](../docs/candidates.md) 6a절.
+
+만드는 데 20~50분이 걸려서, 한 번 만든 테이블은 Supabase Storage(비공개 버킷)로 공유한다.
+
+```sh
+uv run python -m lunar_margin.pipeline.horizons --upload     # 만든 테이블을 Storage에 올리기
+uv run python -m lunar_margin.pipeline.horizons --download   # 계산 대신 Storage에서 받기 (sha256 확인)
+```
+
+`api/.env`에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`(기본 `horizon-tables`)을 둔다. 올리기는 service_role 키가 필요하므로 백엔드나 로컬 스크립트에서만 한다.
+
+**서버를 시작할 때 테이블이 없으면 위 설정이 있는 경우 자동으로 받는다** (백그라운드, 서버는 바로 뜬다). 배포에서는 `DATA_DIR`을 영구 Volume에 두면 다시 받지 않는다. `HORIZON_TABLE_DOWNLOAD_ON_START=false`로 끈다.
+
 두 데이터는 이렇게 합쳐진다: 천체의 고도가 그 방향의 지형 수평선보다 높으면 "보인다"고 판정하고,
 이 판정을 시간별로 쌓아 일조율·최장 암흑 시간·지구 가시율 같은 지표를 만든다 (자세한 방법은 아래 "계산 방법").
+
+## 착륙 후보지 탐색
+
+남극 ROI(기본 85°S 이남)를 격자로 훑어 일조·지구 가시성 지표를 계산하고, 필수 조건으로 거른 뒤
+서로 떨어진 대표 후보 Top-K를 뽑는다. 설계, 설정, 출력, 확장 방법은 [docs/candidates.md](../docs/candidates.md).
+
+```sh
+uv run python -m lunar_margin.pipeline.candidates --out out/candidates   # map.html, candidates.json ...
+```
+
+- 거친 격자(2 km)로 먼저 훑고 유망한 영역만 500 m로 세밀화한다. 14코어에서 수 분~십수 분.
+- 수평선이 DEM 밖으로 나가는 지점은 `horizon_complete=false`로 표시한다. 합성 DEM 덕분에 ROI 전체가 DEM 안에 들어와서 이 표시는 거의 나오지 않는다.
+- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 D와 정한다.
 
 ## 구조
 
