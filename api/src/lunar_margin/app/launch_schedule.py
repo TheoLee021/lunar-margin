@@ -12,15 +12,15 @@ from fastapi import APIRouter
 from pydantic import Field
 
 from lunar_margin.engine.launch_schedule import (
-    MISSIONS,
     SFN_FEED,
     SFN_URL,
+    Feed,
     Launch,
     merge_launches,
     parse_sfn,
-    parse_sls,
 )
 from lunar_margin.engine.provider_pricing import Model
+from lunar_margin.pipeline.launch_sources import Collected, Fetched, collect_sls
 
 router = APIRouter(prefix="/pricing/providers", tags=["provider pricing"])
 
@@ -31,6 +31,9 @@ class SourceState(Model):
     fetched_at: datetime
     stale: bool = False
     error: str | None = None
+    scanned_records: int = 0
+    scanned_pages: int = 0
+    complete: bool = True
 
 
 class LaunchSchedule(Model):
@@ -39,14 +42,15 @@ class LaunchSchedule(Model):
     timezone: str = Field(default="UTC", pattern="^UTC$")
 
 
-def download(url: str) -> str:
+def download(url: str) -> Fetched:
     with urlopen(
         Request(url, headers={"User-Agent": "LunarMargin/1.0 (launch schedule reader)"}), timeout=5
     ) as response:
         body = response.read(4_000_001)
+        pages = int(response.headers.get("X-WP-TotalPages", "1"))
     if len(body) > 4_000_000:
         raise ValueError("Schedule response exceeds size limit")
-    return body.decode("utf-8")
+    return Fetched(body.decode("utf-8-sig"), pages)
 
 
 class ScheduleReader:
@@ -61,56 +65,51 @@ class ScheduleReader:
         with self.lock:
             if time.monotonic() < self.expires:
                 return self.data
-            targets = [("Spaceflight Now", SFN_FEED, None)] + [
-                ("Space Launch Schedule", values[2], key) for key, values in MISSIONS.items()
-            ]
             records: list[Launch] = []
             states: list[SourceState] = []
-            with ThreadPoolExecutor(max_workers=3) as pool:
+
+            def sfn() -> Collected:
+                body = download(SFN_FEED).text
+                return Collected(parse_sfn(body), len(Feed.model_validate_json(body).launches), 1)
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
                 pending = [
-                    (name, url, mission, pool.submit(download, url))
-                    for name, url, mission in targets
+                    ("Spaceflight Now", SFN_URL, pool.submit(sfn)),
+                    (
+                        "Space Launch Schedule",
+                        "https://www.spacelaunchschedule.com/",
+                        pool.submit(collect_sls, download, datetime.now(UTC).date()),
+                    ),
                 ]
-                for name, url, mission, future in pending:
+                for name, url, future in pending:
                     try:
-                        body = future.result()
-                        parsed = parse_sfn(body) if mission is None else [parse_sls(body, mission)]
-                        if not parsed:
-                            raise ValueError("No supported lunar missions in source")
-                        records.extend(parsed)
+                        result = future.result()
+                        records.extend(result.launches)
                         states.append(
                             SourceState(
                                 name=name,
-                                url=SFN_URL if mission is None else url,
+                                url=url,
                                 fetched_at=datetime.now(UTC),
+                                scanned_records=result.scanned_records,
+                                scanned_pages=result.scanned_pages,
                             )
                         )
                     except (OSError, ValueError) as error:
-                        previous_sources = [
-                            s
-                            for s in self.data.sources
-                            if s.url == (SFN_URL if mission is None else url)
-                        ]
-                        stamp = (
-                            previous_sources[0].fetched_at
-                            if previous_sources
-                            else datetime.now(UTC)
+                        previous = next(
+                            (state for state in self.data.sources if state.name == name), None
                         )
                         states.append(
                             SourceState(
                                 name=name,
-                                url=SFN_URL if mission is None else url,
-                                fetched_at=stamp,
+                                url=url,
+                                fetched_at=previous.fetched_at if previous else datetime.now(UTC),
                                 stale=True,
-                                error=f"일정 갱신 실패 ({type(error).__name__}) · 마지막 확인 자료",
+                                complete=False,
+                                error=f"전체 수집 실패 ({type(error).__name__}) · 마지막 확인 자료",
                             )
                         )
                         for item in self.data.launches:
-                            sources = [
-                                s
-                                for s in item.sources
-                                if s.url == (SFN_URL if mission is None else url)
-                            ]
+                            sources = [source for source in item.sources if source.name == name]
                             if sources:
                                 records.append(item.model_copy(update={"sources": sources}))
             self.data = LaunchSchedule(launches=merge_launches(records), sources=states)

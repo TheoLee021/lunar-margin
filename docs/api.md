@@ -536,8 +536,10 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 `GET /pricing/providers/launches` → `{timezone: "UTC", launches, sources}`.
 각 launch는 `{id, provider_id, name, departure_date: date|null, label, confirmed: false,
-sources: [{name, url, label}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
-각 source 상태는 `{name, url, fetched_at, stale, error: string|null}`이다.
+sources: [{name, url, label}], date_precision, participants: [{provider_id, role}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
+각 source 상태는 `{name, url, fetched_at, stale, error: string|null, scanned_records, scanned_pages, complete}`이다.
+`date_precision`은 day/month/quarter/year/unknown, role은 delivery/launch/partner(본문 관련 언급)다.
+두 소스의 전체 페이지 수집 실패 시 complete=false이며, 회사별 빈 결과를 확정적 부재로 해석하지 않는다.
 10분 동안 응답을 재사용하며 외부 오류 시 확인일이 유지된 마지막 자료를 표시한다.
 
 `POST /pricing/providers/compare`와 `/calendar`의 `estimate?: boolean`은 기본 false다.
