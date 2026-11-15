@@ -1,0 +1,217 @@
+{
+  "checked_on": "2026-11-15",
+  "providers": [
+    {
+      "id": "blue_origin",
+      "name": "Blue Origin",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": [
+        {
+          "id": "blue-moon-viper",
+          "name": "Blue Moon MK1 · VIPER",
+          "vehicle": "Blue Moon MK1 / New Glenn",
+          "departure": {
+            "label": "2027년 예정 · 정확일 미정",
+            "precision": "year",
+            "start": "2027-01-01",
+            "end": "2027-12-31",
+            "confirmed": false
+          },
+          "arrival": {
+            "label": "2027년 달 남극 도착 예정",
+            "precision": "year",
+            "start": "2027-01-01",
+            "end": "2027-12-31",
+            "confirmed": false
+          },
+          "deliveries": [
+            "surface"
+          ],
+          "maximum_payload_kg": 3000,
+          "sources": [
+            {
+              "title": "Blue Origin MK1 기체·임무 안내",
+              "url": "https://www.blueorigin.com/blue-moon/mark-1",
+              "published_date": null
+            },
+            {
+              "title": "NASA VIPER 2027년 계획",
+              "url": "https://www.nasa.gov/missions/moon-base/nasa-provides-progress-update-on-moon-base-rovers/",
+              "published_date": "2026-10-20"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ispace_us",
+      "name": "ispace-U.S.",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": [
+        {
+          "id": "team-draper-mission-3",
+          "name": "Team Draper Commercial Mission 1 · ispace-U.S. Mission 3",
+          "vehicle": "APEX 1.0 (공개 임무 명칭)",
+          "departure": {
+            "label": "2027년 이전 불가 · 정확일 미정",
+            "precision": "not_before",
+            "start": "2027-01-01",
+            "end": null,
+            "confirmed": false
+          },
+          "arrival": {
+            "label": "정확한 일정 미공개"
+          },
+          "deliveries": [
+            "surface"
+          ],
+          "sources": [
+            {
+              "title": "ispace-U.S. Mission 3 일정 변경 (2027년 이후)",
+              "url": "https://ispace-us.com/2025/05/09/ispace-u-s-announces-new-lunar-lander-engine-solution-voidrunner-with-agile-and-mission-3-schedule-updated-to-no-earlier-than-2027/",
+              "published_date": "2025-05-09"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacex",
+      "name": "SpaceX",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": [
+        {
+          "id": "starship-lunar-cargo",
+          "name": "Starship 달 표면 화물 서비스",
+          "vehicle": "Starship",
+          "departure": {
+            "label": "2028년 이전 불가 · 정확일 미정",
+            "precision": "not_before",
+            "start": "2028-01-01",
+            "end": null,
+            "confirmed": false
+          },
+          "arrival": {
+            "label": "정확한 일정 미공개"
+          },
+          "deliveries": [
+            "surface"
+          ],
+          "pricing": {
+            "usd_per_kg": 100000,
+            "source": {
+              "title": "SpaceX 달 화물 서비스: 2028년 이후, $100M/metric ton",
+              "url": "https://new.spacex.com/humanspaceflight/moon",
+              "published_date": null
+            }
+          },
+          "sources": [
+            {
+              "title": "SpaceX 달 화물 서비스: 2028년 이후, $100M/metric ton",
+              "url": "https://new.spacex.com/humanspaceflight/moon",
+              "published_date": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lockheed_martin",
+      "name": "Lockheed Martin Space",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": []
+    },
+    {
+      "id": "northrop_grumman",
+      "name": "Northrop Grumman Space Systems",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": []
+    },
+    {
+      "id": "voyager",
+      "name": "Voyager Technologies",
+      "source": {
+        "title": "NASA CLPS 2 공급자 선정 (운항편·단가 확약 아님)",
+        "url": "https://www.nasa.gov/news-release/nasa-awards-moon-base-transportation-technology-science-projects/",
+        "published_date": "2026-11-07"
+      },
+      "flights": [
+        {
+          "id": "griffin-1",
+          "name": "Griffin Mission One",
+          "vehicle": "Griffin / Falcon Heavy (SpaceX)",
+          "departure": {
+            "label": "2027년 1월 예정 · 정확일 미정",
+            "precision": "month",
+            "start": "2027-01-01",
+            "end": "2027-01-31",
+            "confirmed": false
+          },
+          "arrival": {
+            "label": "정확한 일정 미공개"
+          },
+          "deliveries": [
+            "surface"
+          ],
+          "sources": [
+            {
+              "title": "Voyager Griffin-1 2027년 1월 발사 계획·2028년 상업 화물 공간",
+              "url": "https://voyagertechnologies.com/insights/delivering-the-moon-base/",
+              "published_date": "2026-11-12"
+            },
+            {
+              "title": "NASA JPL Griffin-1 · Falcon Heavy 발사체 설명 (일정은 이후 Voyager 발표 우선)",
+              "url": "https://www.nasa.gov/missions/moon-base/nasa-jpl-testing-readies-voyager-technologies-lander-for-moon-mission/",
+              "published_date": "2026-10-13"
+            }
+          ]
+        },
+        {
+          "id": "voyager-commercial-2028",
+          "name": "2028년 상업 화물 임무 (2편 발표)",
+          "vehicle": null,
+          "departure": {
+            "label": "2028년 예정 · 정확일 미정",
+            "precision": "year",
+            "start": "2028-01-01",
+            "end": "2028-12-31",
+            "confirmed": false
+          },
+          "arrival": {
+            "label": "정확한 일정 미공개"
+          },
+          "deliveries": [
+            "surface"
+          ],
+          "sources": [
+            {
+              "title": "Voyager Griffin-1 2027년 1월 발사 계획·2028년 상업 화물 공간",
+              "url": "https://voyagertechnologies.com/insights/delivering-the-moon-base/",
+              "published_date": "2026-11-12"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

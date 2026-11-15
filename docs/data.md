@@ -1,8 +1,8 @@
 # 데이터셋
 
-관리: D (선정), B (다운로드·변환·저장). 대용량 데이터(DEM, SPICE 커널)는 git과 `web/public/`에 넣지 않고 백엔드 Volume 또는 Supabase Storage에 둔다.
+대용량 데이터(DEM, SPICE 커널)는 git과 `web/public/`에 넣지 않고 백엔드 Volume 또는 Supabase Storage에 둔다.
 
-> 아래 목록은 인제스천 구현(`inseon` 브랜치) 때 잠정 선정한 값이다. **D의 확정을 기다리는 중**이다.
+> 아래 목록은 인제스천 구현(`inseon` 브랜치) 때 잠정 선정한 값이다. **아직 확정되지 않았다.**
 > 다운로드와 검증: `cd api && uv run python -m lunar_margin.pipeline.fetch` (자세한 내용은 [api/README.md](../api/README.md)).
 
 | 이름                                  | 용도                                                                         | 출처 URL                                                                                                                               | 해상도                                    | 좌표계                                                                                                             | 버전                                 | 선정 이유                                                                                                                                                                                                         | 저장 위치          |
@@ -14,9 +14,11 @@
 | NAIF 행성 상수 `pck00011.tpc`         | 천체 크기·방향 상수                                                          | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc                                                                    | -                                         | -                                                                                                                  | pck00011                             | SPICE 기본 상수                                                                                                                                                                                                   | `$DATA_DIR/spice/` |
 | 달 자전 `moon_pa_de440_200625.bpc`    | 달 몸체 고정 프레임                                                          | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/moon_pa_de440_200625.bpc                                                        | -                                         | 달 주축(PA)                                                                                                        | DE440 (2020-06-25)                   | 정밀 달 자전(libration) 반영                                                                                                                                                                                      | `$DATA_DIR/spice/` |
 | 달 프레임 정의 `moon_de440_250416.tf` | `MOON_ME` 프레임 정의                                                        | https://naif.jpl.nasa.gov/pub/naif/generic_kernels/fk/satellites/moon_de440_250416.tf                                                  | -                                         | `MOON_ME`                                                                                                          | DE440 (2025-04-16)                   | LOLA DEM이 쓰는 평균지구/자전축 프레임과 일치                                                                                                                                                                     | `$DATA_DIR/spice/` |
+| PGDA Shape-from-Shading DEM `A3CLR22_*_GLDELEV_005.tif` (13개 지역) | 근접 화면의 20 m·5 m 경사 타일과 햇빛 지도의 세밀한 창 (렌더링 전용. 일조·통신 수치 계산에는 쓰지 않는다) | https://doi.org/10.5281/zenodo.17954508 (지역별 zip에서 고도 래스터만 Range 요청으로 받는다) | 5 m/px, 지역마다 16~30 km 정사각형 (파일당 20~60 MB) | LOLA DEM과 같은 남극 입체투영(구 반경 1737.4 km, 경도 0°가 위쪽), 높이는 그 구 기준 m | Bertone et al., Zenodo 2025 (CC BY 4.0, 인용 필요) | Artemis III 후보 착륙 지역(2022)에서 LROC NAC 사진의 명암으로 LOLA 5 m DEM을 보강해 실제 5 m 디테일이 있다. 80 m LOLA DEM과 높이 차이 평균 +0.04 m, 표준편차 1.8 m로 그대로 겹친다 (Connecting Ridge 지역 확인). 85°S 밖의 2개 지역(Amundsen Rim, Nobile Rim 2)은 ROI 밖이라 타일로 굽지 않는다 | `$DATA_DIR/dem/sfs/` |
 
 ## 처리 메모
 
+- Shape-from-Shading DEM은 기본 다운로드에 들지 않는다: `uv run python -m lunar_margin.pipeline.fetch --sfs` (약 400 MB). GeoTIFF(32비트 실수, deflate, 부동소수점 예측자)는 `pipeline/geotiff.py`가 읽는다.
 - 다운로드는 크기와 sha256을 `manifest.json`에 기록하고, 다음 실행에서 파일이 달라졌으면 다시 받는다.
 - DEM 이미지는 PDS3 라벨(`.lbl`)로 해석한다. 32-bit little-endian float(`PC_REAL`), 값 단위 km.
 - 격자 방향은 Malapert 산(약 +5 km)과 Shoemaker·Haworth·Faustini 크레이터 바닥(약 -3.4~-4 km)으로 검증했다 (`api/tests/engine/test_dem_real.py`).

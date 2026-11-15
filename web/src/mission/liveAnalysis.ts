@@ -14,12 +14,17 @@ export type LiveMissionAnalysis = {
   timeline: Timeline
 }
 
+/** The landing time: midnight UTC of the landing date. */
+export function landingStart(landing: string): string {
+  return `${landing}T00:00:00Z`
+}
+
 /** Surface analysis starts at landing midnight UTC, not Earth departure. */
 export function missionParams(
   site: CandidateSite,
   schedule: Schedule,
 ): AnalysisParams {
-  const start = `${schedule.landing}T00:00:00Z`
+  const start = landingStart(schedule.landing)
   return {
     lat: site.latitude,
     lon: site.longitude,
