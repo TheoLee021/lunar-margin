@@ -19,6 +19,7 @@ test('mission input submits the requested JSON, shows progress, then opens the p
       max_continuous_darkness_hours: 24,
       max_communication_blackout_hours: 6,
       max_terrain_slope_degrees: 10,
+      max_terrain_roughness_m: 2.5,
       search_region: 'south',
       optimization_priority: 'balanced',
       observer_height_m: null,
@@ -48,6 +49,7 @@ test('mission input submits the requested JSON, shows progress, then opens the p
   await expect(
     page.getByText(/250 m 반경의 DEM 경사 P95에 적용합니다/),
   ).toBeVisible()
+  await page.getByLabel('최대 지역 거칠기', { exact: true }).fill('2.5')
   await page.getByRole('button', { name: '후보지 탐색 실행' }).click()
   await expect(page.getByText('현재 단계 50 / 100 (50%)')).toBeVisible()
   await expect(

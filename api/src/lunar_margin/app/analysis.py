@@ -246,6 +246,9 @@ def site_assessment(
         terrain=TerrainMetrics(
             slope_p95_deg=None if region.slope_p95_deg is None else round(region.slope_p95_deg, 3),
             coverage_fraction=round(region.coverage_fraction, 4),
+            roughness_p95_m=None
+            if region.roughness_p95_m is None
+            else round(region.roughness_p95_m, 3),
             dem_pixel_m=float(dem.label.map_scale_m),
         ),
     )

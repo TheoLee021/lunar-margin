@@ -35,6 +35,7 @@ class MetricField:
 
     terrain_slope_p95_deg: NDArray[np.float64]
     terrain_coverage_fraction: NDArray[np.float64]
+    terrain_roughness_p95_m: NDArray[np.float64]
 
     def __len__(self) -> int:
         return int(self.computed.shape[0])
@@ -57,6 +58,7 @@ class MetricField:
             computed=np.zeros(n, dtype=np.bool_),
             terrain_slope_p95_deg=nan.copy(),
             terrain_coverage_fraction=nan.copy(),
+            terrain_roughness_p95_m=nan.copy(),
         )
 
     @classmethod
@@ -88,8 +90,8 @@ class FieldContext:
 
 
 # 한 지점이 돌려주는 값의 열 순서 (MetricField의 필드 순서와 같다)
-_COLUMNS = 13
-MISSING_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan)
+_COLUMNS = 14
+MISSING_ROW = (math.nan,) * 9 + (0.0, 0.0) + (math.nan, math.nan, math.nan)
 
 
 def _site_row(ctx: FieldContext, lat_deg: float, lon_deg: float, row: int) -> tuple[float, ...]:
@@ -129,21 +131,24 @@ def _profile_row(
         ]
     values += [float(horizon.elevation_deg.max()), float(horizon.complete), 1.0]
     values += (
-        terrain_metrics(ctx.dem, lat_deg, lon_deg) if s.assess_terrain else (math.nan, math.nan)
+        terrain_metrics(ctx.dem, lat_deg, lon_deg)
+        if s.assess_terrain
+        else (math.nan, math.nan, math.nan)
     )
     return tuple(values)
 
 
-def terrain_metrics(dem: Dem, lat_deg: float, lon_deg: float) -> tuple[float, float]:
+def terrain_metrics(dem: Dem, lat_deg: float, lon_deg: float) -> tuple[float, float, float]:
     """Regional ground terrain, independent of the analysis date or observer height."""
     # The wider fallback DEM is for horizon rays, not regional landing terrain.
     terrain_dem = dem.primary if isinstance(dem, CompositeDem) else dem
     try:
         region = characterize_region(terrain_dem, lat_deg, lon_deg)
     except ValueError:
-        return math.nan, 0.0
+        return math.nan, 0.0, math.nan
     slope = region.slope_p95_deg if region.slope_p95_deg is not None else math.nan
-    return slope, region.coverage_fraction
+    roughness = region.roughness_p95_m if region.roughness_p95_m is not None else math.nan
+    return slope, region.coverage_fraction, roughness
 
 
 def _chunk_rows(
@@ -262,4 +267,5 @@ def field_from_matrix(matrix: NDArray[np.float64]) -> MetricField:
         computed=matrix[:, 10] > 0.5,
         terrain_slope_p95_deg=matrix[:, 11],
         terrain_coverage_fraction=matrix[:, 12],
+        terrain_roughness_p95_m=matrix[:, 13],
     )

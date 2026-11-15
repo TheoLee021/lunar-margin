@@ -32,6 +32,7 @@ class SimpleCandidate(BaseModel):
     score: float | None
     region_id: int
     horizon_complete: bool
+    roughness_p95_m: float | None = None
 
 
 def simple_candidates(document: CandidatesDocument) -> list[SimpleCandidate]:
@@ -52,6 +53,7 @@ def simple_candidates(document: CandidatesDocument) -> list[SimpleCandidate]:
             score=c.score.total,
             region_id=c.region_id,
             horizon_complete=c.data_quality.horizon_complete,
+            roughness_p95_m=None if c.terrain is None else c.terrain.roughness_p95_m,
         )
         for c in document.candidates
     ]

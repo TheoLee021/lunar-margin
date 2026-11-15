@@ -183,6 +183,9 @@ def characterize_region(
     z = dem.sample_height_m((xs[:, None] + wx).ravel(), (ys[:, None] + wy).ravel())
     z = z.reshape(n, wx.size)
     valid &= np.isfinite(z).all(axis=1)
+    # Remove the absolute elevation before fitting to keep flat terrain exactly
+    # zero, including when the caller applies a zero-metre roughness limit.
+    z = z - z[:, :1]
     # Every window shares the same offsets, so one pseudo-inverse fits all planes at once.
     residual = z - (z @ np.linalg.pinv(design).T) @ design.T
     roughness = np.sqrt(np.mean(residual**2, axis=1))

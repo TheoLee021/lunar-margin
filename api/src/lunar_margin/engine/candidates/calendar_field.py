@@ -61,7 +61,7 @@ def _rows(contexts: list[FieldContext], table: HorizonTable, job: Job) -> NDArra
         )
         for i, ctx in enumerate(contexts):
             if ctx.settings.assess_terrain:
-                out[i, :, 11:13] = terrain
+                out[i, :, 11:14] = terrain
     for body, vectors in enumerate((sun, earth)):
         elevations: list[NDArray[np.float64]] = []
         visibility: list[NDArray[np.bool_]] = []

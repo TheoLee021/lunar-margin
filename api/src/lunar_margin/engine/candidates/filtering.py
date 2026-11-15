@@ -16,6 +16,7 @@ EARTH_BLACKOUT_HIGH = 1 << 3
 HORIZON_INCOMPLETE = 1 << 4
 TERRAIN_SLOPE_HIGH = 1 << 5
 TERRAIN_INCOMPLETE = 1 << 6
+TERRAIN_ROUGHNESS_HIGH = 1 << 7
 
 _REASONS: tuple[tuple[int, str], ...] = (
     (SUN_FRACTION_LOW, "sun_fraction_below_min"),
@@ -25,6 +26,7 @@ _REASONS: tuple[tuple[int, str], ...] = (
     (HORIZON_INCOMPLETE, "horizon_incomplete"),
     (TERRAIN_SLOPE_HIGH, "terrain_slope_above_max"),
     (TERRAIN_INCOMPLETE, "terrain_incomplete"),
+    (TERRAIN_ROUGHNESS_HIGH, "terrain_roughness_above_max"),
 )
 
 
@@ -80,14 +82,18 @@ def evaluate(
             violated = (values < limit) if is_minimum else (values > limit)
         failed[available & violated] |= bit
 
-    if thresholds.max_terrain_slope_degrees is not None:
+    for limit, values, bit in (
+        (thresholds.max_terrain_slope_degrees, field.terrain_slope_p95_deg, TERRAIN_SLOPE_HIGH),
+        (thresholds.max_terrain_roughness_m, field.terrain_roughness_p95_m, TERRAIN_ROUGHNESS_HIGH),
+    ):
+        if limit is None:
+            continue
         any_threshold = True
-        available = np.isfinite(field.terrain_slope_p95_deg)
+        available = np.isfinite(values)
         complete = field.terrain_coverage_fraction >= 0.9999
         failed[~available | ~complete] |= TERRAIN_INCOMPLETE
-        too_steep = field.terrain_slope_p95_deg > thresholds.max_terrain_slope_degrees
-        failed[available & too_steep] |= TERRAIN_SLOPE_HIGH
-        applied_any |= field.computed  # Missing terrain is an explicit failed requirement.
+        failed[available & (values > limit)] |= bit
+        applied_any |= field.computed
 
     if exclude_incomplete_horizon:
         failed[field.computed & ~field.horizon_complete] |= HORIZON_INCOMPLETE
@@ -114,6 +120,7 @@ def constraint_ratio(field: MetricField, thresholds: Thresholds) -> NDArray[np.f
         (thresholds.min_earth_fraction, field.earth_fraction, True),
         (thresholds.max_earth_blackout_hours, field.earth_longest_blackout_h, False),
         (thresholds.max_terrain_slope_degrees, field.terrain_slope_p95_deg, False),
+        (thresholds.max_terrain_roughness_m, field.terrain_roughness_p95_m, False),
     )
     for limit, values, is_minimum in criteria:
         if limit is None:

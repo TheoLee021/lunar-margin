@@ -269,6 +269,14 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
                   value={degText(candidate.terrain.slope_p95_deg)}
                 />
                 <Row
+                  label="지역 거칠기 P95"
+                  value={
+                    candidate.terrain.roughness_p95_m == null
+                      ? '—'
+                      : `${candidate.terrain.roughness_p95_m.toFixed(2)} m`
+                  }
+                />
+                <Row
                   label="DEM 유효 표본"
                   value={fractionText(candidate.terrain.coverage_fraction)}
                 />
