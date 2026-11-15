@@ -86,6 +86,18 @@ Run a backend containing #5 and the SPICE concurrency fix before exercising this
 
 Candidate search UI: choose **후보지 탐색**, enter a mission, and optionally enable the development search (20 km → 10 km). Requires the candidate search backend. See [docs/candidates.md](docs/candidates.md).
 
+
+## Candidate-search terrain slope
+
+Candidate search now enforces the optional maximum terrain slope in both standard
+and development searches. It uses the 250 m regional DEM slope P95
+(160 m slope baseline, 400 m roughness window). Incomplete
+regional terrain cannot pass. The table and candidate detail show measured slopes;
+the filter step explains slope and terrain-coverage exclusions. Historical runs
+remain readable and are labeled as not applying slope. Start a new search to apply
+the limit; old results are not reused by the new mission cache version.
+This is terrain screening, not certified landing safety.
+
 ## Prices from the 500m candidate search
 
 Open the mission date planner (`/?planner=1`), or choose “이 임무 조건으로 날짜별
@@ -106,7 +118,8 @@ mean, and transfers outside 3–150 days are unavailable in the price table.
 The pricing API exposes term-level evidence and per-grid details. Missing terrain
 uses a 1.10 fallback marked unknown in the API; the six-persona demand
 model is not connected, so demand is unestimated (1.00). Customer
-equipment slope limits remain unapplied in #13. Actual flight availability,
+equipment slope limits use the candidate search’s 250 m regional DEM slope P95;
+the pricing model’s 500 m terrain gates are separate. Actual flight availability,
 lander capacity and commercial quotes are not verified. The two-digit USD values
 are model estimates, not live fares. Contracts and provenance: [docs/api.md](docs/api.md).
 

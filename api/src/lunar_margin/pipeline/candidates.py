@@ -62,6 +62,7 @@ from lunar_margin.pipeline.candidate_schema import (
     Summary,
     SummaryFile,
     SunMetrics,
+    TerrainMetrics,
     WindowSource,
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, StatusKeeper
@@ -76,6 +77,8 @@ _REASON_KEYS = (
     "earth_fraction_below_min",
     "earth_blackout_hours_above_max",
     "horizon_incomplete",
+    "terrain_slope_above_max",
+    "terrain_incomplete",
     "no_metrics",
     "not_refined",
     "within_min_separation",
@@ -148,6 +151,7 @@ def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettin
         azimuth_step_deg=azimuth_step_deg,
         max_range_m=config.max_range_m,
         observer_height_m=config.observer_height_m,
+        assess_terrain=config.thresholds.max_terrain_slope_degrees is not None,
     )
 
 
@@ -418,6 +422,12 @@ def run_search(
             "(data_quality.horizon_complete=false). 이 지점들은 "
             "탐색 거리 안에 DEM이 없는 방향이 있습니다."
         )
+    if config.thresholds.max_terrain_slope_degrees is not None:
+        warnings.append(
+            "지형 경사는 후보 중심 250 m 원의 DEM 경사 P95로 판정합니다(160 m 기준). "
+            "유효 표본이 100%인 지점만 통과합니다. DEM 규모 환경 선별이며 "
+            "미세 장애물·발판·지반 안전성은 검증하지 않습니다."
+        )
     if counts["missing_all_metrics"]:
         warnings.append(
             f"{counts['missing_all_metrics']}개 지점은 DEM 밖이라 지표를 계산하지 못했습니다."
@@ -525,6 +535,13 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
         x_m=round(float(outcome.x_m[k]), 3),
         y_m=round(float(outcome.y_m[k]), 3),
         grid_spacing_m=spacing,
+        terrain=None
+        if outcome.config.thresholds.max_terrain_slope_degrees is None
+        else TerrainMetrics(
+            slope_p95_deg=_json_float(f.terrain_slope_p95_deg[k]),
+            coverage_fraction=_json_float(f.terrain_coverage_fraction[k]),
+            dem_pixel_m=outcome.source.dem.resolution_m,
+        ),
         sun=SunMetrics(
             fraction=_json_float(f.sun_fraction[k]),
             longest_dark_hours=_json_float(f.sun_longest_dark_h[k]),
@@ -627,6 +644,8 @@ def write_outputs(outcome: SearchOutcome, out_dir: Path) -> None:
         earth_fraction=outcome.field.earth_fraction,
         earth_longest_blackout_h=outcome.field.earth_longest_blackout_h,
         horizon_complete=outcome.field.horizon_complete,
+        terrain_slope_p95_deg=outcome.field.terrain_slope_p95_deg,
+        terrain_coverage_fraction=outcome.field.terrain_coverage_fraction,
     )
 
     counts = outcome.summary.counts

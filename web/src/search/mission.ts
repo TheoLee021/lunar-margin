@@ -1,4 +1,8 @@
-import type { MissionRequest, Priority } from '../api/candidates'
+import type {
+  MissionRequest,
+  Priority,
+  SearchThresholds,
+} from '../api/candidates'
 
 // 임무 입력 폼의 값과 검증. 화면의 입력 칸은 모두 문자열이고,
 // 여기서 계약(docs/api.md 의 POST /candidates/search 요청 본문)의 JSON 으로 바꾼다.
@@ -224,6 +228,7 @@ function limitText(hours: number | null): string {
 /** 결과 화면의 "입력한 임무 조건" 패널에 보여 줄 항목. */
 export function missionSummaryItems(
   mission: MissionRequest,
+  thresholds?: SearchThresholds,
 ): { label: string; value: string }[] {
   const preview = windowPreview(
     mission.landing_date,
@@ -252,7 +257,10 @@ export function missionSummaryItems(
       value:
         mission.max_terrain_slope_degrees === null
           ? '지정하지 않음'
-          : `${mission.max_terrain_slope_degrees}° (적용되지 않음)`,
+          : thresholds?.max_terrain_slope_degrees ===
+              mission.max_terrain_slope_degrees
+            ? `${mission.max_terrain_slope_degrees}° 이하 (250 m 지역 P95)`
+            : `${mission.max_terrain_slope_degrees}° (적용되지 않음)`,
     },
     {
       label: '최적화 우선순위',

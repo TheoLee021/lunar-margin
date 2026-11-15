@@ -48,6 +48,16 @@ class Selection(_Model):
     note: str  # 선정되지 않은 이유 (선정된 점은 "")
 
 
+class TerrainMetrics(_Model):
+    slope_p95_deg: float | None
+    coverage_fraction: float | None
+    assessment_radius_m: float = 250.0
+    slope_baseline_m: float = 160.0
+    roughness_window_m: float = 400.0
+    dem_pixel_m: float
+    landing_safety_status: Literal["UNVERIFIED"] = "UNVERIFIED"
+
+
 class CandidateRecord(_Model):
     id: str
     rank: int
@@ -56,6 +66,7 @@ class CandidateRecord(_Model):
     x_m: float
     y_m: float
     grid_spacing_m: float
+    terrain: TerrainMetrics | None = None  # Absent on historical runs or when not requested.
     sun: SunMetrics
     earth: EarthMetrics
     eligibility: Eligibility

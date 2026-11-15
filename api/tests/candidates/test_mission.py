@@ -76,14 +76,14 @@ def test_null_observer_height_means_ground_level() -> None:
     assert plan_search(tall).config.observer_height_m == 2.5
 
 
-def test_slope_is_accepted_but_not_enforced_and_the_user_is_told() -> None:
+def test_slope_is_enforced_and_unset_slope_disables_the_filter() -> None:
     plan = plan_search(MissionRequest.model_validate(EXAMPLE))
 
-    assert any("max_terrain_slope_degrees" in w and "적용하지 않" in w for w in plan.warnings)
+    assert plan.config.thresholds.max_terrain_slope_degrees == 10
     no_slope = plan_search(
         MissionRequest.model_validate({**EXAMPLE, "max_terrain_slope_degrees": None})
     )
-    assert not any("max_terrain_slope_degrees" in w for w in no_slope.warnings)
+    assert no_slope.config.thresholds.max_terrain_slope_degrees is None
 
 
 def test_other_search_settings_keep_their_defaults() -> None:

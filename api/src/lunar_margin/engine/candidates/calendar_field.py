@@ -15,6 +15,7 @@ from lunar_margin.engine.candidates.field import (
     MetricField,
     field_from_matrix,
     open_dem,
+    terrain_metrics,
 )
 from lunar_margin.engine.candidates.grid import SitePoints
 from lunar_margin.engine.candidates.horizon_table import HorizonTable
@@ -50,7 +51,17 @@ def _rows(contexts: list[FieldContext], table: HorizonTable, job: Job) -> NDArra
     earth = np.concatenate([ctx.earth_vectors for ctx in contexts])
     profiles = [table.profile(int(row)) for row in rows]
     quality = np.array([(float(p.elevation_deg.max()), float(p.complete), 1.0) for p in profiles])
-    out[:, :, 8:] = quality
+    out[:, :, 8:11] = quality
+    if any(ctx.settings.assess_terrain for ctx in contexts):
+        terrain = np.array(
+            [
+                terrain_metrics(contexts[0].dem, float(a), float(b))
+                for a, b in zip(lat, lon, strict=True)
+            ]
+        )
+        for i, ctx in enumerate(contexts):
+            if ctx.settings.assess_terrain:
+                out[i, :, 11:13] = terrain
     for body, vectors in enumerate((sun, earth)):
         elevations: list[NDArray[np.float64]] = []
         visibility: list[NDArray[np.bool_]] = []
