@@ -62,15 +62,25 @@ const MAX_ZOOM_DISTANCE_M = 20_000_000
 // Neither the photo nor the tiles' triangles feed that lighting: the photo's shading belongs to
 // another Sun, and the triangles are tens of pixels wide at every zoom, so their faces show as facets.
 // The overlay fades into the photo over its outer OVERLAY_FADE_M.
+// Outside the overlay the photo still follows the Sun, but only as day and night: it dims towards
+// the terminator and is black beyond it, by the Sun's height over a smooth sphere.
 // The mosaic is darker than the Moon is usually shown; PHOTO_EXPOSURE is the gain in the darks,
-// rolling off so that white stays white.
-const PHOTO_EXPOSURE = 1.6
-// Sunlit brightness is a reflectance (lunar regolith: mostly Lommel-Seeliger, part Lambert) times a
-// fixed exposure, through a filmic curve. Nothing is normalised to the Sun's height or clamped before
-// the curve, so under a 1.5° Sun flat ground is dim and slopes turn brighter the more they face the
-// Sun, as in orbital photos; clamping here is what flattens the picture into two tones.
+// rolling off so that white stays white. It puts sunlit highlands at about half of display white, as
+// in photographs of the Moon under a high Sun.
+const PHOTO_EXPOSURE = 4.5
+// The photo is shown as it is where the Sun stands at least this high. Below that it dims as flat
+// ground does in the overlay's reflectance model.
+const PHOTO_FULL_SUN_DEG = 8
+// Sunlit brightness is a reflectance (lunar regolith: mostly Lommel-Seeliger, part Lambert) times an
+// exposure, through a filmic curve. Nothing is clamped before the curve, so under a 1.5° Sun flat
+// ground is dim and slopes turn brighter the more they face the Sun, as in orbital photos; clamping
+// here is what flattens the picture into two tones.
 const LAMBERT_SHARE = 0.3
 const SUN_EXPOSURE = 1.4
+// Above this Sun height the exposure comes down as fast as flat ground brightens, as a camera would
+// be stopped down away from the terminator: flat ground then stays at the photo's brightness instead
+// of burning out. Near the pole the Sun never stands this high, so nothing changes there.
+const EXPOSURE_SUN_DEG = 3.5
 // The view term is taken as if looking straight down, so brightness does not change as the camera
 // tilts; on near-vertical slopes it is held at this cosine, where Lommel-Seeliger would blow up.
 const MIN_VIEW_COS = 0.2
@@ -128,6 +138,12 @@ function sunlightTexture(map: SunlightMap): TextureUniform {
     minificationFilter: TextureMinificationFilter.LINEAR_MIPMAP_LINEAR,
     magnificationFilter: TextureMagnificationFilter.LINEAR,
   })
+}
+
+/** Reflectance of level ground under a Sun this high; the shader's flatGround is the same model. */
+function flatGround(sunHeightDeg: number): number {
+  const mu0 = Math.sin(CesiumMath.toRadians(sunHeightDeg))
+  return (1 - LAMBERT_SHARE) * ((2 * mu0) / (mu0 + 1)) + LAMBERT_SHARE * mu0
 }
 
 const fineSlots = Array.from({ length: FINE_SLOTS }, (_, slot) => slot)
@@ -304,6 +320,12 @@ function createMoonShader(): CustomShader {
       return clamp(v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14), 0.0, 1.0);
     }
 
+    // Reflectance of level ground under a Sun whose height has this sine.
+    float flatGround(float sunSin) {
+      float mu0 = max(sunSin, 0.0);
+      return mix(2.0 * mu0 / (mu0 + 1.0), mu0, ${LAMBERT_SHARE.toFixed(2)});
+    }
+
     void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       vec3 photo = material.diffuse * ${PHOTO_EXPOSURE.toFixed(2)} / (1.0 + material.diffuse * ${(PHOTO_EXPOSURE - 1).toFixed(2)});
       material.diffuse = photo;
@@ -312,6 +334,10 @@ function createMoonShader(): CustomShader {
 
       vec3 p = fsInput.attributes.positionWC;
       vec3 up = normalize(p);
+      // Day and night on the photo: night begins where the Sun's upper limb sets on a smooth sphere.
+      float sunSin = dot(sun, up);
+      photo *= clamp(flatGround(sunSin + ${Math.sin(CesiumMath.toRadians(SUN_RADIUS_DEG)).toFixed(6)}) / ${flatGround(PHOTO_FULL_SUN_DEG).toFixed(6)}, 0.0, 1.0);
+      material.diffuse = photo;
 
       float pixelSize = u_overlayGrid.x;
       float center = u_overlayGrid.y;
@@ -392,7 +418,8 @@ ${sunWindowSlots
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
       float lommelSeeliger = 2.0 * mu0 / (mu0 + mu);
       float reflectance = visible * mix(lommelSeeliger, mu0, ${LAMBERT_SHARE.toFixed(2)}) + ${SHADOW_FILL.toFixed(3)};
-      vec3 sunlit = filmic(vec3(${SUN_EXPOSURE.toFixed(2)} * reflectance));
+      float exposure = ${SUN_EXPOSURE.toFixed(2)} * min(1.0, ${flatGround(EXPOSURE_SUN_DEG).toFixed(6)} / max(flatGround(sunSin), 1e-6));
+      vec3 sunlit = filmic(vec3(exposure * reflectance));
       material.diffuse = mix(photo, sunlit, weight);
     }
   `,

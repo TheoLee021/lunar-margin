@@ -709,3 +709,146 @@ def test_missing_rf_metrics_cannot_pass_an_enabled_communications_filter(data_di
     result = run_search(config, data_dir, field_provider=incomplete, log=lambda _: None)
     assert result.summary.counts["eligible"] == 0
     assert result.summary.reasons["rf_incomplete"] > 0
+def test_search_reuses_saved_3m_horizons_for_another_date(data_dir: Path, tmp_path: Path) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 2,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    first_log: list[str] = []
+    first = run_search(config, root, log=first_log.append)
+    later = config.model_copy(
+        update={
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 3, tzinfo=UTC),
+                end=datetime(2027, 1, 4, tzinfo=UTC),
+                step_minutes=120,
+            )
+        }
+    )
+    next_log: list[str] = []
+    second = run_search(later, root, log=next_log.append)
+    count = first.summary.counts["computed"]
+    assert count > 0
+    assert f"수평선 캐시: 재사용 0, 새로 저장 {count}" in first_log
+    assert f"수평선 캐시: 재사용 {count}, 새로 저장 0" in next_log
+    assert second.summary.counts["computed"] == count
+
+
+def test_completed_horizon_chunks_survive_an_interrupted_search(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "roi": Roi(max_lat_deg=-89.9),
+            "observer_height_m": 3.0,
+            "workers": 1,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+
+    def interrupted(stage: str, done: int, total: int) -> None:
+        if stage == "fine" and done >= 64:
+            raise RuntimeError("interrupted after a completed chunk")
+
+    with pytest.raises(RuntimeError, match="interrupted after"):
+        run_search(config, root, progress=interrupted, log=lambda _: None)
+    messages: list[str] = []
+    result = run_search(config, root, log=messages.append)
+    remaining = result.summary.counts["computed"] - 64
+    assert remaining > 0
+    assert f"수평선 캐시: 재사용 64, 새로 저장 {remaining}" in messages
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"observer_height_m": 0.0},
+        {"max_range_m": 1000.0},
+        {"fine_azimuth_step_deg": 2.0},
+    ],
+)
+def test_horizon_cache_does_not_mix_height_range_or_azimuth_precision(
+    data_dir: Path, tmp_path: Path, changed: dict[str, float]
+) -> None:
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 1,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    run_search(config, root, log=lambda _: None)
+    messages: list[str] = []
+    result = run_search(config.model_copy(update=changed), root, log=messages.append)
+    count = result.summary.counts["computed"]
+    assert f"수평선 캐시: 재사용 0, 새로 저장 {count}" in messages
+
+
+def test_parallel_search_reuses_overlap_and_adds_new_horizons(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    import numpy as np
+
+    root = tmp_path / "input"
+    root.mkdir()
+    for name in ("dem", "spice"):
+        (root / name).symlink_to((data_dir / name).resolve(), target_is_directory=True)
+    config = SMALL.model_copy(
+        update={
+            "observer_height_m": 3.0,
+            "workers": 2,
+            "coarse_spacing_m": None,
+            "max_range_m": 2000.0,
+            "window": AnalysisWindow(
+                start=datetime(2027, 1, 1, tzinfo=UTC),
+                end=datetime(2027, 1, 2, tzinfo=UTC),
+                step_minutes=120,
+            ),
+        }
+    )
+    first = run_search(config, root, log=lambda _: None)
+    larger = config.model_copy(update={"roi": Roi(max_lat_deg=-89.9)})
+    messages: list[str] = []
+    second = run_search(larger, root, log=messages.append)
+    reused, total = first.summary.counts["computed"], second.summary.counts["computed"]
+    assert total > 64
+    assert f"수평선 캐시: 재사용 {reused}, 새로 저장 {total - reused}" in messages
+    warm_log: list[str] = []
+    warm = run_search(larger, root, log=warm_log.append)
+    assert f"수평선 캐시: 재사용 {total}, 새로 저장 0" in warm_log
+    np.testing.assert_array_equal(second.field.sun_fraction, warm.field.sun_fraction)
+    np.testing.assert_array_equal(second.field.earth_fraction, warm.field.earth_fraction)
+    np.testing.assert_array_equal(second.rank, warm.rank)

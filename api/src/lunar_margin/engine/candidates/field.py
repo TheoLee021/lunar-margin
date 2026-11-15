@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 
 from lunar_margin.engine.candidates.config import AnalysisWindow
 from lunar_margin.engine.candidates.grid import SitePoints
+from lunar_margin.engine.candidates.horizon_cache import HorizonCache, cache_path
 from lunar_margin.engine.candidates.horizon_table import HorizonTable
 from lunar_margin.engine.dem import CompositeDem, Dem, PolarDem
 from lunar_margin.engine.ephemeris import body_vectors, topocentric_azel, utc_range
@@ -96,6 +97,7 @@ class FieldContext:
     sun_vectors: NDArray[np.float64]
     earth_vectors: NDArray[np.float64]
     settings: FieldSettings
+    cache: HorizonCache | None = None
 
 
 # 한 지점이 돌려주는 값의 열 순서 (MetricField의 필드 순서와 같다)
@@ -108,6 +110,9 @@ def _site_row(ctx: FieldContext, lat_deg: float, lon_deg: float, row: int) -> tu
     if ctx.table is not None and row >= 0:
         horizon = ctx.table.profile(row)  # 사전 계산한 수평선: 다시 계산하지 않는다
     else:
+        cached = ctx.cache.get(lat_deg, lon_deg) if ctx.cache is not None else None
+        if cached is not None:
+            return _profile_row(ctx, lat_deg, lon_deg, cached)
         try:
             horizon = horizon_profile(
                 ctx.dem,
@@ -119,6 +124,8 @@ def _site_row(ctx: FieldContext, lat_deg: float, lon_deg: float, row: int) -> tu
             )
         except ValueError:  # DEM 밖이거나 유효한 표본이 없는 지점: 결측으로 남긴다
             return MISSING_ROW
+        if ctx.cache is not None:
+            ctx.cache.put(lat_deg, lon_deg, horizon)
     return _profile_row(ctx, lat_deg, lon_deg, horizon)
 
 
@@ -167,17 +174,32 @@ def terrain_metrics(dem: Dem, lat_deg: float, lon_deg: float) -> tuple[float, fl
     return slope, region.coverage_fraction, roughness
 
 
+@dataclass(frozen=True)
+class _ChunkResult:
+    matrix: NDArray[np.float64]
+    hits: int
+    written: int
+
+
 def _chunk_rows(
     ctx: FieldContext,
     lat: NDArray[np.float64],
     lon: NDArray[np.float64],
     table_rows: NDArray[np.int64],
-) -> NDArray[np.float64]:
+) -> _ChunkResult:
+    before_hits = ctx.cache.hits if ctx.cache is not None else 0
+    before_written = ctx.cache.written if ctx.cache is not None else 0
     rows = [
         _site_row(ctx, float(a), float(b), int(r))
         for a, b, r in zip(lat, lon, table_rows, strict=True)
     ]
-    return np.array(rows, dtype=np.float64).reshape(len(rows), _COLUMNS)
+    if ctx.cache is not None:
+        ctx.cache.flush()
+    return _ChunkResult(
+        np.array(rows, dtype=np.float64).reshape(len(rows), _COLUMNS),
+        (ctx.cache.hits - before_hits) if ctx.cache is not None else 0,
+        (ctx.cache.written - before_written) if ctx.cache is not None else 0,
+    )
 
 
 _worker_ctx: FieldContext | None = None
@@ -189,10 +211,14 @@ def _init_worker(
     earth_vectors: NDArray[np.float64],
     settings: FieldSettings,
     table_dir: str | None,
+    cache_file: str | None,
 ) -> None:
     global _worker_ctx
     table = HorizonTable.open(Path(table_dir)) if table_dir is not None else None
-    _worker_ctx = FieldContext(open_dem(dem_pairs), table, sun_vectors, earth_vectors, settings)
+    cache = HorizonCache(Path(cache_file), settings.azimuth_step_deg) if cache_file else None
+    _worker_ctx = FieldContext(
+        open_dem(dem_pairs), table, sun_vectors, earth_vectors, settings, cache
+    )
 
 
 def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
@@ -207,7 +233,7 @@ def open_dem(pairs: Sequence[tuple[str | Path, str | Path]]) -> Dem:
 
 def _worker_chunk(
     args: tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]],
-) -> NDArray[np.float64]:
+) -> _ChunkResult:
     if _worker_ctx is None:
         raise RuntimeError("worker was not initialised")
     return _chunk_rows(_worker_ctx, args[0], args[1], args[2])
@@ -228,6 +254,8 @@ def compute_field(
     chunk_size: int = 64,
     on_progress: Callable[[int, int], None] | None = None,
     table: HorizonTable | None = None,
+    cache_root: Path | None = None,
+    on_cache: Callable[[int, int], None] | None = None,
 ) -> MetricField:
     """각 지점의 일조·지구 가시성 지표를 계산한다.
 
@@ -245,25 +273,52 @@ def compute_field(
     matrix = np.full((n, _COLUMNS), np.nan)
     slices = list(_chunks(n, chunk_size))
     table_rows = table.rows_for(sites) if table is not None else np.full(n, -1, dtype=np.int64)
-    if workers <= 1 or n <= chunk_size:
-        ctx = FieldContext(dem, table, sun, earth, settings)
-        for sl in slices:
-            matrix[sl] = _chunk_rows(ctx, sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl])
-            if on_progress is not None:
-                on_progress(sl.stop, n)
-    else:
-        assert dem_files is not None
-        jobs = [(sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl]) for sl in slices]
-        pairs = tuple((str(img), str(lbl)) for img, lbl in dem_files)
-        table_dir = str(table.directory) if table is not None else None
-        init_args = (pairs, sun, earth, settings, table_dir)
-        with ProcessPoolExecutor(
-            max_workers=workers, initializer=_init_worker, initargs=init_args
-        ) as pool:
-            for sl, rows in zip(slices, pool.map(_worker_chunk, jobs), strict=True):
-                matrix[sl] = rows
-                if on_progress is not None:
-                    on_progress(sl.stop, n)
+    cache_file = None
+    cache = None
+    if cache_root is not None and dem_files is not None and np.any(table_rows < 0):
+        cache_file = cache_path(
+            cache_root,
+            dem_files,
+            azimuth_step_deg=settings.azimuth_step_deg,
+            max_range_m=settings.max_range_m,
+            observer_height_m=settings.observer_height_m,
+        )
+        cache = HorizonCache(cache_file, settings.azimuth_step_deg)
+
+    def store(sl: slice, result: _ChunkResult) -> None:
+        matrix[sl] = result.matrix
+        if on_cache is not None:
+            on_cache(result.hits, result.written)
+        if on_progress is not None:
+            on_progress(sl.stop, n)
+
+    try:
+        if workers <= 1 or n <= chunk_size:
+            ctx = FieldContext(dem, table, sun, earth, settings, cache)
+            for sl in slices:
+                store(sl, _chunk_rows(ctx, sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl]))
+        else:
+            assert dem_files is not None
+            jobs = [(sites.lat_deg[sl], sites.lon_deg[sl], table_rows[sl]) for sl in slices]
+            pairs = tuple((str(img), str(lbl)) for img, lbl in dem_files)
+            table_dir = str(table.directory) if table is not None else None
+            init_args = (
+                pairs,
+                sun,
+                earth,
+                settings,
+                table_dir,
+                str(cache_file) if cache_file else None,
+            )
+            with ProcessPoolExecutor(
+                max_workers=workers, initializer=_init_worker, initargs=init_args
+            ) as pool:
+                for sl, rows in zip(slices, pool.map(_worker_chunk, jobs), strict=True):
+                    store(sl, rows)
+
+    finally:
+        if cache is not None:
+            cache.close()
 
     return field_from_matrix(matrix)
 

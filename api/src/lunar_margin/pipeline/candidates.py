@@ -234,11 +234,19 @@ def run_search(
     table = find_table(data_dir / TABLES_DIR, table_spec)
     if table is None:
         warnings.append(
-            "수평선 테이블이 없어 지점마다 수평선을 직접 계산했습니다(느림). "
-            "`uv run python -m lunar_margin.pipeline.horizons --download`로 Storage에서 받거나 "
-            "`uv run python -m lunar_margin.pipeline.horizons`로 미리 계산해 두면 "
-            "같은 조건의 이후 탐색이 훨씬 빨라집니다."
+            "전체 수평선 테이블이 없어 지점별 캐시를 재사용하고, 없는 지점은 계산 후 저장합니다. "
+            "새 지점은 느릴 수 있습니다. 관측 높이·DEM·방위 간격·탐색 거리가 같은 다음 탐색은 "
+            "날짜가 달라도 저장된 수평선을 재사용합니다. "
+            "전체 테이블은 `uv run python -m lunar_margin.pipeline.horizons --download` 또는 "
+            "`uv run python -m lunar_margin.pipeline.horizons`로 준비할 수 있습니다. "
+            "3 m 등 기본값 외 높이는 해당 설정의 --config를 추가해야 합니다."
         )
+    cache_totals = [0, 0]
+
+    def cache_usage(hits: int, written: int) -> None:
+        cache_totals[0] += hits
+        cache_totals[1] += written
+
     load_kernels(data_dir / "spice")
     dem = open_dem(dem_pairs)
     workers = config.workers or os.cpu_count() or 1
@@ -294,6 +302,8 @@ def run_search(
                 dem_files=dem_pairs,
                 on_progress=reporter("coarse"),
                 table=table,
+                cache_root=data_dir / "horizon-cache",
+                on_cache=cache_usage,
             )
         )
         coarse_filter = evaluate(
@@ -332,8 +342,12 @@ def run_search(
             dem_files=dem_pairs,
             on_progress=reporter("fine"),
             table=table,
+            cache_root=data_dir / "horizon-cache",
+            on_cache=cache_usage,
         )
     )
+    if sum(cache_totals):
+        log(f"수평선 캐시: 재사용 {cache_totals[0]}, 새로 저장 {cache_totals[1]}")
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
     )
