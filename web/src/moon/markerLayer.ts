@@ -75,11 +75,24 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
     for (const [id, entity] of entities) {
       if (!entity.label) continue
       const color = comparedIds.includes(id)
-        ? Color.fromCssColorString(comparedIds[0] === id ? '#5dd5ce' : '#f2b96b')
-        : id === selectedId ? SELECTED_LABEL_BACKGROUND : POINT_COLOR
-      footprints.get(id)?.setStyle(color, id === selectedId || comparedIds.includes(id) ? 0.45 : 0.25)
+        ? Color.fromCssColorString(
+            comparedIds[0] === id ? '#5dd5ce' : '#f2b96b',
+          )
+        : id === selectedId
+          ? SELECTED_LABEL_BACKGROUND
+          : POINT_COLOR
+      footprints
+        .get(id)
+        ?.setStyle(
+          color,
+          id === selectedId || comparedIds.includes(id) ? 0.45 : 0.25,
+        )
       entity.label.backgroundColor = new ConstantProperty(
-        comparedIds.includes(id) ? color : id === selectedId ? SELECTED_LABEL_BACKGROUND : LABEL_BACKGROUND,
+        comparedIds.includes(id)
+          ? color
+          : id === selectedId
+            ? SELECTED_LABEL_BACKGROUND
+            : LABEL_BACKGROUND,
       )
     }
   }
