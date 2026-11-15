@@ -43,7 +43,10 @@ export function MissionWorkspace({
   const comparison = compareIds.map((id) => run?.candidates.find((c) => c.id === id)).filter((c) => c !== undefined)
   function addComparison(id: string) {
     if (!run || !run.candidates.some((candidate) => candidate.id === id)) return
-    const next = nextComparisonIds(compareIds, id, selection.siteId)
+    const selectedInRun = run.candidates.some((c) => c.id === selection.siteId)
+      ? selection.siteId
+      : null
+    const next = nextComparisonIds(compareIds, id, selectedInRun)
     setCompareState({ runId: run.id, ids: next })
   }
   const searchUrl = new URL(window.location.href)
@@ -184,7 +187,7 @@ export function MissionWorkspace({
                       type="button"
                       className="ml-8 text-xs text-cyan-300 underline underline-offset-2"
                       onClick={() => addComparison(site.id)}
-                      aria-label={`후보 ${index + 1} 비교에 추가`}
+                      aria-label={`비교에 추가: ${index + 1}번 지점`}
                     >
                       {compareIds.includes(site.id) ? '비교에서 제거' : '비교에 추가'}
                     </button>
