@@ -33,8 +33,10 @@ function sample() {
       body_azimuth_deg: [212.4, 213.1],
       body_elevation_deg: [0.7, 0.9],
       visible: [true, false],
+      terrain_clearance_deg: [0.5, -0.5],
     },
     windows: [{ start: '2027-01-01T00:00:00Z', end: '2027-01-01T00:30:00Z' }],
+    visible_clearance_p10_deg: 0.5,
     dark_periods: [
       { start: '2027-01-01T00:30:00Z', end: '2027-01-02T00:00:00Z' },
     ],
