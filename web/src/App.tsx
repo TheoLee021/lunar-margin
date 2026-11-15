@@ -16,18 +16,21 @@ const DatePlanner = lazy(() =>
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
+const ResearchLibrary = lazy(() => import('./ResearchLibrary'))
 const INITIAL_SELECTION: MissionSelection = {
   departure: '2027-01-06',
   landing: '2027-01-10',
   duration: 14,
   siteId: null,
 }
-type View = 'mission' | 'analysis' | 'orbit' | 'search'
+type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'research'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
+  if (window.location.pathname.replace(/\/+$/, '') === '/research')
+    return 'research'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
@@ -56,7 +59,8 @@ function locationFor(
   planner: boolean,
 ): string {
   const url = new URL(window.location.href)
-  url.pathname = view === 'orbit' ? '/orbit' : '/'
+  url.pathname =
+    view === 'orbit' ? '/orbit' : view === 'research' ? '/research' : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
@@ -119,7 +123,9 @@ export default function App() {
           </p>
         }
       >
-        {view === 'analysis' ? (
+        {view === 'research' ? (
+          <ResearchLibrary />
+        ) : view === 'analysis' ? (
           <AnalysisWorkspace
             dashboardHref={locationFor('mission', selection, false)}
             onDashboardClick={(event) => {
@@ -213,6 +219,9 @@ export default function App() {
           >
             후보지 탐색
           </button>
+          <a className="hud-button" href="/research">
+            Research &amp; Evidence
+          </a>
         </div>
       ) : null}
     </>
