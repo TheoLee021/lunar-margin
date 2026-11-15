@@ -3,7 +3,7 @@
 ## Goal
 - 달 남극의 착륙 지점과 착륙 시점을 빠르게 비교·평가할 수 있는 직관적인 mission decision tool
 - 환경 데이터를 보여주는 데서 끝나지 않고, mission requirements를 만족하는지 판단하고 실패 원인을 설명한다
-- 데모 시나리오: TBD (D·F). 확대 장면은 남극(Artemis 후보지) 중심
+- 데모 시나리오: TBD. 확대 장면은 남극(Artemis 후보지) 중심
 
 ## Stack
 - Frontend (`web/`): Vite, React, TypeScript (strict), Tailwind v4, zod, CesiumJS (Cesium Moon 3D Tiles)
@@ -47,7 +47,7 @@ npm run e2e        # 백엔드를 띄운 상태에서 실행 (처음엔 npx play
 ```
 
 ## Contracts
-- 프론트 ↔ 백엔드: `docs/api.md`. 변경 시 B에게 먼저 공유, 기존 응답을 깨지 않게 필드 추가 위주로
+- 프론트 ↔ 백엔드: `docs/api.md`. 변경 시 기존 응답을 깨지 않게 필드 추가 위주로
 - 뷰어 ↔ 타일: `/tiles/{layer}/{z}/{x}/{y}.png`
 - 3D 뷰어 ↔ 비교 UI: 선택된 착륙지·시각을 담는 공용 타입 하나로만 주고받기
 

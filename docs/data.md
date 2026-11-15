@@ -1,8 +1,8 @@
 # 데이터셋
 
-관리: D (선정), B (다운로드·변환·저장). 대용량 데이터(DEM, SPICE 커널)는 git과 `web/public/`에 넣지 않고 백엔드 Volume 또는 Supabase Storage에 둔다.
+대용량 데이터(DEM, SPICE 커널)는 git과 `web/public/`에 넣지 않고 백엔드 Volume 또는 Supabase Storage에 둔다.
 
-> 아래 목록은 인제스천 구현(`inseon` 브랜치) 때 잠정 선정한 값이다. **D의 확정을 기다리는 중**이다.
+> 아래 목록은 인제스천 구현(`inseon` 브랜치) 때 잠정 선정한 값이다. **아직 확정되지 않았다.**
 > 다운로드와 검증: `cd api && uv run python -m lunar_margin.pipeline.fetch` (자세한 내용은 [api/README.md](../api/README.md)).
 
 | 이름                                  | 용도                                                                         | 출처 URL                                                                                                                               | 해상도                                    | 좌표계                                                                                                             | 버전                                 | 선정 이유                                                                                                                                                                                                         | 저장 위치          |

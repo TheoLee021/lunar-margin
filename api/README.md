@@ -75,7 +75,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 `uv run python -m lunar_margin.pipeline.fetch`가 `DATA_DIR`(기본 `api/data/`, git 제외)에 합계 약 501 MB를 받는다.
 크기와 sha256을 `manifest.json`에 기록하고, 다시 실행하면 손상된 파일을 검증해 새로 받는다.
-선정은 잠정이며 D 확정 대기다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
+선정은 잠정이며 아직 확정되지 않았다 (`docs/data.md`에 출처 URL·버전·선정 이유 정리).
 
 | | 지형 데이터: LOLA 남극 DEM | 천체 위치 데이터: SPICE 커널 |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ uv run python -m lunar_margin.pipeline.candidates --out out/candidates   # map.h
 
 - 거친 격자(2 km)로 먼저 훑고 유망한 영역만 500 m로 세밀화한다. 14코어에서 수 분~십수 분.
 - 수평선이 DEM 밖으로 나가는 지점은 `horizon_complete=false`로 표시한다. 합성 DEM 덕분에 ROI 전체가 DEM 안에 들어와서 이 표시는 거의 나오지 않는다.
-- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 D와 정한다.
+- 분석 기간 기본값은 2027~2046(19년, 월 궤도 승교점 주기). 임계값은 분포를 보고 정한다.
 
 ## 구조
 
@@ -181,7 +181,7 @@ src/lunar_margin/
 
 ## 예시 결과 (2027년 1년, 30분 간격)
 
-> 좌표는 **예시용 근사값**이다. 공식 착륙 후보지가 아니며, 데모 후보는 D가 정한다.
+> 좌표는 **예시용 근사값**이다. 공식 착륙 후보지가 아니며, 데모 후보는 아직 정해지지 않았다.
 
 | 지점 (lat, lon) | 일조율 | 최장 암흑(h) | 지구 가시율 | 최장 두절(h) |
 | --- | --- | --- | --- | --- |
