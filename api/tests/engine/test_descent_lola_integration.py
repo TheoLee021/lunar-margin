@@ -11,8 +11,8 @@ import pytest
 
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.descent_reference import (
-    Lander,
     R_M,
+    Lander,
     evaluate_reference,
     pdi_from_target,
 )
