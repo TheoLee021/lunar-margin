@@ -1,20 +1,18 @@
 """실제 LOLA DEM으로 축 방향이 맞는지 확인한다 (DEM 없으면 다운로드)."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
-from lunar_margin.app.settings import Settings
 from lunar_margin.engine.dem import PolarDem
-from lunar_margin.pipeline.fetch import fetch_all
 
 
 @pytest.fixture(scope="module")
-def dem() -> Iterator[PolarDem]:
-    fetch_all(Settings().data_dir)
+def dem(data_dir: Path) -> Iterator[PolarDem]:
     yield PolarDem.from_files(
-        Settings().data_dir / "dem" / "ldem_80s_80m_float.img",
-        Settings().data_dir / "dem" / "ldem_80s_80m_float.lbl",
+        data_dir / "dem" / "ldem_80s_80m_float.img",
+        data_dir / "dem" / "ldem_80s_80m_float.lbl",
     )
 
 
