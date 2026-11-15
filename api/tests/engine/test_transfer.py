@@ -24,6 +24,31 @@ def test_dated_transfer_reaches_requested_arrival_and_captures(data_dir: Path) -
     assert result.metrics.post_loi_min_altitude_km > 0
     assert result.metrics.tli_delta_v_km_s > 0
     assert result.metrics.loi_delta_v_km_s > 0
+    # LOI state is an epoch-tagged Moon-centered state, never reconstructed
+    # from the public (position-only) sampled display trajectory.
+    handoff = result.loi_handoff
+    assert handoff.epoch_utc == arrival
+    assert handoff.center == "MOON"
+    assert handoff.inertial_frame == "J2000"
+    assert handoff.fixed_frame == "MOON_ME"
+    before = np.asarray(handoff.pre_loi_j2000_km_kmps)
+    after = np.asarray(handoff.post_loi_j2000_km_kmps)
+    assert before.shape == after.shape == (6,)
+    assert np.array_equal(before[:3], after[:3])
+    assert np.linalg.norm(after[:3]) - 1737.4 == pytest.approx(100, abs=0.05)
+    assert np.linalg.norm(after[3:] - before[3:]) == pytest.approx(
+        result.metrics.loi_delta_v_km_s, abs=1e-10
+    )
+    # Verify full 6x6 state transform independently against SPICE sxform.
+    et = spiceypy.str2et(arrival.strftime("%Y-%m-%dT%H:%M:%S"))
+    matrix = spiceypy.sxform("J2000", "MOON_ME", et)
+    expected_fixed = matrix @ (after * 1000)
+    assert np.asarray(handoff.post_loi_moon_me_m_mps) == pytest.approx(
+        expected_fixed, abs=1e-5
+    )
+    assert np.linalg.norm(handoff.post_loi_moon_me_m_mps[:3]) == pytest.approx(
+        np.linalg.norm(after[:3]) * 1000, abs=1e-5
+    )
 
 
 def test_equal_flight_times_on_different_dates_have_different_trajectories(data_dir: Path) -> None:
