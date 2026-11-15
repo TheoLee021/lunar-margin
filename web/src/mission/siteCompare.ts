@@ -63,6 +63,11 @@ export function comparisonMetrics(
   const slopeReference = slopeLimit != null && slopeLimit > 0 ? slopeLimit : 15
   const roughnessReference =
     roughnessLimit != null && roughnessLimit > 0 ? roughnessLimit : 20
+  const terrainValue = (site: Candidate, kind: 'slope_p95_deg' | 'roughness_p95_m') =>
+    site.terrain?.coverage_fraction != null &&
+    site.terrain.coverage_fraction >= 0.9999
+      ? site.terrain[kind]
+      : null
 
   function metric(
     key: string,
@@ -136,8 +141,8 @@ export function comparisonMetrics(
       'slope',
       '지역 경사 P95',
       '°',
-      a.terrain?.slope_p95_deg,
-      b.terrain?.slope_p95_deg,
+      terrainValue(a, 'slope_p95_deg'),
+      terrainValue(b, 'slope_p95_deg'),
       slopeReference,
       false,
       slopeLimit != null && slopeLimit > 0
@@ -148,8 +153,8 @@ export function comparisonMetrics(
       'roughness',
       '지역 거칠기 P95',
       'm',
-      a.terrain?.roughness_p95_m,
-      b.terrain?.roughness_p95_m,
+      terrainValue(a, 'roughness_p95_m'),
+      terrainValue(b, 'roughness_p95_m'),
       roughnessReference,
       false,
       roughnessLimit != null && roughnessLimit > 0
