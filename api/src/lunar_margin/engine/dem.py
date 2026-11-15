@@ -77,6 +77,60 @@ class PolarDem:
         return value
 
 
+class RasterDem:
+    """극 입체투영 평면의 사각형 고도 래스터 (예: 5 m 지역 DEM). 높이는 구 기준 상대 높이(m).
+
+    heights_m[row, col] 픽셀의 중심은 x = left_m + (col + 0.5) * pixel_size_m,
+    y = top_m - (row + 0.5) * pixel_size_m 이다. 바깥 픽셀 중심들이 이루는 사각형 밖과
+    결측(NaN) 픽셀이 걸리는 곳은 NaN.
+    """
+
+    def __init__(
+        self,
+        heights_m: NDArray[np.float32],
+        *,
+        left_m: float,
+        top_m: float,
+        pixel_size_m: float,
+        radius_m: float = 1_737_400.0,
+    ) -> None:
+        self._h = heights_m
+        self.left_m = left_m
+        self.top_m = top_m
+        self.pixel_size_m = pixel_size_m
+        self.radius_m = radius_m
+
+    @property
+    def bounds_m(self) -> tuple[float, float, float, float]:
+        """값이 있을 수 있는 범위 (x 최소, y 최소, x 최대, y 최대)."""
+        rows, cols = self._h.shape
+        half = self.pixel_size_m / 2.0
+        return (
+            self.left_m + half,
+            self.top_m - (rows - 0.5) * self.pixel_size_m,
+            self.left_m + (cols - 0.5) * self.pixel_size_m,
+            self.top_m - half,
+        )
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """쌍선형 보간."""
+        rows, cols = self._h.shape
+        col = (x_m - self.left_m) / self.pixel_size_m - 0.5
+        row = (self.top_m - y_m) / self.pixel_size_m - 0.5
+        inside = (col >= 0) & (col <= cols - 1) & (row >= 0) & (row <= rows - 1)
+        col = np.where(inside, col, 0.0)
+        row = np.where(inside, row, 0.0)
+        c0 = np.minimum(np.floor(col).astype(np.int64), cols - 2)
+        r0 = np.minimum(np.floor(row).astype(np.int64), rows - 2)
+        fc, fr = col - c0, row - r0
+        h = self._h
+        top = h[r0, c0] * (1 - fc) + h[r0, c0 + 1] * fc
+        bottom = h[r0 + 1, c0] * (1 - fc) + h[r0 + 1, c0 + 1] * fc
+        return np.where(inside, (top * (1 - fr) + bottom * fr).astype(np.float64), np.nan)
+
+
 class Dem(Protocol):
     """수평선 계산이 DEM에 요구하는 것. PolarDem과 CompositeDem이 이를 만족한다."""
 
