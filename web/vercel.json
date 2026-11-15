@@ -1,5 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ]",
-  "rewrites": [{ "source": "/orbit", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/orbit",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/research",
+      "destination": "/index.html"
+    }
+  ]
 }
