@@ -102,7 +102,10 @@ def test_alternates_share_the_same_pdi_state() -> None:
     )
     assert len(result) == 2
     assert all(item.status == "REFERENCE_FEASIBLE" for item in result)
-    assert all(item.samples[0].moon_me_xyz_m == result[0].samples[0].moon_me_xyz_m for item in result)
+    assert all(
+        item.samples[0].moon_me_xyz_m == result[0].samples[0].moon_me_xyz_m
+        for item in result
+    )
 
 
 def test_geometric_los_blocked_visible_unknown() -> None:
