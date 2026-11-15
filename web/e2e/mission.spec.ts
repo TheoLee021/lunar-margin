@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { mockDashboardRuns } from './dashboard-fixture.js'
 
 type Analysis = {
   metrics: { visible_fraction: number; longest_dark_hours: number }
@@ -10,6 +11,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   request,
 }) => {
   test.setTimeout(60_000)
+  await mockDashboardRuns(page, request)
   const trajectoryRequests: string[] = []
   page.on('request', (request) => {
     if (request.url().includes('/trajectory/transfer?'))
@@ -101,14 +103,6 @@ test('mission planner previews dates, discards drafts and applies the selection'
   ).toBeVisible()
   await page.getByRole('button', { name: '선택 지점 3D로 보기' }).click()
   await page.getByRole('button', { name: '위에서 보기' }).click()
-  const slope = page.getByRole('slider', { name: /경사 ≤/ })
-  await slope.fill('0')
-  await expect(
-    rail.getByText('조건을 만족하는 예시 후보가 없습니다. 필터를 완화하세요.'),
-  ).toBeVisible()
-  await slope.fill('12')
-  await expect(rail.getByRole('button', { name: /후보 2/ })).toBeVisible()
-
   const opener = page.getByRole('button', { name: '미션 날짜 비교 열기' })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: '미션 날짜 UTC' })
@@ -180,6 +174,8 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(opener).toContainText('2027.01.07')
   await expect(opener).toContainText('2027.01.11')
   await expect(opener).toContainText('7일')
+  await expect(metrics).toHaveCount(0)
+  await rail.getByRole('button', { name: /후보 2/ }).click()
   await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(
     'aria-current',
     'true',
@@ -244,7 +240,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   expect(orbitUrl.searchParams.get('departure')).toBe('2027-01-13')
   expect(orbitUrl.searchParams.get('arrival')).toBe('2027-01-18')
   expect(orbitUrl.searchParams.get('duration')).toBe('7')
-  expect(orbitUrl.searchParams.get('site')).toBe('site-1')
+  expect(orbitUrl.searchParams.get('site')).toBeNull()
   await expect(page.getByLabel('달 도착일 · UTC')).toHaveValue('2027-01-18')
   await page.goBack()
   await expect(dialog).toBeVisible()
@@ -264,10 +260,8 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(
     dialog.getByRole('combobox', { name: /착륙 후 표면 임무/ }),
   ).toHaveValue('7')
-  await expect(rail.getByRole('button', { name: /후보 1/ })).toHaveAttribute(
-    'aria-current',
-    'true',
-  )
+  await expect(metrics).toHaveCount(0)
+  await expect(rail).toContainText('저장된 탐색 결과가 없습니다')
   await dialog.getByRole('button', { name: '날짜 패널 닫기' }).click()
   await expect(opener).toContainText('2027.01.13')
   await expect(opener).toContainText('2027.01.18')

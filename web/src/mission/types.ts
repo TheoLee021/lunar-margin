@@ -3,17 +3,18 @@ export type MissionSelection = {
   departure: string
   landing: string
   duration: number
-  siteId: string
+  siteId: string | null
 }
 export type CandidateSite = {
   id: string
   name: string
   latitude: number
   longitude: number
-  sun: number
-  earth: number
-  longestDarkness: number
-  slope: number
+  sun: number | null
+  earth: number | null
+  longestDarkness: number | null
+  slope: number | null
+  score?: number | null
 }
 
 export type Schedule = Pick<

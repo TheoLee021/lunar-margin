@@ -1,4 +1,4 @@
-import type { CandidateSite, MissionSelection } from './types'
+import type { CandidateSite } from './types'
 
 // UI fixtures only. These coordinates and scores are not landing recommendations.
 export const DEMO_SITES: readonly CandidateSite[] = [
@@ -53,9 +53,3 @@ export const DEMO_SITES: readonly CandidateSite[] = [
     slope: 7,
   },
 ]
-export const INITIAL_SELECTION: MissionSelection = {
-  departure: '2027-01-06',
-  landing: '2027-01-10',
-  duration: 14,
-  siteId: 'site-1',
-}

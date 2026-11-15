@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
 import { MissionSummary } from './mission/MissionSummary'
-import { DEMO_SITES, INITIAL_SELECTION } from './mission/demoSites'
 import { missionParams } from './mission/liveAnalysis'
+import { useDashboardRun } from './mission/useDashboardRun'
 import { useMissionAnalysis } from './mission/useMissionAnalysis'
 import { ScheduleSchema } from './mission/scheduleSchema'
 import type { MissionSelection, Schedule } from './mission/types'
@@ -16,6 +16,12 @@ const DatePlanner = lazy(() =>
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
+const INITIAL_SELECTION: MissionSelection = {
+  departure: '2027-01-06',
+  landing: '2027-01-10',
+  duration: 14,
+  siteId: null,
+}
 type View = 'mission' | 'analysis' | 'orbit' | 'search'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
@@ -39,9 +45,7 @@ function initialSelection(): MissionSelection {
   return {
     ...INITIAL_SELECTION,
     ...(schedule.success ? schedule.data : {}),
-    siteId: DEMO_SITES.some((site) => site.id === siteId)
-      ? siteId!
-      : INITIAL_SELECTION.siteId,
+    siteId,
   }
 }
 
@@ -58,7 +62,8 @@ function locationFor(
   url.searchParams.set('departure', selection.departure)
   url.searchParams.set('arrival', selection.landing)
   url.searchParams.set('duration', String(selection.duration))
-  url.searchParams.set('site', selection.siteId)
+  if (selection.siteId) url.searchParams.set('site', selection.siteId)
+  else url.searchParams.delete('site')
   if (view === 'mission' && planner) url.searchParams.set('planner', '1')
   else url.searchParams.delete('planner')
   return `${url.pathname}${url.search}${url.hash}`
@@ -131,7 +136,15 @@ export default function App() {
           <OrbitWorkspace
             schedule={selection}
             onScheduleChange={(schedule) =>
-              setSelection((current) => ({ ...current, ...schedule }))
+              setSelection((current) => ({
+                ...current,
+                ...schedule,
+                siteId:
+                  current.landing === schedule.landing &&
+                  current.duration === schedule.duration
+                    ? current.siteId
+                    : null,
+              }))
             }
             onBack={() => navigate('mission', true)}
           />
@@ -149,11 +162,23 @@ export default function App() {
             planner={planner}
             onPlannerChange={setPlanner}
             onApply={(schedule) => {
-              setSelection((current) => ({ ...current, ...schedule }))
+              setSelection((current) => ({
+                ...current,
+                ...schedule,
+                siteId: null,
+              }))
               setPlanner(false)
             }}
             onViewOrbit={(schedule) =>
-              navigate('orbit', false, { ...selection, ...schedule })
+              navigate('orbit', false, {
+                ...selection,
+                ...schedule,
+                siteId:
+                  selection.landing === schedule.landing &&
+                  selection.duration === schedule.duration
+                    ? selection.siteId
+                    : null,
+              })
             }
           />
         )}
@@ -200,7 +225,7 @@ function MissionApp({
   onViewOrbit,
 }: {
   selection: MissionSelection
-  onSelect: (siteId: string) => void
+  onSelect: (siteId: string | null) => void
   planner: boolean
   onPlannerChange: (open: boolean) => void
   onApply: (schedule: Schedule) => void
@@ -220,13 +245,46 @@ function MissionApp({
       })
     return () => controller.abort()
   }, [])
-  const site =
-    DEMO_SITES.find((s) => s.id === selection.siteId) ?? DEMO_SITES[0]!
-  const live = useMissionAnalysis(missionParams(site, selection))
+  const candidates = useDashboardRun(selection)
+  const run = candidates.result.kind === 'ready' ? candidates.result.run : null
+  const sites = run
+    ? [...run.candidates]
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 5)
+        .map((candidate) => ({
+          id: candidate.id,
+          name: `후보 ${candidate.rank}`,
+          latitude: candidate.lat_deg,
+          longitude: candidate.lon_deg,
+          sun:
+            candidate.sun.fraction === null
+              ? null
+              : candidate.sun.fraction * 100,
+          earth:
+            candidate.earth.fraction === null
+              ? null
+              : candidate.earth.fraction * 100,
+          longestDarkness: candidate.sun.longest_dark_hours,
+          slope: candidate.terrain?.slope_p95_deg ?? null,
+          score:
+            candidate.score.total === null ? null : candidate.score.total * 100,
+        }))
+    : []
+  const site = sites.find((candidate) => candidate.id === selection.siteId)
+  const live = useMissionAnalysis(
+    site && run
+      ? {
+          ...missionParams(site, selection),
+          observer_height_m: run.config.observer_height_m,
+        }
+      : null,
+  )
   return (
     <MissionWorkspace
       selection={selection}
       analysis={live}
+      candidates={candidates}
+      sites={sites}
       onSelect={onSelect}
       summary={
         <button
