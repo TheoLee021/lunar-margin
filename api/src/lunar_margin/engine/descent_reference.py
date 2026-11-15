@@ -222,7 +222,7 @@ def evaluate_reference(
     # Inverse-dynamics/propellant grid. Do not use the sparse guidance grid
     # for collision checks; the spacecraft travels kilometers in five seconds.
     t = np.linspace(0, duration_s, max(41, math.ceil(duration_s / 5) + 1))
-    r, v, a = _trajectory_at_times(pdi, target, duration_s, loft_m, t)
+    r, v, _ = _trajectory_at_times(pdi, target, duration_s, loft_m, t)
     radius, phi, lam = _moon_lat_lon(r)
     altitude = radius - R_M - dem.sample_height_lonlat_m(phi, lam)
 
