@@ -28,7 +28,11 @@ function candidate(
     terrain:
       slope === null && roughness === null
         ? null
-        : { slope_p95_deg: slope, roughness_p95_m: roughness, coverage_fraction: 1 },
+        : {
+            slope_p95_deg: slope,
+            roughness_p95_m: roughness,
+            coverage_fraction: 1,
+          },
   } as Candidate
 }
 
