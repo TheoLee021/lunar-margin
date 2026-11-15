@@ -28,7 +28,7 @@ function candidate(
     terrain:
       slope === null && roughness === null
         ? null
-        : { slope_p95_deg: slope, roughness_p95_m: roughness },
+        : { slope_p95_deg: slope, roughness_p95_m: roughness, coverage_fraction: 1 },
   } as Candidate
 }
 
@@ -85,6 +85,14 @@ describe('site comparison', () => {
     expect(metrics.find((m) => m.key === 'roughness')?.aScore).toBeNull()
     expect(metrics.find((m) => m.key === 'earth')?.a).toBe(90)
     expect(metrics.find((m) => m.key === 'slope')?.bScore).toBeCloseTo(60)
+  })
+
+  it('never presents terrain scores from incomplete DEM coverage', () => {
+    const a = candidate(0.8, 0.9, 2, 3)
+    if (a.terrain) a.terrain.coverage_fraction = 0.75
+    const metrics = comparisonMetrics(a, candidate(0.8, 0.9, 3, 4), config)
+    expect(metrics.find((m) => m.key === 'slope')?.a).toBeNull()
+    expect(metrics.find((m) => m.key === 'roughness')?.aScore).toBeNull()
   })
 
   it('calculates chart scales relative to the same mission window', () => {
