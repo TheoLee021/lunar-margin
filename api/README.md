@@ -53,6 +53,12 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
    | `CORS_ORIGIN_REGEX` | Vercel PR Preview 도메인 (`.env.example` 참고) |
    | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | 팀 Supabase 프로젝트 값 |
    | `SUPABASE_BUCKET` | `landing-spot` |
+   | `PYTHON_CPU_COUNT` | 서비스의 vCPU 수 (현재 `8`) |
+   | `OPENBLAS_NUM_THREADS` | `1` |
+
+   컨테이너 안의 `os.cpu_count()`는 실제 할당(8 vCPU)이 아니라 호스트 CPU 수(48)를 돌려주고, 프로세스·스레드 한도는 1000이다.
+   마지막 두 변수가 없으면 후보지 탐색이 worker 48개를 띄우고 각자 OpenBLAS 스레드 48개를 만들다 한도에 걸려
+   `[Errno 32] Broken pipe`로 실패한다. 병렬화는 프로세스 단위로 하므로 BLAS 스레드는 1개면 된다.
 
 3. 처음 한 번 NASA 원천 데이터를 Volume에 받는다 (약 510 MB). 이미 있는 파일은 sha256만 확인하고 건너뛴다.
 
