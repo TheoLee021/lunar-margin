@@ -47,9 +47,10 @@ def test_reference_endpoint_returns_same_initial_state_and_two_targets(
     assert data["pdi"]["altitude_reference_m"] == pytest.approx(15000)
     assert len(data["results"]) == 2
     assert all(item["path"]["status"] == "REFERENCE_FEASIBLE" for item in data["results"])
-    assert data["results"][0]["path"]["samples"][0]["moon_me_xyz_m"] == data["results"][1][
-        "path"
-    ]["samples"][0]["moon_me_xyz_m"]
+    assert (
+        data["results"][0]["path"]["samples"][0]["moon_me_xyz_m"]
+        == data["results"][1]["path"]["samples"][0]["moon_me_xyz_m"]
+    )
     assert data["results"][0]["earth_los_samples"] is None
 
 
