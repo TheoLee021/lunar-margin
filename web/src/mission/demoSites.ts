@@ -1,4 +1,4 @@
-import type { CandidateSite, MissionSelection } from './types'
+import type { CandidateSite } from './types'
 
 // Example coordinates for the mission HUD, not landing recommendations.
 // Their metrics come from GET /analysis/site-assessment.
@@ -34,9 +34,3 @@ export const DEMO_SITES: readonly CandidateSite[] = [
     longitude: -67.7,
   },
 ]
-export const INITIAL_SELECTION: MissionSelection = {
-  departure: '2027-01-06',
-  landing: '2027-01-10',
-  duration: 14,
-  siteId: 'site-1',
-}
