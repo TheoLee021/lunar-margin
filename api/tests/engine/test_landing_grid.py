@@ -48,7 +48,7 @@ def test_missing_terrain_never_passes_through_zero_filling() -> None:
     heights = np.zeros((101, 101), dtype=np.float32)
     heights[50, 50] = np.nan
     dem = dem_with(heights)
-    with pytest.raises(ValueError, match="outside|missing"):
+    with pytest.raises(ValueError, match=r"outside|missing"):
         evaluate_landing_grid(dem, -90.0, 0.0)
 
 
