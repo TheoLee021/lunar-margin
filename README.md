@@ -116,7 +116,11 @@ never becomes a full-grid mean.
 
 Choose a tentative departure from Spaceflight Now and Space Launch
 Schedule (including general launches in demo mode), then choose the landing date independently. Month-only or conflicting
-dates cannot be auto-selected. Source precision, update time and stale fallback
+dates cannot be auto-selected. Selecting a launch applies its operator’s model rate to the
+same eligible-grid average; an unavailable operator/delivery rate uses the labeled common
+reference model. Clearing the selection restores the six-company minimum comparison.
+The selected launch ID persists through applying dates and opening candidate searches.
+Source precision, update time and stale fallback
 are visible. Clicking a completed date opens its saved candidate search and carries
 departure, landing, duration, mass and delivery mode. Details display all six companies.
 The strict public-quote API remains available separately and never fills unknown

@@ -166,6 +166,11 @@ export const ComparisonSchema = CompareInputSchema.extend({
 export type Comparison = z.infer<typeof ComparisonSchema>
 export const ProviderCalendarInputSchema = CalendarInputSchema.extend({
   estimate: z.boolean().optional(),
+  selected_launch_id: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,160}$/)
+    .nullable()
+    .optional(),
   departure_dates: z.array(z.iso.date()).min(1).max(5),
   source_run_id: z
     .string()
@@ -208,34 +213,60 @@ const CalendarCell = z
           c.eligible_grid_count !== null &&
           c.eligible_grid_count > 0 &&
           c.quoted_grid_count === c.eligible_grid_count &&
-          c.eligible_provider_ids.length > 0
+          (c.status === 'estimated' || c.eligible_provider_ids.length > 0)
         : c.mean_min_usd === null,
     'A partial or unknown quote cannot become a full-grid average',
   )
-export const ProviderCalendarSchema = z.object({
-  estimate: z.boolean().optional().default(false),
-  catalog_checked_on: z.iso.date(),
-  mass_kg: z.number().positive(),
-  delivery: DeliverySchema,
-  mission_duration_days: z.number().int().positive(),
-  dates: z.array(
-    z.object({
-      landing_date: z.iso.date(),
-      run_id: z.string(),
-      state: z.enum([
-        'completed',
-        'not_computed',
-        'running',
-        'failed',
-        'unavailable',
-      ]),
-      message: z.string().nullable(),
-    }),
-  ),
-  cells: z.array(CalendarCell),
-  aggregation: z.literal('mean_of_grid_minima'),
-  sampling: z.literal('all_eligible_500m_grids'),
+const CompanyModelSchema = z.object({
+  launch_id: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/),
+  launch_name: z.string(),
+  company_id: ProviderIdSchema.nullable(),
+  company_name: z.string(),
+  tariff_usd_per_kg: z.number().positive(),
+  fixed_usd: Amount,
+  billable_mass_kg: z.number().positive(),
+  tariff_basis: z.enum(['public_tariff', 'common_model']),
+  tariff_source: Source,
+  assumptions: z.array(z.string()).min(1),
 })
+export const ProviderCalendarSchema = z
+  .object({
+    selection: CompanyModelSchema.nullable().optional().default(null),
+    estimate: z.boolean().optional().default(false),
+    catalog_checked_on: z.iso.date(),
+    mass_kg: z.number().positive(),
+    delivery: DeliverySchema,
+    mission_duration_days: z.number().int().positive(),
+    dates: z.array(
+      z.object({
+        landing_date: z.iso.date(),
+        run_id: z.string(),
+        state: z.enum([
+          'completed',
+          'not_computed',
+          'running',
+          'failed',
+          'unavailable',
+        ]),
+        message: z.string().nullable(),
+      }),
+    ),
+    cells: z.array(CalendarCell),
+    aggregation: z.literal('mean_of_grid_minima'),
+    sampling: z.literal('all_eligible_500m_grids'),
+  })
+  .refine((r) => {
+    if (r.selection && !r.estimate) return false
+    return r.cells.every((c) => {
+      if (r.selection)
+        return (
+          c.eligible_provider_ids.length === (r.selection.company_id ? 1 : 0) &&
+          (!r.selection.company_id ||
+            c.eligible_provider_ids[0] === r.selection.company_id)
+        )
+      return c.status !== 'estimated' || c.eligible_provider_ids.length > 0
+    })
+  }, 'Selected-company estimates require matching company metadata')
 export type ProviderCalendar = z.infer<typeof ProviderCalendarSchema>
 export type ProviderCalendarCell = ProviderCalendar['cells'][number]
 
@@ -279,6 +310,8 @@ export async function fetchProviderCalendar(
     result.cells.map((c) => `${c.departure_date}/${c.landing_date}`),
   )
   if (
+    (result.selection?.launch_id ?? null) !==
+      (request.selected_launch_id ?? null) ||
     result.mass_kg !== request.mass_kg ||
     result.delivery !== request.delivery ||
     result.mission_duration_days !== request.mission.mission_duration_days ||

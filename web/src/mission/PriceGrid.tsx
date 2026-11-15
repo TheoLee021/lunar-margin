@@ -124,6 +124,7 @@ export function PriceGrid({
     valid && sourceReady
       ? {
           estimate: true,
+          selected_launch_id: draft.launchId ?? null,
           mass_kg: massNumber,
           delivery,
           landing_dates: landings.map(iso),
@@ -158,6 +159,8 @@ export function PriceGrid({
     url.searchParams.set('run', runId)
     url.searchParams.set('mass_kg', String(massNumber))
     url.searchParams.set('delivery', delivery)
+    if (draft.launchId) url.searchParams.set('launch_id', draft.launchId)
+    else url.searchParams.delete('launch_id')
     return `${url.pathname}${url.search}`
   }
   return (
@@ -294,10 +297,41 @@ export function PriceGrid({
         </p>
       ) : null}
       {calendar.calculating ? <p role="status">날짜별 가격 계산 중…</p> : null}
-      <p className="mb-3 text-xs text-neutral-400">
-        공개 단가 우선 · 미공개 시 공통 비용 모델 · 각 500m 적합 격자의 최저
-        예상 비용 평균 · 실제 견적 아님
-      </p>
+      {data?.selection ? (
+        <section
+          aria-label="선택한 발사사의 가격 모델"
+          className="mb-3 text-sm"
+        >
+          <p className="text-amber-300">
+            {data.selection.company_name} 모델 예상 비용 ·{' '}
+            {data.selection.tariff_basis === 'public_tariff'
+              ? '공개 단가'
+              : '공통 참조 단가'}{' '}
+            ${data.selection.tariff_usd_per_kg.toLocaleString('en-US')}/kg
+            {' · '}고정비 ${data.selection.fixed_usd.toLocaleString('en-US')}
+          </p>
+          <p className="hint">
+            {data.selection.launch_name} · 같은 적합 500m 격자 전체의 산술평균 ·
+            실제 견적 아님
+          </p>
+          <details>
+            <summary>적용 근거와 가정</summary>
+            <p className="hint">{data.selection.assumptions.join(' · ')}</p>
+            <a
+              href={data.selection.tariff_source.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {data.selection.tariff_source.title} ↗
+            </a>
+          </details>
+        </section>
+      ) : !draft.launchId ? (
+        <p className="mb-3 text-xs text-neutral-400">
+          공개 단가 우선 · 미공개 시 공통 비용 모델 · 각 500m 적합 격자의 최저
+          예상 비용 평균 · 실제 견적 아님
+        </p>
+      ) : null}
       <div className="grid-scroll">
         <table className="cost-grid" aria-label="출발일과 착륙일별 평균 가격">
           <thead>
@@ -361,7 +395,7 @@ export function PriceGrid({
                       mean !== null && mean <= minimum * 1.05
                         ? 'low-cost'
                         : undefined
-                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `최저가 평균 ${formatPrice(mean)}` : label}`
+                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `${draft.launchId ? '회사 모델 평균' : '최저가 평균'} ${formatPrice(mean)}` : label}`
                     const completed = row?.state === 'completed'
                     const content = (
                       <>
@@ -370,7 +404,10 @@ export function PriceGrid({
                           <>
                             <small>
                               {offer!.quoted_grid_count.toLocaleString()}개 격자
-                              최저 예상 비용 평균 · {l - d}일 비행
+                              {draft.launchId
+                                ? '회사 모델 평균'
+                                : '최저 예상 비용 평균'}{' '}
+                              · {l - d}일 비행
                               {offer!.terrain_unknown_count
                                 ? ' · 지형 미산정 포함'
                                 : ''}

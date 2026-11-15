@@ -126,10 +126,13 @@ export function DatePlanner({
               </div>
             </div>
             <LaunchDeparture
-              departure={anchors.departure}
-              onSelect={(departure) => {
+              selectedId={draft.launchId ?? null}
+              onClear={() => setDraft((d) => ({ ...d, launchId: null }))}
+              onSelect={(launch) => {
+                const departure = launch.departure_date
+                if (!departure) return
                 setAnchors((a) => ({ ...a, departure }))
-                setDraft((d) => ({ ...d, departure }))
+                setDraft((d) => ({ ...d, departure, launchId: launch.id }))
               }}
             />
             <div className="date-anchors">

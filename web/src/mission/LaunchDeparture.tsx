@@ -19,17 +19,18 @@ const ROLES = {
 }
 
 export function LaunchDeparture({
-  departure,
+  selectedId,
   onSelect,
+  onClear,
 }: {
-  departure: string
-  onSelect: (date: string) => void
+  selectedId: string | null
+  onSelect: (launch: LaunchSchedule['launches'][number]) => void
+  onClear: () => void
 }) {
   const [data, setData] = useState<LaunchSchedule | null>(null)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
   const [company, setCompany] = useState<Company | 'all'>('all')
-  const [chosen, setChosen] = useState('')
   const [query, setQuery] = useState('')
   useEffect(() => {
     const controller = new AbortController()
@@ -46,16 +47,12 @@ export function LaunchDeparture({
       })
     return () => controller.abort()
   }, [revision])
-  const selected =
-    data?.launches.find(
-      (item) => item.id === chosen && item.departure_date === departure,
-    ) ?? data?.launches.find((item) => item.departure_date === departure)
+  const selected = data?.launches.find((item) => item.id === selectedId)
   const complete =
     data?.sources.every((source) => source.complete && !source.stale) ?? false
   function choose(item: LaunchSchedule['launches'][number]) {
     if (item.departure_date) {
-      setChosen(item.id)
-      onSelect(item.departure_date)
+      onSelect(item)
     }
   }
   function related(item: LaunchSchedule['launches'][number], id: Company) {
@@ -91,6 +88,7 @@ export function LaunchDeparture({
               (item) => item.id === e.target.value,
             )
             if (item) choose(item)
+            else if (!e.target.value) onClear()
           }}
         >
           <option value="">
