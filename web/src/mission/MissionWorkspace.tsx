@@ -41,7 +41,7 @@ export function MissionWorkspace({
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
   const compareIds =
-    run?.id === compareState?.runId
+    run && compareState && run.id === compareState.runId
       ? compareState.ids.filter((id) => run.candidates.some((c) => c.id === id))
       : []
   const comparison = compareIds
