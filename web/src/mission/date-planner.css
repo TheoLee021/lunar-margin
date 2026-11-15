@@ -400,7 +400,7 @@
   .planner-charts {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 1fr);
     border-top: 1px solid var(--line);
     background: transparent;
   }
@@ -576,56 +576,6 @@
     .planner-primary {
       grid-template-columns: minmax(0, 1fr);
     }
-  }
-}
-
-@layer components {
-  .mission-timeline-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .mission-timeline-guide {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .mission-timeline-guide > span::before {
-    content: '';
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    margin-right: 5px;
-    background: var(--sun);
-    border-radius: 2px;
-  }
-  .mission-timeline-guide .timeline-blocked-key::before {
-    background: repeating-linear-gradient(
-      135deg,
-      var(--muted) 0 1px,
-      transparent 1px 3px
-    );
-    border: 1px solid var(--muted);
-  }
-  .unified-timeline {
-    touch-action: pan-y;
-  }
-  .timeline-inspection {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px;
-    font-size: 12px;
-  }
-  .timeline-inspection output {
-    font-family: var(--f-mono);
-  }
-  .timeline-inspection input {
-    grid-column: 1/-1;
-    width: 100%;
-    accent-color: var(--fg);
   }
 }
 

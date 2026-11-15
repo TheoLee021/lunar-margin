@@ -1,8 +1,5 @@
 import { BASE_DAY, iso } from './missionDates'
 import type { DateScore } from './types'
-import { AnalysisStatus } from './AnalysisStatus'
-import type { MissionAnalysisResult } from './useMissionAnalysis'
-import { MissionTimeline } from './MissionTimeline'
 
 type Series = { x: number[]; y: number[]; color: string; dashed?: boolean }
 type PlotProps = {
@@ -148,13 +145,9 @@ function Plot({
 }
 export function MissionCharts({
   score,
-  live,
-  hour,
   onLanding,
 }: {
-  live: MissionAnalysisResult
   score: DateScore | null
-  hour: number
   onLanding: (date: string) => void
 }) {
   if (!score)
@@ -166,7 +159,7 @@ export function MissionCharts({
         </section>
       </div>
     )
-  const { xs, ys, day, duration } = score
+  const { xs, ys, day } = score
   const best = ys.indexOf(Math.max(...ys)),
     ticks = [day - 60, day - 15, day + 30, day + 75, day + 120]
   return (
@@ -192,25 +185,6 @@ export function MissionCharts({
           선택한 착륙지의 날짜별 예시 점수. 곡선을 클릭해 착륙일을 비교하세요. ▲
           최고 점수.
         </p>
-      </section>
-      <section
-        className="group chart mission-timeline-panel"
-        aria-label="미션 기간 타임라인"
-      >
-        <div className="mission-timeline-heading">
-          <h2>미션 기간 타임라인</h2>
-          <span className="example-label">NASA 실제 분석</span>
-        </div>
-        {live.kind === 'ready' ? (
-          <MissionTimeline
-            key={`${live.data.sun.start}/${live.data.sun.end}/${live.data.sun.lat}/${live.data.sun.lon}`}
-            timeline={live.data.timeline}
-            duration={duration}
-            hour={hour}
-          />
-        ) : (
-          <AnalysisStatus result={live} />
-        )}
       </section>
     </div>
   )
