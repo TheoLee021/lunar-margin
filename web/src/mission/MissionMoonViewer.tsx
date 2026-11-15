@@ -39,6 +39,19 @@ export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
 }
 
+/**
+ * Which operator's equipment stands on the surface. The plan is for this to come from
+ * the signed-in account, so it is an input rather than something the scene decides:
+ * when login lands it is passed in and the picker below stops rendering. Until then a
+ * `?operator=` parameter chooses one, and the picker is there to switch while working.
+ */
+function operatorFromUrl(): string | undefined {
+  const asked = new URLSearchParams(window.location.search).get('operator')
+  return COMPANIES.some((company) => company.id === asked)
+    ? (asked ?? undefined)
+    : undefined
+}
+
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
   ref,
@@ -46,6 +59,7 @@ export function MissionMoonViewer({
   sites,
   onSelect,
   sun,
+  operatorId: givenOperatorId,
 }: {
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
@@ -53,6 +67,8 @@ export function MissionMoonViewer({
   onSelect: (siteId: string) => void
   /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
   sun: SunDirectionResult
+  /** The account's operator once there is one. Supplying it hides the picker. */
+  operatorId?: string
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
   const [photo, setPhoto] = useState(false)
@@ -86,7 +102,10 @@ export function MissionMoonViewer({
 
   // "Company" already means a delivery provider elsewhere in this app, so the operator
   // whose equipment stands on the surface is called that instead.
-  const [operatorId, setOperatorId] = useState(DEFAULT_COMPANY_ID)
+  const [pickedOperatorId, setPickedOperatorId] = useState(
+    () => operatorFromUrl() ?? DEFAULT_COMPANY_ID,
+  )
+  const operatorId = givenOperatorId ?? pickedOperatorId
   const operator = companyById(operatorId)
   const sky = useEquipmentSky(selected, selection, operator)
   const { mobile } = operator
@@ -172,25 +191,27 @@ export function MissionMoonViewer({
       </div>
       <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-2">
-          <label className="hud-button flex items-center gap-2">
-            <span className="text-neutral-400">운영사</span>
-            <select
-              aria-label="장비를 배치할 운영사"
-              className="bg-transparent outline-none"
-              value={operatorId}
-              onChange={(event) => setOperatorId(event.target.value)}
-            >
-              {COMPANIES.map((option) => (
-                <option
-                  key={option.id}
-                  value={option.id}
-                  className="bg-neutral-900"
-                >
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {givenOperatorId ? null : (
+            <label className="hud-button flex items-center gap-2">
+              <span className="text-neutral-400">운영사</span>
+              <select
+                aria-label="장비를 배치할 운영사"
+                className="bg-transparent outline-none"
+                value={operatorId}
+                onChange={(event) => setPickedOperatorId(event.target.value)}
+              >
+                {COMPANIES.map((option) => (
+                  <option
+                    key={option.id}
+                    value={option.id}
+                    className="bg-neutral-900"
+                  >
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
             className="hud-button"

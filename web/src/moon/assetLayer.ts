@@ -122,7 +122,8 @@ const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
 /** The Earth verdict, carried by the card beside each unit. */
 const EARTH_CLEAR = Color.fromCssColorString('#4ade80')
 const EARTH_BLOCKED = Color.fromCssColorString('#f87171')
-const LABEL_BACKGROUND = Color.fromCssColorString('#15191ee6')
+/** Translucent so the card reads as an overlay on the surface, not a sticker on it. */
+const LABEL_BACKGROUND = Color.fromCssColorString('#15191eb3')
 
 export interface AssetLayer {
   /**
