@@ -66,6 +66,7 @@ export interface MoonSceneOptions {
   signal: AbortSignal
   onPick: (location: LunarLocation) => void
   onMarkerSelect: (id: string) => void
+  onMarkerCompare: (id: string) => void
   onHeadingChange: (headingRad: number) => void
 }
 
@@ -75,6 +76,7 @@ export interface MoonScene {
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
   setSelectedMarker(id: string | null): void
+  setComparedMarkers(ids: readonly string[]): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
   resetNorth(): void
@@ -164,36 +166,46 @@ export async function createMoonScene(
   const markers = createMarkerLayer(viewer)
   let flight = 0
   const handler = new ScreenSpaceEventHandler(scene.canvas)
+  const clickMap = (position: Cartesian2, compare: boolean) => {
+    const picked: unknown = scene.pick(position)
+    const cluster = markers.clusterPositionsOf(picked)
+    if (cluster) {
+      flight++
+      const bounds = BoundingSphere.fromPoints(cluster)
+      camera.flyToBoundingSphere(bounds, {
+        offset: new HeadingPitchRange(
+          0,
+          -CesiumMath.PI_OVER_TWO,
+          Math.max(bounds.radius * 5, 5_000),
+        ),
+        duration: 1.2,
+      })
+      return
+    }
+    const markerId = markers.markerIdOf(picked)
+    if (markerId !== undefined) {
+      if (compare) options.onMarkerCompare(markerId)
+      else options.onMarkerSelect(markerId)
+      return
+    }
+    if (compare) return
+    const surface = pickSurface(position)
+    if (!surface) return
+    options.onPick(
+      toLunarLocation(Cartographic.fromCartesian(surface, Ellipsoid.MOON)),
+    )
+  }
   handler.setInputAction(
-    ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
-      const picked: unknown = scene.pick(position)
-      const cluster = markers.clusterPositionsOf(picked)
-      if (cluster) {
-        flight++
-        const bounds = BoundingSphere.fromPoints(cluster)
-        camera.flyToBoundingSphere(bounds, {
-          offset: new HeadingPitchRange(
-            0,
-            -CesiumMath.PI_OVER_TWO,
-            Math.max(bounds.radius * 5, 5_000),
-          ),
-          duration: 1.2,
-        })
-        return
-      }
-      const markerId = markers.markerIdOf(picked)
-      if (markerId !== undefined) {
-        options.onMarkerSelect(markerId)
-        return
-      }
-      const surface = pickSurface(position)
-      if (!surface) return
-      options.onPick(
-        toLunarLocation(Cartographic.fromCartesian(surface, Ellipsoid.MOON)),
-      )
-    },
+    ({ position }: ScreenSpaceEventHandler.PositionedEvent) => clickMap(position, false),
     ScreenSpaceEventType.LEFT_CLICK,
   )
+  for (const modifier of [KeyboardEventModifier.CTRL, KeyboardEventModifier.SHIFT]) {
+    handler.setInputAction(
+      ({ position }: ScreenSpaceEventHandler.PositionedEvent) => clickMap(position, true),
+      ScreenSpaceEventType.LEFT_CLICK,
+      modifier,
+    )
+  }
   handler.setInputAction(
     ({ position }: ScreenSpaceEventHandler.PositionedEvent) => {
       const surface = pickSurface(position)
@@ -237,6 +249,9 @@ export async function createMoonScene(
     },
     setSelectedMarker(id) {
       markers.setSelected(id)
+    },
+    setComparedMarkers(ids) {
+      markers.setCompared(ids)
     },
     setSunDirection(direction) {
       if (direction === null) {
