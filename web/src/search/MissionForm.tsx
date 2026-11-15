@@ -181,12 +181,6 @@ export function MissionForm({
             </label>
           ))}
           <label className="flex flex-col gap-1 text-xs text-neutral-300">
-            탐색 영역
-            <select className={inputClass} value="south" onChange={() => {}}>
-              <option value="south">달 남극 (85°S 이남)</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-neutral-300">
             최적화 우선순위
             <select
               className={inputClass}
