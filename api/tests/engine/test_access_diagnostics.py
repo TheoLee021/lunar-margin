@@ -13,9 +13,7 @@ from lunar_margin.engine.horizon import HorizonProfile
 
 
 def test_access_window_transitions_and_clearance() -> None:
-    horizon = HorizonProfile(
-        azimuth_deg=np.array([0.0, 180.0]), elevation_deg=np.array([0.0, 0.0])
-    )
+    horizon = HorizonProfile(azimuth_deg=np.array([0.0, 180.0]), elevation_deg=np.array([0.0, 0.0]))
     azimuth = np.zeros(6)
     elevation = np.array([-1.0, 0.2, 1.0, -2.0, 0.3, 0.4])
     visible = elevation > 0.0
@@ -26,9 +24,7 @@ def test_access_window_transitions_and_clearance() -> None:
 
 
 def test_no_visible_access_keeps_clearance_unknown() -> None:
-    horizon = HorizonProfile(
-        azimuth_deg=np.array([0.0, 180.0]), elevation_deg=np.array([0.0, 0.0])
-    )
+    horizon = HorizonProfile(azimuth_deg=np.array([0.0, 180.0]), elevation_deg=np.array([0.0, 0.0]))
     result = access_diagnostics(horizon, np.zeros(3), -np.ones(3), np.zeros(3, dtype=bool), 30)
     assert result.longest_visible_hours == 0.0
     assert result.clearance_p10_deg is None
