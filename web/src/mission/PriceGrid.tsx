@@ -52,14 +52,12 @@ export function PriceGrid({
   landings,
   draft,
   availability,
-  isNonLunarLaunch = false,
   onSelect,
   onDepartureStatus,
 }: {
   departures: number[]
   landings: number[]
   draft: Schedule
-  isNonLunarLaunch?: boolean
   availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
   onDepartureStatus: (status: DepartureStatus) => void
@@ -342,12 +340,6 @@ export function PriceGrid({
       ) : calendar.calculating ? (
         <p role="status">날짜별 가격 계산 중…</p>
       ) : null}
-      {data?.selection && isNonLunarLaunch ? (
-        <p role="note" className="hint text-amber-200">
-          일반 발사일을 사용한 달 배송 시뮬레이션입니다. 실제 달 배송편이
-          아닙니다.
-        </p>
-      ) : null}
       {data?.selection ? (
         <section
           aria-label="선택한 발사사의 가격 모델"
@@ -379,8 +371,8 @@ export function PriceGrid({
         </section>
       ) : !draft.launchId ? (
         <p className="mb-3 text-xs text-neutral-400">
-          발사일 기준 달 배송 비용 시뮬레이션 · 각 500m 적합 격자의 최저 예상
-          비용 평균 · 실제 달 배송편·운임 아님
+          모든 발사를 달 탐사로 가정한 모델 예상 비용 · 적합 500m 격자의 최저
+          예상 비용 평균
         </p>
       ) : null}
       <div className="grid-scroll">

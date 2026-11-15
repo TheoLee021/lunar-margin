@@ -63,9 +63,6 @@ export function DatePlanner({
   const availability = (departure: string) =>
     departureAvailability(launchData, launchError, draft.launchId, departure)
   const transitPossible = isTransitPossible(draft.departure, draft.landing)
-  const isNonLunarLaunch =
-    launchData?.launches.find((launch) => launch.id === draft.launchId)
-      ?.lunar_related === false
   const departureUnavailable =
     departureStatus?.departure === draft.departure &&
     departureStatus.launchId === (draft.launchId ?? null) &&
@@ -227,7 +224,6 @@ export function DatePlanner({
               draft={draft}
               availability={availability}
               onDepartureStatus={setDepartureStatus}
-              isNonLunarLaunch={isNonLunarLaunch}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
