@@ -39,6 +39,7 @@ class SourceState(Model):
 class LaunchSchedule(Model):
     launches: list[Launch]
     sources: list[SourceState]
+    scope: str = "all_launches_demo"
     timezone: str = Field(default="UTC", pattern="^UTC$")
 
 
@@ -70,7 +71,11 @@ class ScheduleReader:
 
             def sfn() -> Collected:
                 body = download(SFN_FEED).text
-                return Collected(parse_sfn(body), len(Feed.model_validate_json(body).launches), 1)
+                return Collected(
+                    parse_sfn(body, all_launches=True),
+                    len(Feed.model_validate_json(body).launches),
+                    1,
+                )
 
             with ThreadPoolExecutor(max_workers=2) as pool:
                 pending = [
@@ -78,7 +83,9 @@ class ScheduleReader:
                     (
                         "Space Launch Schedule",
                         "https://www.spacelaunchschedule.com/",
-                        pool.submit(collect_sls, download, datetime.now(UTC).date()),
+                        pool.submit(
+                            collect_sls, download, datetime.now(UTC).date(), all_launches=True
+                        ),
                     ),
                 ]
                 for name, url, future in pending:

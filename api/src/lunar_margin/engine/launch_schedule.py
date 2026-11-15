@@ -95,8 +95,10 @@ class LaunchSource(Model):
 
 class Launch(Model):
     id: str
-    provider_id: ProviderId
+    provider_id: ProviderId | None
     name: str
+    launch_provider: str = "발사사 미정"
+    lunar_related: bool = True
     departure_date: date | None = None
     label: str
     confirmed: Literal[False] = False
@@ -106,6 +108,7 @@ class Launch(Model):
 
 
 class FeedLaunch(BaseModel):
+    id: str = ""
     mission_name: str
     provider: str = ""
     description: str = ""
@@ -130,14 +133,15 @@ def has_calendar_day(label: str) -> bool:
     )
 
 
-def parse_sfn(text: str) -> list[Launch]:
+def parse_sfn(text: str, *, all_launches: bool = False) -> list[Launch]:
     records: list[Launch] = []
     for item in Feed.model_validate_json(text).launches:
         name = item.mission_name
-        if not LUNAR.search(f"{name} {item.description}"):
+        lunar = bool(LUNAR.search(f"{name} {item.description}"))
+        if not all_launches and not lunar:
             continue
         roles = participants(name, item.description, item.provider)
-        if not roles:
+        if not roles and not all_launches:
             continue
         day = (
             item.launch_date_iso.astimezone(UTC).date()
@@ -149,8 +153,10 @@ def parse_sfn(text: str) -> list[Launch]:
         )
         records.append(
             Launch(
-                id=mission_id(name),
-                provider_id=roles[0].provider_id,
+                id=f"sfn-{item.id}" if all_launches and item.id else mission_id(name),
+                provider_id=roles[0].provider_id if roles else None,
+                launch_provider=item.provider or "발사사 미정",
+                lunar_related=lunar,
                 name=name,
                 participants=roles,
                 date_precision=precision(item.launch_date_label),
@@ -209,12 +215,13 @@ def parse_sls(
     description: str = "",
     launcher: str = "",
     url: str | None = None,
+    all_launches: bool = False,
 ) -> Launch:
     name = name or mission.replace("-", " ").title()
     roles = participants(name, description, launcher)
-    if not roles:
+    if not roles and not all_launches:
         raise ValueError("No listed company is associated with this lunar mission")
-    provider = roles[0].provider_id
+    provider = roles[0].provider_id if roles else None
     url = url or SLS_URL + "launch/" + mission + "/"
     page = Page()
     page.feed(text)
@@ -273,7 +280,11 @@ def parse_sls(
                 else f"{value.year}년 주간 일정"
             )
             label, resolved_precision, has_day = f"{period} · 정확일 미정", "unknown", False
-    day: date | None = None
+    day: date | None = (
+        datetime.fromisoformat(stamp[1].replace("Z", "+00:00")).astimezone(UTC).date()
+        if has_day and accuracy and stamp
+        else None
+    )
     for script in page.scripts:
         try:
             graph = Graph.model_validate_json(script)
@@ -287,6 +298,8 @@ def parse_sls(
     return Launch(
         id=mission,
         provider_id=provider,
+        launch_provider=launcher or "발사사 미정",
+        lunar_related=bool(LUNAR.search(name + " " + description)),
         name=name,
         departure_date=day,
         participants=roles,
@@ -297,31 +310,55 @@ def parse_sls(
 
 
 def merge_launches(records: list[Launch]) -> list[Launch]:
-    merged: dict[str, Launch] = {}
-    for item in records:
-        previous = merged.get(item.id)
-        if previous is None:
-            merged[item.id] = item
-            continue
-        sources = list(
-            {
-                (source.name, source.url, source.label): source
-                for source in [*previous.sources, *item.sources]
-            }.values()
-        )
-        days = {d for d in (previous.departure_date, item.departure_date) if d is not None}
-        chosen = item if item.departure_date else previous
-        merged[item.id] = chosen.model_copy(
+    def combine(rows: list[Launch]) -> Launch:
+        chosen = next((row for row in rows if row.departure_date), rows[0])
+        days = {row.departure_date for row in rows if row.departure_date is not None}
+        sources = {
+            (source.name, source.url, source.label): source
+            for row in rows
+            for source in row.sources
+        }
+        roles = {(p.provider_id, p.role): p for row in rows for p in row.participants}
+        return chosen.model_copy(
             update={
-                "sources": sources,
-                "participants": list(
-                    {
-                        (p.provider_id, p.role): p
-                        for p in [*previous.participants, *item.participants]
-                    }.values()
-                ),
+                "sources": list(sources.values()),
+                "participants": list(roles.values()),
+                "lunar_related": any(row.lunar_related for row in rows),
                 "departure_date": next(iter(days)) if len(days) == 1 else None,
                 "label": chosen.label if len(days) <= 1 else "출처별 날짜 불일치 · 직접 선택",
             }
         )
-    return sorted(merged.values(), key=lambda item: (item.departure_date or date.max, item.name))
+
+    exact: dict[str, list[Launch]] = {}
+    for row in records:
+        exact.setdefault(row.id, []).append(row)
+    groups: dict[str, list[Launch]] = {}
+    for rows in exact.values():
+        row = combine(rows)
+        # Vendor names can include different legal suffixes, so use the matched target company
+        # for known launch operators; other operators retain their own literal identity.
+        launch_roles = [p.provider_id for p in row.participants if p.role == "launch"]
+        abbreviation = re.search(r"\(([A-Za-z0-9.-]{2,10})\)$", row.launch_provider)
+        operator = (
+            launch_roles[0]
+            if launch_roles
+            else re.sub(
+                r"[^a-z0-9]+",
+                "",
+                (abbreviation[1] if abbreviation else row.launch_provider).lower(),
+            )
+        )
+        key = mission_id(row.name) + ":" + operator
+        groups.setdefault(key, []).append(row)
+    result: list[Launch] = []
+    for rows in groups.values():
+        counts: dict[str, int] = {}
+        for row in rows:
+            for source in {s.name for s in row.sources}:
+                counts[source] = counts.get(source, 0) + 1
+        if max(counts.values(), default=0) <= 1:
+            result.append(combine(rows))
+        else:
+            # Repeated generic mission names are separate flights, even with unknown dates.
+            result.extend(rows)
+    return sorted(result, key=lambda row: (row.departure_date or date.max, row.name, row.id))
