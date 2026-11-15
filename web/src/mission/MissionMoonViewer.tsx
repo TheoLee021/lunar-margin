@@ -40,16 +40,16 @@ export interface MissionMoonViewerHandle {
 }
 
 /**
- * Which operator's equipment stands on the surface. The plan is for this to come from
- * the signed-in account, so it is an input rather than something the scene decides:
- * when login lands it is passed in and the picker below stops rendering. Until then a
- * `?operator=` parameter chooses one, and the picker is there to switch while working.
+ * Which operator's equipment stands on the surface. The plan is for the signed-in
+ * account to decide, so it is an input rather than a control on the map: pass
+ * `operatorId` and nothing is shown to change it.
+ *
+ * Until login exists, an `?operator=` parameter stands in. Its presence also reveals
+ * the picker and the drive button, which are there to work and demo with and are not
+ * part of the product's own screen.
  */
-function operatorFromUrl(): string | undefined {
-  const asked = new URLSearchParams(window.location.search).get('operator')
-  return COMPANIES.some((company) => company.id === asked)
-    ? (asked ?? undefined)
-    : undefined
+function operatorParam(): string | null {
+  return new URLSearchParams(window.location.search).get('operator')
 }
 
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
@@ -102,11 +102,16 @@ export function MissionMoonViewer({
 
   // "Company" already means a delivery provider elsewhere in this app, so the operator
   // whose equipment stands on the surface is called that instead.
-  const [pickedOperatorId, setPickedOperatorId] = useState(
-    () => operatorFromUrl() ?? DEFAULT_COMPANY_ID,
+  const [asked] = useState(operatorParam)
+  const [pickedOperatorId, setPickedOperatorId] = useState(() =>
+    COMPANIES.some((company) => company.id === asked)
+      ? (asked ?? DEFAULT_COMPANY_ID)
+      : DEFAULT_COMPANY_ID,
   )
   const operatorId = givenOperatorId ?? pickedOperatorId
   const operator = companyById(operatorId)
+  /** The map carries no operator controls of its own; `?operator=` brings them back. */
+  const showControls = givenOperatorId === undefined && asked !== null
   const sky = useEquipmentSky(selected, selection, operator)
   const { mobile } = operator
 
@@ -174,6 +179,37 @@ export function MissionMoonViewer({
   }
 
   const unitCount = operator.statics.length + (mobile ? 1 : 0)
+  // Loading and failure always have to show. The summary is only useful next to the
+  // controls it describes, so it goes away with them.
+  const status =
+    sky.kind === 'loading' ? (
+      <span role="status">
+        {operator.name} 장비 {unitCount}대 · 지점별 지구 가시성 계산 중…
+      </span>
+    ) : sky.kind === 'error' ? (
+      <span role="alert" className="text-red-300">
+        장비 지점 가시성을 불러오지 못했습니다. 다른 후보를 고르면 다시
+        계산합니다.
+      </span>
+    ) : sky.kind === 'idle' ? (
+      '후보를 선택하면 장비를 배치합니다.'
+    ) : showControls ? (
+      <>
+        {sky.missing > 0 ? (
+          <span role="alert" className="text-red-300">
+            {sky.missing}개 지점 계산 실패 ·{' '}
+          </span>
+        ) : null}
+        {operator.tagline} · 장비 {unitCount}대
+        {mobile
+          ? ` · 주행 ${Math.round(pathLength(mobile.path))} m, 실제 ${mobile.speedMS} m/s를 ${DEMO_SPEED_SCALE}배속으로 재생`
+          : ''}
+      </>
+    ) : sky.missing > 0 ? (
+      <span role="alert" className="text-red-300">
+        {sky.missing}개 지점의 지구 가시성을 계산하지 못했습니다.
+      </span>
+    ) : null
   return (
     <>
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
@@ -191,7 +227,7 @@ export function MissionMoonViewer({
       </div>
       <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-2">
-          {givenOperatorId ? null : (
+          {showControls ? (
             <label className="hud-button flex items-center gap-2">
               <span className="text-neutral-400">운영사</span>
               <select
@@ -211,7 +247,7 @@ export function MissionMoonViewer({
                 ))}
               </select>
             </label>
-          )}
+          ) : null}
           <button
             type="button"
             className="hud-button"
@@ -252,46 +288,27 @@ export function MissionMoonViewer({
           >
             선택 지점 3D로 보기
           </button>
-          <button
-            type="button"
-            className="hud-button"
-            disabled={!selected || !mobile || sky.kind !== 'ready'}
-            title={
-              mobile
-                ? undefined
-                : `${operator.name}에는 움직이는 장비가 없습니다`
-            }
-            onClick={runDrive}
-          >
-            {mobile ? `${mobile.spec.label} 주행` : '주행 장비 없음'}
-          </button>
+          {showControls ? (
+            <button
+              type="button"
+              className="hud-button"
+              disabled={!selected || !mobile || sky.kind !== 'ready'}
+              title={
+                mobile
+                  ? undefined
+                  : `${operator.name}에는 움직이는 장비가 없습니다`
+              }
+              onClick={runDrive}
+            >
+              {mobile ? `${mobile.spec.label} 주행` : '주행 장비 없음'}
+            </button>
+          ) : null}
         </div>
-        <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
-          {sky.kind === 'loading' ? (
-            <span role="status">
-              {operator.name} 장비 {unitCount}대 · 지점별 지구 가시성 계산 중…
-            </span>
-          ) : sky.kind === 'error' ? (
-            <span role="alert" className="text-red-300">
-              장비 지점 가시성을 불러오지 못했습니다. 다른 후보나 운영사를
-              고르면 다시 계산합니다.
-            </span>
-          ) : sky.kind === 'ready' ? (
-            <>
-              {sky.missing > 0 ? (
-                <span role="alert" className="text-red-300">
-                  {sky.missing}개 지점 계산 실패 ·{' '}
-                </span>
-              ) : null}
-              {operator.tagline} · 장비 {unitCount}대
-              {mobile
-                ? ` · 주행 ${Math.round(pathLength(mobile.path))} m, 실제 ${mobile.speedMS} m/s를 ${DEMO_SPEED_SCALE}배속으로 재생`
-                : ''}
-            </>
-          ) : (
-            '후보를 선택하면 장비를 배치합니다.'
-          )}
-        </p>
+        {status ? (
+          <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
+            {status}
+          </p>
+        ) : null}
       </div>
     </>
   )
