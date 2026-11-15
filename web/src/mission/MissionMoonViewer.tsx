@@ -9,8 +9,8 @@ import {
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import { gridCellCorners } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
-import type { Vector3 } from '../moon/sun'
 import type { CandidateSite, MissionSelection } from './types'
+import type { SunDirectionResult } from './useSunDirection'
 
 export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
@@ -22,17 +22,18 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
-  sunDirection,
+  sun,
 }: {
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string) => void
-  /** Moon-to-Sun direction (MOON_ME) at the shown time, or null while it is unknown. */
-  sunDirection: Vector3 | null
+  /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
+  sun: SunDirectionResult
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
   const [photo, setPhoto] = useState(false)
+  const sunDirection = sun.kind === 'ready' ? sun.direction : null
   const lit = sunDirection !== null && !photo
   useEffect(() => {
     viewer.current?.setSunDirection(lit ? sunDirection : null)
@@ -78,12 +79,25 @@ export function MissionMoonViewer({
         <button
           type="button"
           className="hud-button"
-          disabled={sunDirection === null}
+          disabled={sun.kind === 'loading'}
           aria-pressed={lit}
-          title="착륙 시각의 태양으로 조명과 지형 그림자를 그립니다"
-          onClick={() => setPhoto((value) => !value)}
+          title={
+            sun.kind === 'loading'
+              ? '착륙 시각의 태양 방향을 불러오는 중입니다'
+              : sun.kind === 'error'
+                ? '착륙 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
+                : '착륙 시각의 태양으로 조명과 지형 그림자를 그립니다'
+          }
+          onClick={() => {
+            if (sun.kind === 'error') sun.retry()
+            else setPhoto((value) => !value)
+          }}
         >
-          {lit ? '사진으로 보기' : '착륙 시각 햇빛'}
+          {sun.kind === 'error'
+            ? '햇빛 다시 시도'
+            : lit
+              ? '사진으로 보기'
+              : '착륙 시각 햇빛'}
         </button>
         <button
           type="button"

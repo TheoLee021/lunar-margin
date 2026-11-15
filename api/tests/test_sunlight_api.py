@@ -1,9 +1,11 @@
-"""GET /sunlight/south-pole.png, /sunlight/south-pole/{level}/{tile_x}/{tile_y}.png:
-태양 방향 하나의 햇빛 지도와 그 세밀한 창 (계약: docs/api.md)."""
+"""GET /sunlight/sun-direction, /sunlight/south-pole.png,
+/sunlight/south-pole/{level}/{tile_x}/{tile_y}.png: 한 시각의 태양 방향과, 태양 방향 하나의
+햇빛 지도와 그 세밀한 창 (계약: docs/api.md)."""
 
 import math
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
@@ -21,6 +23,7 @@ from lunar_margin.app.sunlight import (
     DetailRegion,
     detail_levels,
     get_renderer,
+    get_sun_finder,
     make_renderer,
     sunlight_grid,
 )
@@ -320,3 +323,51 @@ def test_a_window_waits_in_the_same_queue_as_the_whole_map() -> None:
         dem.gate.set()
         assert whole.result(timeout=20) == 200
     assert client.get("/sunlight/south-pole/3/6/2.png", params=SUN_5_DEG).status_code == 200
+
+
+def sun_client(asked: list[datetime]) -> TestClient:
+    def finder(moment: datetime) -> tuple[float, float, float]:
+        asked.append(moment)
+        return (0.6, -0.8, 0.0000004)
+
+    app = create_app(Settings())
+    app.dependency_overrides[get_sun_finder] = lambda: finder
+    return TestClient(app)
+
+
+def test_the_sun_direction_of_a_moment_is_a_moon_me_vector() -> None:
+    asked: list[datetime] = []
+
+    # 서울 시각 09:00 = 00:00 UTC
+    response = sun_client(asked).get(
+        "/sunlight/sun-direction", params={"time": "2027-01-10T09:00:00+09:00"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"time": "2027-01-10T00:00:00Z", "x": 0.6, "y": -0.8, "z": 0.0}
+    assert "max-age" in response.headers["cache-control"]
+    assert [moment.astimezone(UTC) for moment in asked] == [datetime(2027, 1, 10, tzinfo=UTC)]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},  # 시각 누락
+        {"time": "2027-01-10T00:00:00"},  # 타임존 없음
+        {"time": "soon"},
+        {"time": "2027-01-10T00:00:00Z", "lat": "-89.7"},  # 모르는 파라미터
+    ],
+)
+def test_an_unusable_moment_is_422(params: dict[str, str]) -> None:
+    assert sun_client([]).get("/sunlight/sun-direction", params=params).status_code == 422
+
+
+def test_the_sun_direction_without_spice_kernels_is_503_not_500(tmp_path: Path) -> None:
+    app = create_app(Settings())
+    app.dependency_overrides[get_settings] = lambda: Settings(data_dir=tmp_path)
+
+    response = TestClient(app).get(
+        "/sunlight/sun-direction", params={"time": "2027-01-10T00:00:00Z"}
+    )
+
+    assert response.status_code == 503

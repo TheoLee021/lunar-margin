@@ -1,4 +1,5 @@
-"""GET /sunlight/south-pole.png?x=&y=&z=: 태양 방향 하나에 대한 남극 햇빛 지도 (계약: docs/api.md).
+"""GET /sunlight/sun-direction?time=: 한 시각에 달에서 태양을 향하는 방향 (계약: docs/api.md).
+GET /sunlight/south-pole.png?x=&y=&z=: 태양 방향 하나에 대한 남극 햇빛 지도.
 GET /sunlight/south-pole/{level}/{tile_x}/{tile_y}.png?x=&y=&z=: 그 지도의 세밀한 창.
 
 지형 그림자는 태양 방향마다 달라서 미리 구워 둘 수 없다. 요청이 오면 DEM으로 계산하고
@@ -14,6 +15,7 @@ import math
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import lru_cache, partial
 from pathlib import Path
 from threading import BoundedSemaphore, Lock
@@ -22,13 +24,14 @@ from typing import Annotated, Protocol, Self
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from lunar_margin.app.analysis import get_settings
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.field import open_dem
 from lunar_margin.engine.dem import Dem, HeightField, LayeredHeights, RasterDem
+from lunar_margin.engine.ephemeris import load_kernels, sun_direction
 from lunar_margin.engine.sunlight import GridWindow, SunlightGrid, sunlit_fraction
 from lunar_margin.pipeline.geotiff import read_geotiff_bounds
 from lunar_margin.pipeline.horizons import resolve_dems
@@ -36,6 +39,7 @@ from lunar_margin.pipeline.overlay_tiles import detail_dem_paths, open_detail_de
 from lunar_margin.pipeline.png import encode_png
 
 Direction = tuple[float, float, float]
+SunFinder = Callable[[datetime], Direction]
 
 router = APIRouter(prefix="/sunlight", tags=["sunlight"])
 _CACHE = {"Cache-Control": "public, max-age=3600"}
@@ -291,6 +295,48 @@ def _build_renderer(data_dir: Path) -> Renderer:
 
 def get_renderer(settings: Annotated[Settings, Depends(get_settings)]) -> Renderer:
     return _build_renderer(settings.data_dir)
+
+
+class SunMoment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    time: AwareDatetime
+
+
+class SunDirectionAt(BaseModel):
+    """time(UTC)에 달에서 태양을 향하는 MOON_ME 단위 벡터."""
+
+    time: str
+    x: float
+    y: float
+    z: float
+
+
+@lru_cache(maxsize=2)
+def _build_sun_finder(data_dir: Path) -> SunFinder:
+    """SPICE 커널을 처음 요청 때 한 번 로드한다. 없으면 503."""
+    try:
+        load_kernels(data_dir / "spice")
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail=f"{error}") from error
+    return sun_direction
+
+
+def get_sun_finder(settings: Annotated[Settings, Depends(get_settings)]) -> SunFinder:
+    return _build_sun_finder(settings.data_dir)
+
+
+@router.get("/sun-direction")
+def sun_direction_at(
+    moment: Annotated[SunMoment, Query()],
+    find: Annotated[SunFinder, Depends(get_sun_finder)],
+    response: Response,
+) -> SunDirectionAt:
+    # 같은 시각이면 언제나 같은 답이다: 받은 방향으로 요청하는 햇빛 지도도 같은 것이 된다
+    x, y, z = (round(component, 6) + 0.0 for component in find(moment.time))
+    response.headers.update(_CACHE)
+    return SunDirectionAt(
+        time=moment.time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), x=x, y=y, z=z
+    )
 
 
 def _respond(render: Renderer, sun: SunDirection, window: TileWindow | None) -> Response:
