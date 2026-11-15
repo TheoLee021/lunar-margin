@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  TRAVERSE,
-  TRAVERSE_LENGTH_M,
+  COMPANIES,
   buildEquipmentAssets,
+  companyById,
+  driveDurationMs,
+  pathLength,
+  sampledPlaces,
   traverseAt,
 } from './demoEquipment'
 import type { CandidateSite } from './types'
@@ -15,111 +18,173 @@ const SITE: CandidateSite = {
 }
 const CLEAR = { azimuthDeg: 212.4, elevationDeg: 0.7, visible: true }
 const BLOCKED = { azimuthDeg: 212.4, elevationDeg: -0.4, visible: false }
-const noSky = { statics: {}, waypoints: TRAVERSE.map(() => null) }
+const TERRA = companyById('terra-nova-works')
+const MERIDIAN = companyById('meridian-relay')
+const TRENCH = TERRA.mobile!.path
+const noSky = { statics: {}, waypoints: TRENCH.map(() => null) }
+
+describe('COMPANIES', () => {
+  it('gives every unit a real height and an observer point on it', () => {
+    for (const company of COMPANIES)
+      for (const spec of [
+        ...company.statics,
+        ...(company.mobile ? [company.mobile.spec] : []),
+      ]) {
+        expect(spec.shape.heightM).toBeGreaterThan(0)
+        expect(spec.observerHeightM).toBeGreaterThan(0)
+      }
+  })
+
+  it('keeps unit ids unique inside a company, since the scene keys on them', () => {
+    for (const company of COMPANIES) {
+      const ids = [
+        ...company.statics.map((spec) => spec.id),
+        ...(company.mobile ? [company.mobile.spec.id] : []),
+      ]
+      expect(new Set(ids).size).toBe(ids.length)
+    }
+  })
+
+  it('starts a route at the unit that drives it', () => {
+    for (const company of COMPANIES)
+      if (company.mobile)
+        expect(company.mobile.path[0]).toEqual(company.mobile.spec.offset)
+  })
+
+  it('falls back to the first company for an unknown id', () => {
+    expect(companyById('no-such-company')).toBe(COMPANIES[0])
+  })
+})
+
+describe('sampledPlaces', () => {
+  it('asks for one place per static unit and one per waypoint', () => {
+    expect(sampledPlaces(TERRA)).toHaveLength(
+      TERRA.statics.length + TRENCH.length,
+    )
+    expect(sampledPlaces(MERIDIAN)).toHaveLength(MERIDIAN.statics.length)
+  })
+
+  it('samples each place at the observer height of its own unit', () => {
+    const places = sampledPlaces(MERIDIAN)
+    expect(places.map((place) => place.observerHeightM)).toEqual(
+      MERIDIAN.statics.map((spec) => spec.observerHeightM),
+    )
+  })
+})
 
 describe('traverseAt', () => {
   it('starts on the first waypoint', () => {
-    expect(traverseAt(0)).toMatchObject({ offset: TRAVERSE[0], waypoint: 0 })
+    expect(traverseAt(TRENCH, 0)).toMatchObject({
+      offset: TRENCH[0],
+      waypoint: 0,
+    })
   })
 
   it('ends on the last waypoint', () => {
-    expect(traverseAt(1)).toMatchObject({
-      offset: TRAVERSE.at(-1),
-      waypoint: TRAVERSE.length - 1,
+    expect(traverseAt(TRENCH, 1)).toMatchObject({
+      offset: TRENCH.at(-1),
+      waypoint: TRENCH.length - 1,
     })
+  })
+
+  it('clamps progress outside 0..1', () => {
+    expect(traverseAt(TRENCH, -3)).toEqual(traverseAt(TRENCH, 0))
+    expect(traverseAt(TRENCH, 9)).toEqual(traverseAt(TRENCH, 1))
+  })
+
+  it('interpolates inside a segment at constant speed', () => {
+    const half = traverseAt(TRENCH, 0.5)
+    expect(half.offset).not.toEqual(TRENCH[0])
+    expect(half.offset).not.toEqual(TRENCH.at(-1))
+    let walked = 0
+    for (let i = 1; i <= half.waypoint; i += 1)
+      walked += Math.hypot(
+        TRENCH[i]!.eastM - TRENCH[i - 1]!.eastM,
+        TRENCH[i]!.northM - TRENCH[i - 1]!.northM,
+      )
+    walked += Math.hypot(
+      half.offset.eastM - TRENCH[half.waypoint]!.eastM,
+      half.offset.northM - TRENCH[half.waypoint]!.northM,
+    )
+    expect(walked).toBeCloseTo(pathLength(TRENCH) / 2, 6)
   })
 
   it('faces the way it is driving', () => {
     // The trench starts heading south-east: east grows, north falls.
-    const start = traverseAt(0).headingDeg
+    const start = traverseAt(TRENCH, 0).headingDeg
     expect(start).toBeGreaterThan(90)
     expect(start).toBeLessThan(180)
     // It curves back west by the end, so the bearing passes south.
-    expect(traverseAt(1).headingDeg).toBeGreaterThan(180)
+    expect(traverseAt(TRENCH, 1).headingDeg).toBeGreaterThan(180)
   })
+})
 
-  it('clamps progress outside 0..1', () => {
-    expect(traverseAt(-3)).toEqual(traverseAt(0))
-    expect(traverseAt(9)).toEqual(traverseAt(1))
-  })
-
-  it('interpolates inside a segment at constant speed', () => {
-    const half = traverseAt(0.5)
-    const first = TRAVERSE[0]!
-    const last = TRAVERSE.at(-1)!
-    // Halfway along the path, so not sitting on either end.
-    expect(half.offset).not.toEqual(first)
-    expect(half.offset).not.toEqual(last)
-    // Distance walked from the start is half the path length, within a metre.
-    let walked = 0
-    for (let i = 1; i <= half.waypoint; i += 1)
-      walked += Math.hypot(
-        TRAVERSE[i]!.eastM - TRAVERSE[i - 1]!.eastM,
-        TRAVERSE[i]!.northM - TRAVERSE[i - 1]!.northM,
-      )
-    walked += Math.hypot(
-      half.offset.eastM - TRAVERSE[half.waypoint]!.eastM,
-      half.offset.northM - TRAVERSE[half.waypoint]!.northM,
+describe('driveDurationMs', () => {
+  it('is the route at the real speed, played back faster', () => {
+    const mobile = TERRA.mobile!
+    expect(driveDurationMs(mobile)).toBeCloseTo(
+      (pathLength(mobile.path) / mobile.speedMS / 150) * 1000,
+      6,
     )
-    expect(walked).toBeCloseTo(TRAVERSE_LENGTH_M / 2, 6)
-  })
-
-  it('reports the waypoint the leg started from', () => {
-    expect(traverseAt(0.5).waypoint).toBeLessThan(TRAVERSE.length - 1)
   })
 })
 
 describe('buildEquipmentAssets', () => {
-  it('places every unit of the set', () => {
-    const assets = buildEquipmentAssets(SITE, 0, noSky)
-    expect(assets.map((asset) => asset.id)).toEqual([
-      'array',
-      'thermal',
-      'printer',
-      'trencher',
-    ])
+  it('draws every unit of the chosen company', () => {
+    expect(
+      buildEquipmentAssets(TERRA, SITE, 0, noSky).map((a) => a.id),
+    ).toEqual(['array', 'thermal', 'printer', 'trencher'])
+    expect(
+      buildEquipmentAssets(MERIDIAN, SITE, 0, {
+        statics: {},
+        waypoints: [],
+      }).map((a) => a.id),
+    ).toEqual(['antenna-a', 'antenna-b', 'power-unit'])
   })
 
   it('keeps the units within about a kilometre of the site', () => {
-    // 0.05 deg is 1.5 km on the Moon. The set spreads over a few hundred metres
-    // because cable runs and stand-off distances put it there, not metres apart.
-    for (const asset of buildEquipmentAssets(SITE, 0, noSky)) {
-      expect(Math.abs(asset.location.lat - SITE.latitude)).toBeLessThan(0.05)
-    }
+    for (const company of COMPANIES)
+      for (const asset of buildEquipmentAssets(company, SITE, 0, noSky))
+        expect(Math.abs(asset.location.lat - SITE.latitude)).toBeLessThan(0.05)
   })
 
   it('sizes each unit from its real dimensions', () => {
-    const [array] = buildEquipmentAssets(SITE, 0, noSky)
+    const [array] = buildEquipmentAssets(TERRA, SITE, 0, noSky)
     expect(array?.shape.heightM).toBe(8)
     expect(array?.observerHeightM).toBe(10)
   })
 
-  it('moves only the trencher as the traverse runs', () => {
-    const start = buildEquipmentAssets(SITE, 0, noSky)
-    const end = buildEquipmentAssets(SITE, 1, noSky)
-    const at = (assets: readonly { id: string; location: unknown }[]) =>
-      Object.fromEntries(assets.map((a) => [a.id, JSON.stringify(a.location)]))
-    const before = at(start)
-    const after = at(end)
+  it('moves only the mobile unit as the drive runs', () => {
+    const at = (progress: number) =>
+      Object.fromEntries(
+        buildEquipmentAssets(TERRA, SITE, progress, noSky).map((a) => [
+          a.id,
+          JSON.stringify(a.location),
+        ]),
+      )
+    const before = at(0),
+      after = at(1)
     expect(after['array']).toBe(before['array'])
     expect(after['printer']).toBe(before['printer'])
     expect(after['trencher']).not.toBe(before['trencher'])
   })
 
-  it('gives the trencher the sky of the waypoint it is on', () => {
-    const waypoints = TRAVERSE.map((_, index) =>
-      index === 0 ? CLEAR : BLOCKED,
-    )
-    const assets = buildEquipmentAssets(SITE, 0, { statics: {}, waypoints })
-    expect(assets.at(-1)?.earth).toEqual(CLEAR)
-    const later = buildEquipmentAssets(SITE, 1, { statics: {}, waypoints })
-    expect(later.at(-1)?.earth).toEqual(BLOCKED)
+  it('gives the mobile unit the sky of the waypoint it is on', () => {
+    const waypoints = TRENCH.map((_, index) => (index === 0 ? CLEAR : BLOCKED))
+    expect(
+      buildEquipmentAssets(TERRA, SITE, 0, { statics: {}, waypoints }).at(-1)
+        ?.earth,
+    ).toEqual(CLEAR)
+    expect(
+      buildEquipmentAssets(TERRA, SITE, 1, { statics: {}, waypoints }).at(-1)
+        ?.earth,
+    ).toEqual(BLOCKED)
   })
 
   it('gives each static unit its own sky and leaves the rest unevaluated', () => {
-    const assets = buildEquipmentAssets(SITE, 0, {
+    const assets = buildEquipmentAssets(TERRA, SITE, 0, {
       statics: { array: CLEAR },
-      waypoints: TRAVERSE.map(() => null),
+      waypoints: TRENCH.map(() => null),
     })
     expect(assets[0]?.earth).toEqual(CLEAR)
     expect(assets[1]?.earth).toBeNull()
