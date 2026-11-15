@@ -6,6 +6,7 @@ import {
   type RunSummary,
 } from '../api/candidates'
 import { formatPrice, isTransitPossible, type Delivery } from '../api/pricing'
+import type { departureAvailability } from '../api/launchSchedule'
 import type { ProviderCalendarInput } from '../api/providerPricing'
 import { dayOf, iso, short } from './missionDates'
 import type { Schedule } from './types'
@@ -44,11 +45,13 @@ export function PriceGrid({
   departures,
   landings,
   draft,
+  availability,
   onSelect,
 }: {
   departures: number[]
   landings: number[]
   draft: Schedule
+  availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
 }) {
   const [mass, setMass] = useState('24')
@@ -120,15 +123,18 @@ export function PriceGrid({
     (black === null || (Number.isFinite(black) && black >= 0))
   const sourceReady =
     source === '' || (sourceState.id === source && !sourceState.error)
+  const scheduledDepartures = departures.filter(
+    (day) => availability(iso(day)) === 'scheduled',
+  )
   const input: ProviderCalendarInput | null =
-    valid && sourceReady
+    valid && sourceReady && scheduledDepartures.length > 0
       ? {
           estimate: true,
           selected_launch_id: draft.launchId ?? null,
           mass_kg: massNumber,
           delivery,
           landing_dates: landings.map(iso),
-          departure_dates: departures.map(iso),
+          departure_dates: scheduledDepartures.map(iso),
           source_run_id: source || null,
           mission: {
             ...mission,
@@ -371,12 +377,12 @@ export function PriceGrid({
               return (
                 <tr key={l}>
                   <th scope="row">
-                    {row?.state === 'completed' ? (
+                    {row?.state === 'completed' &&
+                    availability(draft.departure) === 'scheduled' &&
+                    isTransitPossible(draft.departure, iso(l)) ? (
                       <a
                         href={candidateHref(
-                          isTransitPossible(draft.departure, iso(l))
-                            ? dayOf(draft.departure)
-                            : l - 4,
+                          dayOf(draft.departure),
                           l,
                           row.run_id,
                         )}
@@ -389,6 +395,7 @@ export function PriceGrid({
                     )}
                   </th>
                   {departures.map((d) => {
+                    const departureState = availability(iso(d))
                     const possible = isTransitPossible(iso(d), iso(l))
                     const offer = data?.cells.find(
                       (cell) =>
@@ -436,7 +443,20 @@ export function PriceGrid({
                     )
                     return (
                       <td key={d}>
-                        {!possible ? (
+                        {departureState !== 'scheduled' ? (
+                          <div
+                            className="invalid-cell"
+                            aria-label={`출발 ${iso(d)}: ${departureState === 'no_launch' ? '발사 일정 없음' : departureState === 'loading' ? '일정 확인 중' : '일정 미확인'}`}
+                          >
+                            <span>
+                              {departureState === 'no_launch'
+                                ? '발사 일정 없음'
+                                : departureState === 'loading'
+                                  ? '일정 확인 중'
+                                  : '일정 미확인'}
+                            </span>
+                          </div>
+                        ) : !possible ? (
                           <div
                             className="invalid-cell"
                             title="전이는 3~150일이어야 합니다"
@@ -482,7 +502,9 @@ export function PriceGrid({
           <i />
           선택한 조합
         </span>
-        <span>전이 3~150일 · 열: 출발일 · 행: 착륙일 / UTC</span>
+        <span>
+          공개 발사 예정일만 표시 · 전이 3~150일 · 열: 출발일 · 행: 착륙일 / UTC
+        </span>
       </div>
     </>
   )

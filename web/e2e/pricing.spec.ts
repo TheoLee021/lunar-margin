@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { providerCalendarFixture } from './provider-pricing-fixture.js'
 import { z } from 'zod'
+import { mockScheduledDepartures } from './launch-fixture.js'
+
+test.beforeEach(async ({ page }) => {
+  await mockScheduledDepartures(page)
+})
 
 test('missing landing dates launch one batch and display all five results', async ({
   page,
@@ -328,9 +333,6 @@ test('a busy search waits and automatically starts the missing dates when the wo
   let statusCalls = 0
   await page.route('**/api/candidates/runs', (route) =>
     route.fulfill({ json: { runs: [] } }),
-  )
-  await page.route('**/api/pricing/providers/launches', (route) =>
-    route.fulfill({ json: { timezone: 'UTC', sources: [], launches: [] } }),
   )
   await page.route('**/api/pricing/providers/calendar', (route) =>
     route.fulfill({

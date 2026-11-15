@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { fetchLaunchSchedule, type LaunchSchedule } from '../api/launchSchedule'
+import { useState } from 'react'
+import { type LaunchSchedule } from '../api/launchSchedule'
 
 type Company =
   Exclude<LaunchSchedule['launches'][number]['provider_id'], null> | 'other'
@@ -19,34 +19,22 @@ const ROLES = {
 }
 
 export function LaunchDeparture({
+  data,
+  error,
+  onRetry,
   selectedId,
   onSelect,
   onClear,
 }: {
+  data: LaunchSchedule | null
+  error: string
+  onRetry: () => void
   selectedId: string | null
   onSelect: (launch: LaunchSchedule['launches'][number]) => void
   onClear: () => void
 }) {
-  const [data, setData] = useState<LaunchSchedule | null>(null)
-  const [error, setError] = useState('')
-  const [revision, setRevision] = useState(0)
   const [company, setCompany] = useState<Company | 'all'>('all')
   const [query, setQuery] = useState('')
-  useEffect(() => {
-    const controller = new AbortController()
-    fetchLaunchSchedule({ signal: controller.signal })
-      .then((result) => {
-        if (!controller.signal.aborted) {
-          setData(result)
-          setError('')
-        }
-      })
-      .catch((e: unknown) => {
-        if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : String(e))
-      })
-    return () => controller.abort()
-  }, [revision])
   const selected = data?.launches.find((item) => item.id === selectedId)
   const complete =
     data?.sources.every((source) => source.complete && !source.stale) ?? false
@@ -93,7 +81,7 @@ export function LaunchDeparture({
         >
           <option value="">
             {data
-              ? '발사 임무 선택 · 또는 아래에서 직접 입력'
+              ? '발사 임무 선택'
               : error
                 ? '일정 불러오기 실패'
                 : '두 사이트의 발사 일정 확인 중…'}
@@ -127,7 +115,7 @@ export function LaunchDeparture({
       {error ? (
         <p role="alert">
           {error}{' '}
-          <button type="button" onClick={() => setRevision((v) => v + 1)}>
+          <button type="button" onClick={onRetry}>
             일정 다시 시도
           </button>
         </p>
@@ -136,8 +124,8 @@ export function LaunchDeparture({
         <p className="hint" aria-label="선택한 발사 임무 출처">
           {selected.name} ·{' '}
           {selected.lunar_related ? '달 관련' : '일반 발사 · 달 임무 가정'} ·
-          예정/NET · 착륙일은 직접 선택합니다. 표의 ±2일은 비교용
-          시나리오입니다.{' '}
+          예정/NET · 착륙일은 직접 선택합니다. 날짜표는 이 발사편의 예정일에만
+          가격을 표시합니다.{' '}
           {selected.sources.map((source) => (
             <a
               key={source.url}

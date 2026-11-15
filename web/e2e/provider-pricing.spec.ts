@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { providerCalendarFixture } from './provider-pricing-fixture.js'
 
 test('candidate comparison shows all six providers, unknown prices, and recovers from a quote error', async ({
   page,
@@ -302,7 +303,7 @@ test('selected launch operator reprices the same date and grids and survives nav
   })
   await picker.selectOption('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
-  await expect(table.getByText('$2.9M', { exact: true })).toHaveCount(19)
+  await expect(table.getByText('$2.9M', { exact: true })).toHaveCount(4)
   await expect(
     table.getByRole('link', { name: /2027-01-06.*2027-01-10/ }),
   ).toHaveAttribute('href', /launch_id=spacex-demo/)
@@ -312,14 +313,14 @@ test('selected launch operator reprices the same date and grids and survives nav
     'United Launch Alliance (ULA) 모델 예상 비용',
   )
   await expect(model).toContainText('공통 참조 단가')
-  await expect(table.getByText('$29M', { exact: true })).toHaveCount(19)
+  await expect(table.getByText('$29M', { exact: true })).toHaveCount(4)
   expect(requests).toBeGreaterThan(before)
   await expect(
     dialog.getByLabel('기준 착륙일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-10')
   await picker.selectOption('')
   await expect(model).toHaveCount(0)
-  await expect(table.getByText('$2M', { exact: true })).toHaveCount(19)
+  await expect(table.getByText('$2M', { exact: true })).toHaveCount(4)
   await picker.selectOption('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
   await dialog.getByRole('button', { name: '일정 적용' }).click()
@@ -328,4 +329,87 @@ test('selected launch operator reprices the same date and grids and survives nav
   await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
   await expect(picker).toHaveValue('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
+})
+
+test('dates without a published launch have no price, departure link, or applicable schedule', async ({
+  page,
+}) => {
+  const requestedDates: string[][] = []
+  await page.route('**/api/pricing/providers/launches', (route) =>
+    route.fulfill({
+      json: {
+        timezone: 'UTC',
+        sources: [],
+        launches: [
+          {
+            id: 'jan6',
+            provider_id: 'spacex',
+            launch_provider: 'SpaceX',
+            name: 'January flight',
+            departure_date: '2027-01-06',
+            label: 'January 6',
+            confirmed: false,
+            sources: [
+              {
+                name: 'Spaceflight Now',
+                url: 'https://spaceflightnow.com/launch-schedule/',
+                label: 'January 6',
+              },
+            ],
+          },
+          {
+            id: 'month-only',
+            provider_id: 'spacex',
+            launch_provider: 'SpaceX',
+            name: 'January TBD',
+            departure_date: null,
+            label: 'January 2027',
+            confirmed: false,
+            sources: [
+              {
+                name: 'Spaceflight Now',
+                url: 'https://spaceflightnow.com/launch-schedule/',
+                label: 'January 2027',
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/pricing/providers/calendar', (route) => {
+    const input = route.request().postDataJSON() as {
+      departure_dates: string[]
+    }
+    requestedDates.push(input.departure_dates)
+    return route.fulfill({
+      json: providerCalendarFixture(input, (date) => ({
+        run_id: `saved-${date}`,
+        state: 'completed',
+        status: 'quoted',
+        mean: 29300000,
+        eligible: 110,
+        priced: 110,
+      })),
+    })
+  })
+  await page.goto(
+    '/?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
+  )
+  const dialog = page.getByRole('dialog')
+  const grid = dialog.getByRole('table')
+  await expect(grid.getByText('발사 일정 없음', { exact: true })).toHaveCount(
+    20,
+  )
+  await expect(grid.getByText('$29M', { exact: true })).toHaveCount(4)
+  expect(requestedDates.at(-1)).toEqual(['2027-01-06'])
+  await expect(
+    grid.getByRole('link', { name: /출발 2027-01-0[4578],/ }),
+  ).toHaveCount(0)
+  await expect(dialog.locator('option[value="month-only"]')).toBeDisabled()
+  await dialog
+    .getByLabel('기준 출발일 · UTC', { exact: true })
+    .fill('2027-01-07')
+  await expect(dialog.getByRole('button', { name: '일정 적용' })).toBeDisabled()
+  await expect(grid.getByRole('rowheader').getByRole('link')).toHaveCount(0)
 })

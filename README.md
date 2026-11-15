@@ -119,6 +119,8 @@ Schedule (including general launches in demo mode), then choose the landing date
 dates cannot be auto-selected. Selecting a launch applies its operator’s model rate to the
 same eligible-grid average; an unavailable operator/delivery rate uses the labeled common
 reference model. Clearing the selection restores the six-company minimum comparison.
+Only published exact departure days have prices and links; selecting a flight enables
+only its scheduled day, and unscheduled departure dates cannot be applied.
 The selected launch ID persists through applying dates and opening candidate searches.
 Source precision, update time and stale fallback
 are visible. Clicking a completed date opens its saved candidate search and carries

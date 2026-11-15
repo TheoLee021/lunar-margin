@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { providerCalendarFixture } from './provider-pricing-fixture.js'
+import { mockScheduledDepartures } from './launch-fixture.js'
 import { mockDashboardRuns } from './dashboard-fixture.js'
 
 type Analysis = {
@@ -12,6 +13,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   request,
 }) => {
   test.setTimeout(60_000)
+  await mockScheduledDepartures(page)
   await mockDashboardRuns(page, request)
   const trajectoryRequests: string[] = []
   page.on('request', (request) => {

@@ -67,3 +67,23 @@ export async function fetchLaunchSchedule({
     )
   return parsed.data
 }
+
+/** Published exact days only; missing/incomplete data never implies an available flight. */
+export function departureAvailability(
+  data: LaunchSchedule | null,
+  error: string,
+  launchId: string | null | undefined,
+  departure: string,
+): 'scheduled' | 'no_launch' | 'unknown' | 'loading' {
+  if (!data) return error ? 'unknown' : 'loading'
+  if (launchId) {
+    const selected = data.launches.find((launch) => launch.id === launchId)
+    if (!selected?.departure_date) return 'unknown'
+    return selected.departure_date === departure ? 'scheduled' : 'no_launch'
+  }
+  if (data.launches.some((launch) => launch.departure_date === departure))
+    return 'scheduled'
+  return data.sources.every((source) => source.complete && !source.stale)
+    ? 'no_launch'
+    : 'unknown'
+}
