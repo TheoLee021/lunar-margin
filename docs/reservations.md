@@ -42,6 +42,8 @@ uv run pytest tests/test_reservations.py
 
 프런트는 기존 `web/`의 `npm run dev`를 사용한다. 후보지 탐색 → 후보 ID 선택 → **운영자 예약 관리**를 펼친다. 토큰·회사·임무명을 입력하고 확정한다. **예약 이력 조회**에서 확정 예약을 취소할 수 있다. 토큰은 React 메모리에만 있고 브라우저 저장소에 남기지 않는다.
 
+예약 E2E는 실제 API/Postgres와 임무 입력으로 만든 탐색 결과가 필요하다. 최신 실행에 예약 가능한 후보가 있는 상태에서 `web/`에서 `RESERVATION_E2E_ADMIN_TOKEN`을 로컬 API와 같은 운영자 토큰으로 설정하고 `npm run e2e -- e2e/reservations.spec.ts`를 실행한다. 테스트는 회사명이 `E2E-`로 시작하는 예약을 만들고 마지막에 취소한다. 조회 실패 시나리오는 503 응답을 주입해 확인한다. 개발 서버가 다른 포트이면 `E2E_BASE_URL`을 지정한다.
+
 기존 로컬 볼륨이나 Supabase에는 migration을 별도로 적용해야 한다. CLI가 만든 `supabase/migrations/20261115010338_landing_reservations.sql`을 DB 소유 권한으로 적용한다. 새 볼륨용 자동 초기화와 달리 기존 볼륨에는 compose 재시작만으로 새 migration이 적용되지 않는다. 이후 API 환경변수를 설정하고 재시작한다.
 
 ## Supabase 배포

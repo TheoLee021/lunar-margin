@@ -201,6 +201,7 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
 
 function RunScreen({ runId }: { runId: string }) {
   const { state, reload } = useRun(runId)
+  const availability = useAvailability(runId)
   if (state.status === 'loading')
     return <Spinner text="탐색 결과를 불러오는 중…" />
   if (state.status === 'error')
@@ -211,11 +212,16 @@ function RunScreen({ runId }: { runId: string }) {
         onRetry={reload}
       />
     )
-  return <RunBody run={state.data} />
+  return <RunBody run={state.data} availability={availability} />
 }
 
-function RunBody({ run }: { run: RunDetail }) {
-  const availability = useAvailability(run.id)
+function RunBody({
+  run,
+  availability,
+}: {
+  run: RunDetail
+  availability: ReturnType<typeof useAvailability>
+}) {
   const reservations = useMemo(
     () =>
       availability.state.status === 'ready'

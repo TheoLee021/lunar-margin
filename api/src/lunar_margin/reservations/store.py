@@ -13,10 +13,13 @@ class Store:
     def __init__(self, dsn: str) -> None:
         self.dsn = dsn
 
-    def confirm(self, request: Registration) -> Booking:
-        with psycopg.Connection[DictRow].connect(
+    def _connect(self) -> psycopg.Connection[DictRow]:
+        return psycopg.Connection[DictRow].connect(
             self.dsn, connect_timeout=5, row_factory=dict_row, options="-c statement_timeout=10000"
-        ) as conn:
+        )
+
+    def confirm(self, request: Registration) -> Booking:
+        with self._connect() as conn:
             # 동시 INSERT의 exclusion-check 교착을 피하려고 같은 셀만 직렬화한다.
             # DB 제약도 유지해 다른 writer/프로세스의 중복까지 막는다.
             conn.execute(
@@ -41,9 +44,7 @@ class Store:
             return Booking.model_validate(row)
 
     def list(self, limit: int = 100, offset: int = 0) -> list[Booking]:
-        with psycopg.Connection[DictRow].connect(
-            self.dsn, connect_timeout=5, row_factory=dict_row, options="-c statement_timeout=10000"
-        ) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 """SELECT * FROM mission_reservations.bookings
                 ORDER BY confirmed_at DESC, id LIMIT %s OFFSET %s""",
@@ -52,9 +53,7 @@ class Store:
             return [Booking.model_validate(row) for row in rows]
 
     def cancel(self, booking_id: UUID) -> Booking | None:
-        with psycopg.Connection[DictRow].connect(
-            self.dsn, connect_timeout=5, row_factory=dict_row, options="-c statement_timeout=10000"
-        ) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 """UPDATE mission_reservations.bookings SET status='cancelled',
                 cancelled_at=COALESCE(cancelled_at, clock_timestamp())
@@ -64,9 +63,7 @@ class Store:
             return Booking.model_validate(row) if row else None
 
     def conflicts(self, cells: list[str], start: datetime, end: datetime) -> list[Booking]:
-        with psycopg.Connection[DictRow].connect(
-            self.dsn, connect_timeout=5, row_factory=dict_row, options="-c statement_timeout=10000"
-        ) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 """SELECT * FROM mission_reservations.bookings WHERE status='confirmed'
                 AND cell_id = ANY(%s)
