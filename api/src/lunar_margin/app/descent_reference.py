@@ -40,7 +40,7 @@ class VehicleRequest(BaseModel):
     isp_s: float = Field(default=310.0, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def mass_and_thrust(self) -> "VehicleRequest":
+    def mass_and_thrust(self) -> VehicleRequest:
         if self.wet_mass_kg <= self.dry_mass_kg:
             raise ValueError("wet mass must exceed dry mass")
         if self.max_thrust_n <= self.min_thrust_n:
