@@ -159,7 +159,7 @@
 | `mission_duration_days` | 1~365 (지구일) |
 | `max_continuous_darkness_hours` | 임무 기간 중 직사광이 없는 최장 연속 시간 한도. `null`이면 조건 없음. 0 이상 |
 | `max_communication_blackout_hours` | 지구가 보이지 않는 최장 연속 시간(통신 두절) 한도. `null`이면 조건 없음. 0 이상 |
-| `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. **받아서 검증만 하고 적용하지 않는다**(지형 경사 분석 미구현). 값이 있으면 `summary.warnings`에 "적용하지 않았습니다" 경고가 남는다 |
+| `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. 후보 중심 250 m 반경의 DEM 경사 P95에 적용(160 m 경사 기준, 400 m 거칠기 창). 유효 지형 표본 100%와 P95 ≤ 한도를 모두 만족해야 통과. `null`이면 지형 필터를 적용하지 않는다 |
 | `search_region` | `"south"`만 가능. `"global"`은 422 ("hybrid global search is planned and not available yet") |
 | `optimization_priority` | `"balanced"`(일조 0.5 : 지구 0.5), `"solar"`(0.75 : 0.25), `"earth"`(0.25 : 0.75). 점수 가중치이며 적격 여부와는 별개 |
 | `observer_height_m` | 0~100 또는 `null`(= 0, 지표면) |
@@ -250,3 +250,24 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 각 좌표 표본은 `{seconds, spacecraft_km: [x,y,z], moon_km: [x,y,z]}`. 시간은 출발부터 경과한 초, 위치는 지구 중심 J2000의 km. 전이 마지막 표본과 진입 첫 표본은 동일 시각·동일 위치이며 진입에서 접선 방향을 유지하며 속력만 순간 변경한다. LOI 전후 각각 10분 구간에 5초 간격 표본을 추가한다. 확대도는 각 표본의 달 위치를 뺀 뒤 진입 궤도면에 투영한다.
 
 오류: `422` 입력 오류·비수렴·충돌 경로, `503` SPICE 파일 없음, `429` 동시 계산 한도(2건) 초과. 계산 한 건은 최대 약 20초로 제한한다. 정적 궤도로 대체하지 않는다.
+
+
+### 후보지 탐색의 실제 지형 경사 필터
+
+`POST /candidates/search`와 `/search/dev` 모두 `max_terrain_slope_degrees`를
+거친 단계의 적격 판정·세밀화 우선순위와 세밀 단계의 최종 적격 판정에 적용한다.
+수평선 테이블을 재사용하더라도 지역 지형은 주 DEM에서 별도로 계산한다.
+넓은 보충 DEM은 수평선 광선에만 쓰며 지역 지형 결측을 메우지 않는다.
+지역 유효 표본은 경사와 400 m 거칠기 창 모두 유효해야 한다.
+
+- 초과 사유: `terrain_slope_above_max`. 결측/불완전 사유: `terrain_incomplete`.
+- 새 결과의 `config.thresholds.max_terrain_slope_degrees`가 실제 적용 한도다.
+- 후보의 nullable `terrain`: `slope_p95_deg`, `coverage_fraction`,
+  `assessment_radius_m`(250), `slope_baseline_m`(160), `roughness_window_m`(400),
+  `dem_pixel_m`, `landing_safety_status`(`UNVERIFIED`). 비활성화/과거 실행은 null 또는 생략.
+- `candidates.csv`와 `sites.npz`에도 경사 및 유효 표본 비율을 저장한다.
+- 임무 실행 캐시 버전을 2로 올려 과거 미적용 결과를 새 탐색에 재사용하지 않는다.
+  과거 결과는 계속 읽을 수 있으며 화면에는 미적용으로 표시한다.
+
+이는 DEM 규모의 환경 선별이다. 80 m 지형으로 발판·미세 장애물·지반 지지력 등
+착륙 안전성을 인증하지 않으며, 경사 조건 비활성화는 안전 확인을 뜻하지 않는다.
