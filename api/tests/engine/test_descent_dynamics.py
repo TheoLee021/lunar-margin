@@ -17,7 +17,6 @@ from lunar_margin.engine.descent_reference import (
     OMEGA,
     R_M,
     Lander,
-    _trajectory_at_times,
     evaluate_reference,
     pdi_from_target,
     surface_vector,
@@ -34,6 +33,44 @@ class FlatDem:
 def _rotation_z(theta: float) -> Vec:
     c, s = math.cos(theta), math.sin(theta)
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+def _independent_reference_sample(
+    pdi_position: Vec,
+    pdi_velocity: Vec,
+    target: Vec,
+    duration_s: float,
+    loft_m: float,
+    t_s: float,
+) -> tuple[Vec, Vec, Vec]:
+    """Scalar polynomial derivatives, separate from the engine's vectorized code."""
+    s = t_s / duration_s
+    delta = target - pdi_position
+    c3 = 10.0 * delta - 6.0 * pdi_velocity * duration_s
+    c4 = -15.0 * delta + 8.0 * pdi_velocity * duration_s
+    c5 = 6.0 * delta - 3.0 * pdi_velocity * duration_s
+    up = target / np.linalg.norm(target)
+    bump = 16.0 * (s**2 - 2.0 * s**3 + s**4)
+    bump_d = (32.0 * s - 96.0 * s**2 + 64.0 * s**3) / duration_s
+    bump_dd = (32.0 - 192.0 * s + 192.0 * s**2) / duration_s**2
+    position = (
+        pdi_position
+        + pdi_velocity * t_s
+        + c3 * s**3
+        + c4 * s**4
+        + c5 * s**5
+        + loft_m * bump * up
+    )
+    velocity = (
+        pdi_velocity
+        + (3.0 * c3 * s**2 + 4.0 * c4 * s**3 + 5.0 * c5 * s**4) / duration_s
+        + loft_m * bump_d * up
+    )
+    acceleration = (
+        (6.0 * c3 * s + 12.0 * c4 * s**2 + 20.0 * c5 * s**3) / duration_s**2
+        + loft_m * bump_dd * up
+    )
+    return position, velocity, acceleration
 
 
 def test_subsample_thrust_peak_rejects_marginal_engine() -> None:
@@ -70,12 +107,13 @@ def test_reference_acceleration_reintegrates_in_inertial_frame() -> None:
     starting_inertial_velocity = pdi.velocity_mps + np.cross(omega, pdi.position_m)
 
     def thrust_command(t_s: float) -> Vec:
-        t = np.array([t_s], dtype=np.float64)
-        r, v, a = _trajectory_at_times(pdi, target, duration, loft, t)
-        radius = float(np.linalg.norm(r[0]))
-        gravity = -MU_M * r[0] / radius**3
+        r, v, a = _independent_reference_sample(
+            pdi.position_m, pdi.velocity_mps, target, duration, loft, t_s
+        )
+        radius = float(np.linalg.norm(r))
+        gravity = -MU_M * r / radius**3
         thrust_moon_fixed = (
-            a[0] - gravity + 2.0 * np.cross(omega, v[0]) + np.cross(omega, np.cross(omega, r[0]))
+            a - gravity + 2.0 * np.cross(omega, v) + np.cross(omega, np.cross(omega, r))
         )
         return _rotation_z(OMEGA * t_s) @ thrust_moon_fixed
 
