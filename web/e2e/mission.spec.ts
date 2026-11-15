@@ -26,6 +26,25 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const sun: Analysis = await sunResponse.json()
   const earth: Analysis = await earthResponse.json()
   const degree = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`
+  // This workflow edits drafts; completed date links have a separate navigation scenario.
+  await page.route('**/api/pricing/calendar', (route) => {
+    const input = route.request().postDataJSON() as { landing_dates: string[] }
+    return route.fulfill({
+      json: {
+        mass_kg: 24,
+        delivery: 'surface',
+        tariff_usd_per_kg: 1200000,
+        evidence: [],
+        dates: input.landing_dates.map((landing_date) => ({
+          landing_date,
+          run_id: `m-${landing_date}`,
+          state: 'not_computed',
+          message: null,
+          pricing: null,
+        })),
+      },
+    })
+  })
   await page.goto('/')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
@@ -58,6 +77,28 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(metric('최장 지구 차폐')).toHaveText(
     `${earth.metrics.longest_dark_hours.toFixed(1)} 시간`,
   )
+  const timeline = metrics.getByRole('region', { name: '미션 기간 타임라인' })
+  await expect(
+    timeline.getByRole('img', {
+      name: '고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인',
+    }),
+  ).toBeVisible()
+  await timeline.getByRole('slider', { name: '타임라인 검토 시점' }).fill('1')
+  await expect(timeline.locator('output')).toHaveText(
+    'D+0 00:30 · 2027-01-10 00:30 UTC',
+  )
+  await expect(
+    timeline.getByText(
+      `태양 ${degree(sun.series.body_elevation_deg[1]!)} · ${sun.series.visible[1] ? '햇빛 있음' : '햇빛 없음'}`,
+      { exact: true },
+    ),
+  ).toBeVisible()
+  await expect(
+    timeline.getByText(
+      `지구 ${degree(earth.series.body_elevation_deg[1]!)} · ${earth.series.visible[1] ? '지구 가시' : '지구 차폐'}`,
+      { exact: true },
+    ),
+  ).toBeVisible()
   await page.getByRole('button', { name: '선택 지점 3D로 보기' }).click()
   await page.getByRole('button', { name: '위에서 보기' }).click()
   const slope = page.getByRole('slider', { name: /경사 ≤/ })
@@ -98,35 +139,19 @@ test('mission planner previews dates, discards drafts and applies the selection'
     .getByLabel('기준 착륙일 · UTC', { exact: true })
     .fill('2027-01-10')
   const grid = dialog.getByRole('table', {
-    name: '출발일과 착륙일별 예시 비용',
+    name: '출발일과 착륙일별 평균 가격',
   })
   await expect(grid.locator('tbody tr')).toHaveCount(5)
   await expect(grid.locator('thead th')).toHaveCount(6)
   await expect(grid.locator('thead')).toContainText('Jan 04')
   await expect(grid.locator('thead')).toContainText('Jan 08')
 
-  const timeline = dialog.getByRole('region', { name: '미션 기간 타임라인' })
   await expect(
-    timeline.getByRole('img', {
-      name: '고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인',
-    }),
-  ).toBeVisible()
-  await timeline.getByRole('slider', { name: '타임라인 검토 시점' }).fill('1')
-  await expect(timeline.locator('output')).toHaveText(
-    'D+0 00:30 · 2027-01-10 00:30 UTC',
-  )
-  await expect(
-    timeline.getByText(
-      `태양 ${degree(sun.series.body_elevation_deg[1]!)} · ${sun.series.visible[1] ? '햇빛 있음' : '햇빛 없음'}`,
-      { exact: true },
-    ),
+    dialog.getByRole('img', { name: '착륙일별 예시 점수' }),
   ).toBeVisible()
   await expect(
-    timeline.getByText(
-      `지구 ${degree(earth.series.body_elevation_deg[1]!)} · ${earth.series.visible[1] ? '지구 가시' : '지구 차폐'}`,
-      { exact: true },
-    ),
-  ).toBeVisible()
+    dialog.getByRole('region', { name: '미션 기간 타임라인' }),
+  ).toHaveCount(0)
   const combination = dialog.getByRole('button', {
     name: /출발 2027-01-07, 착륙 2027-01-11,/,
   })
@@ -141,6 +166,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(opener).toContainText('2027.01.06')
   await expect(opener).toContainText('14일')
   await expect(opener).toBeFocused()
+  await expect(timeline).toContainText('2027-01-10 → 2027-01-24 UTC')
 
   await opener.click()
   await dialog
@@ -149,9 +175,6 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await dialog
     .getByRole('combobox', { name: /착륙 후 표면 임무/ })
     .selectOption('7')
-  await expect(
-    timeline.getByText('2027-01-11 → 2027-01-18 UTC', { exact: false }),
-  ).toBeVisible()
   await dialog.getByRole('button', { name: '일정 적용 ↗' }).click()
   await expect(dialog).not.toBeVisible()
   await expect(opener).toContainText('2027.01.07')
@@ -162,7 +185,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
     'true',
   )
 
-  await expect(metrics).toContainText('2027-01-11 → 2027-01-18 UTC')
+  await expect(timeline).toContainText('2027-01-11 → 2027-01-18 UTC')
   // An unavailable body must clear old metrics; retry restores the paired result.
   await page.route('**/api/analysis/earth-visibility?**', (route) =>
     route.fulfill({ status: 503, json: { detail: 'NASA data not found' } }),
@@ -170,6 +193,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await rail.getByRole('button', { name: /후보 1/ }).click()
   await expect(metrics.getByRole('alert')).toContainText('(503)')
   await expect(metrics.locator('dd')).toHaveCount(0)
+  await expect(metrics.locator('.unified-timeline')).toHaveCount(0)
   await page.unroute('**/api/analysis/earth-visibility?**')
   await metrics.getByRole('button', { name: '분석 다시 시도' }).click()
   await expect(metrics.getByRole('definition')).toHaveCount(4)

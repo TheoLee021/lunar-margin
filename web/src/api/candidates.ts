@@ -52,6 +52,18 @@ export const CandidateSchema = z.object({
   x_m: z.number(),
   y_m: z.number(),
   grid_spacing_m: z.number(),
+  terrain: z
+    .object({
+      slope_p95_deg: NullableNumber,
+      coverage_fraction: z.number().min(0).max(1).nullable(),
+      assessment_radius_m: z.number().positive(),
+      slope_baseline_m: z.number().positive(),
+      roughness_window_m: z.number().positive(),
+      dem_pixel_m: z.number().positive(),
+      landing_safety_status: z.literal('UNVERIFIED'),
+    })
+    .nullable()
+    .optional(),
   sun: SunMetricsSchema,
   earth: EarthMetricsSchema,
   eligibility: z.object({
@@ -81,6 +93,7 @@ const ThresholdsSchema = z.object({
   max_sun_dark_hours: NullableNumber,
   min_earth_fraction: NullableNumber,
   max_earth_blackout_hours: NullableNumber,
+  max_terrain_slope_degrees: NullableNumber.optional(),
 })
 export type SearchThresholds = z.infer<typeof ThresholdsSchema>
 

@@ -3,6 +3,7 @@ import type { Candidate } from '../api/candidates'
 import type { CandidateAvailability } from '../api/reservations'
 import {
   fractionText,
+  degText,
   scoreText,
   sortCandidates,
   type SortDir,
@@ -29,6 +30,7 @@ const COLUMNS: readonly {
   { key: 'lon', label: '경도(°E)', align: 'right' },
   { key: 'sun', label: '일조율', align: 'right' },
   { key: 'earth', label: '지구 가시율', align: 'right' },
+  { key: 'slope', label: '지역 경사 P95', align: 'right' },
   { key: 'score', label: '점수', align: 'right' },
   { key: 'region', label: '영역', align: 'right' },
 ]
@@ -186,6 +188,9 @@ export function CandidateTable({
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-sky-300">
                   {fractionText(c.earth.fraction)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {degText(c.terrain?.slope_p95_deg ?? null)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {scoreText(c.score.total)}

@@ -50,7 +50,8 @@ export function useRun(runId: string) {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetchRun(runId, { signal: controller.signal })
+    Promise.resolve()
+      .then(() => fetchRun(runId, { signal: controller.signal }))
       .then((data) => setState({ status: 'ok', data }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return

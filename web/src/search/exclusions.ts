@@ -10,6 +10,8 @@ const FILTER_REASON_KEYS = [
   'earth_fraction_below_min',
   'earth_blackout_hours_above_max',
   'horizon_incomplete',
+  'terrain_slope_above_max',
+  'terrain_incomplete',
   'no_metrics',
 ] as const
 
@@ -84,6 +86,21 @@ export function dominantExclusion(
         advice: '최소 지구 가시율 기준을 낮춰 보세요.',
       }
     }
+    case 'terrain_slope_above_max': {
+      const degrees = thresholds.max_terrain_slope_degrees
+      return {
+        ...top,
+        limit: degrees == null ? null : `250 m 지역 경사 P95 ${degrees}° 이하`,
+        advice: '지형 경사 한도를 늘리거나 다른 지역을 살펴보세요.',
+      }
+    }
+    case 'terrain_incomplete':
+      return {
+        ...top,
+        limit: '250 m 평가 원의 DEM 유효 표본 100%',
+        advice:
+          '지역 지형 자료가 완전한 지점을 살펴보세요. 결측은 완만한 지형을 뜻하지 않습니다.',
+      }
     case 'horizon_incomplete':
       return {
         ...top,

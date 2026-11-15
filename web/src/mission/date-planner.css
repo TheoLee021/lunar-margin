@@ -1,4 +1,59 @@
 @layer components {
+  .price-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 20px 0 12px;
+  }
+  .price-inputs label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .price-inputs input,
+  .price-inputs select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    color: var(--fg);
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .price-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+  }
+  .price-actions button {
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .price-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .cost-grid td :is(button, a) span {
+    font-size: clamp(12px, 1.5vw, 20px);
+  }
+  .cost-grid .invalid-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  @media (max-width: 680px) {
+    .price-inputs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
   .group {
     padding: 12px 14px;
     display: flex;
@@ -203,11 +258,19 @@
     font-size: 11px;
     width: 62px;
   }
+  .cost-grid th a {
+    color: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+  .cost-grid th a:hover {
+    color: var(--earth);
+  }
   .cost-grid td {
     padding: 0;
     text-align: center;
   }
-  .cost-grid button {
+  .cost-grid td :is(button, a) {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -223,36 +286,38 @@
     font: 13px var(--f-mono);
     cursor: pointer;
   }
-  .cost-grid button small {
+  .cost-grid td :is(button, a) small {
     font: 10px var(--f-body);
     color: var(--muted);
   }
-  .cost-grid button > span small {
+  .cost-grid td :is(button, a) > span small {
     margin-left: 2px;
     color: inherit;
     font: 9px var(--f-mono);
     opacity: 0.7;
   }
-  .cost-grid button.low-cost {
+  .cost-grid td :is(button, a).low-cost {
     color: var(--good);
     background: rgba(95, 191, 134, 0.06);
     border-color: var(--line);
   }
-  .cost-grid button .best-cost {
+  .cost-grid td :is(button, a) .best-cost {
     color: var(--good);
     font: 10px var(--f-body);
   }
-  .cost-grid button:hover {
+  .cost-grid td :is(button, a):hover {
     border-color: var(--earth);
     background: rgba(255, 255, 255, 0.1);
   }
-  .cost-grid button[aria-pressed='true'] {
+  .cost-grid td :is(button, a)[aria-pressed='true'],
+  .cost-grid td a[aria-current='date'] {
     color: var(--bg);
     background: var(--fg);
     border-color: var(--fg);
   }
-  .cost-grid button[aria-pressed='true'] small,
-  .cost-grid button[aria-pressed='true'] .best-cost {
+  .cost-grid td a[aria-current='date'] small,
+  .cost-grid td :is(button, a)[aria-pressed='true'] small,
+  .cost-grid td :is(button, a)[aria-pressed='true'] .best-cost {
     color: #454b52;
   }
   .unavailable {
@@ -345,7 +410,7 @@
   .planner-charts {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 1fr);
     border-top: 1px solid var(--line);
     background: transparent;
   }
@@ -490,7 +555,7 @@
     .date-anchors {
       margin-bottom: 10px;
     }
-    .cost-grid button {
+    .cost-grid td :is(button, a) {
       min-height: 43px;
       gap: 3px;
     }
@@ -521,56 +586,6 @@
     .planner-primary {
       grid-template-columns: minmax(0, 1fr);
     }
-  }
-}
-
-@layer components {
-  .mission-timeline-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .mission-timeline-guide {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .mission-timeline-guide > span::before {
-    content: '';
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    margin-right: 5px;
-    background: var(--sun);
-    border-radius: 2px;
-  }
-  .mission-timeline-guide .timeline-blocked-key::before {
-    background: repeating-linear-gradient(
-      135deg,
-      var(--muted) 0 1px,
-      transparent 1px 3px
-    );
-    border: 1px solid var(--muted);
-  }
-  .unified-timeline {
-    touch-action: pan-y;
-  }
-  .timeline-inspection {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px;
-    font-size: 12px;
-  }
-  .timeline-inspection output {
-    font-family: var(--f-mono);
-  }
-  .timeline-inspection input {
-    grid-column: 1/-1;
-    width: 100%;
-    accent-color: var(--fg);
   }
 }
 

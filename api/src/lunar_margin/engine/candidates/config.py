@@ -37,6 +37,7 @@ class Thresholds(_Frozen):
     max_sun_dark_hours: float | None = Field(default=None, ge=0.0)
     min_earth_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
     max_earth_blackout_hours: float | None = Field(default=None, ge=0.0)
+    max_terrain_slope_degrees: float | None = Field(default=None, gt=0.0, le=90.0)
 
 
 class Weights(_Frozen):

@@ -14,6 +14,8 @@ SUN_DARK_HIGH = 1 << 1
 EARTH_FRACTION_LOW = 1 << 2
 EARTH_BLACKOUT_HIGH = 1 << 3
 HORIZON_INCOMPLETE = 1 << 4
+TERRAIN_SLOPE_HIGH = 1 << 5
+TERRAIN_INCOMPLETE = 1 << 6
 
 _REASONS: tuple[tuple[int, str], ...] = (
     (SUN_FRACTION_LOW, "sun_fraction_below_min"),
@@ -21,6 +23,8 @@ _REASONS: tuple[tuple[int, str], ...] = (
     (EARTH_FRACTION_LOW, "earth_fraction_below_min"),
     (EARTH_BLACKOUT_HIGH, "earth_blackout_hours_above_max"),
     (HORIZON_INCOMPLETE, "horizon_incomplete"),
+    (TERRAIN_SLOPE_HIGH, "terrain_slope_above_max"),
+    (TERRAIN_INCOMPLETE, "terrain_incomplete"),
 )
 
 
@@ -76,6 +80,15 @@ def evaluate(
             violated = (values < limit) if is_minimum else (values > limit)
         failed[available & violated] |= bit
 
+    if thresholds.max_terrain_slope_degrees is not None:
+        any_threshold = True
+        available = np.isfinite(field.terrain_slope_p95_deg)
+        complete = field.terrain_coverage_fraction >= 0.9999
+        failed[~available | ~complete] |= TERRAIN_INCOMPLETE
+        too_steep = field.terrain_slope_p95_deg > thresholds.max_terrain_slope_degrees
+        failed[available & too_steep] |= TERRAIN_SLOPE_HIGH
+        applied_any |= field.computed  # Missing terrain is an explicit failed requirement.
+
     if exclude_incomplete_horizon:
         failed[field.computed & ~field.horizon_complete] |= HORIZON_INCOMPLETE
 
@@ -100,6 +113,7 @@ def constraint_ratio(field: MetricField, thresholds: Thresholds) -> NDArray[np.f
         (thresholds.max_sun_dark_hours, field.sun_longest_dark_h, False),
         (thresholds.min_earth_fraction, field.earth_fraction, True),
         (thresholds.max_earth_blackout_hours, field.earth_longest_blackout_h, False),
+        (thresholds.max_terrain_slope_degrees, field.terrain_slope_p95_deg, False),
     )
     for limit, values, is_minimum in criteria:
         if limit is None:

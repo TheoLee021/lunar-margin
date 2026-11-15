@@ -53,6 +53,29 @@
 - `series`: 시간 배열과 같은 길이의 배열들. `visible` = `body_elevation_deg > horizon(body_azimuth_deg)`.
 - `windows`, `dark_periods`: `visible` 연속 구간(`end` 미포함). 기간 경계에서 잘린 구간도 포함.
 
+### `GET /analysis/site-assessment`
+
+여러 후보 지점을 같은 기간으로 비교할 때 쓰는 요약. 쿼리는 위 두 엔드포인트와 같다. 시계열·수평선 없이 지표와 지형만 돌려준다.
+
+```json
+{
+  "lat": -89.7, "lon": 130.0,
+  "start": "2027-01-01T00:00:00Z", "end": "2027-02-01T00:00:00Z", "step_minutes": 30,
+  "observer_height_m": 0,
+  "sun": { "visible_fraction": 0.42, "longest_dark_hours": 96.5, "windows_per_24h": 0.9, "mean_elevation_deg": 0.8 },
+  "earth": { "visible_fraction": 0.88, "longest_dark_hours": 40.0, "windows_per_24h": 0.07, "mean_elevation_deg": 4.1 },
+  "terrain": {
+    "slope_p95_deg": 6.1, "coverage_fraction": 1.0,
+    "assessment_radius_m": 250, "slope_baseline_m": 160, "roughness_window_m": 400,
+    "dem_pixel_m": 80, "landing_safety_status": "UNVERIFIED"
+  }
+}
+```
+
+- `sun`, `earth`: 같은 쿼리로 `illumination`, `earth-visibility`를 부른 응답의 `metrics`와 같은 값.
+- `terrain`: 후보 탐색 결과의 `terrain`과 같은 형태·계산(후보 중심 250 m 원의 DEM 경사 P95, 80 m 주 DEM). 판정은 하지 않는다. DEM 결측으로 `coverage_fraction < 1`이어도 그대로 돌려주며, 결측을 통과로 해석하지 않는 것은 호출하는 쪽의 몫이다. `slope_p95_deg`는 유효 표본이 없으면 `null`.
+- 지점이 DEM 밖이면 422.
+
 ## 후보지 탐색 결과 (`/candidates`)
 
 남극 후보지 탐색은 오래 걸려서(수 분~십수 분) CLI(`python -m lunar_margin.pipeline.candidates`)가 한 번 돌려 `DATA_DIR/candidates/{run_id}/`에 결과를 쓰고, API는 그 결과를 읽어서 돌려준다. 화면은 이 결과로 **탐색 과정**(거친 격자 -> 세밀화 -> 필터 -> 연결 영역 -> 선정)을 단계별로 재생한다. 설계는 `docs/candidates.md`.
@@ -159,7 +182,7 @@
 | `mission_duration_days` | 1~365 (지구일) |
 | `max_continuous_darkness_hours` | 임무 기간 중 직사광이 없는 최장 연속 시간 한도. `null`이면 조건 없음. 0 이상 |
 | `max_communication_blackout_hours` | 지구가 보이지 않는 최장 연속 시간(통신 두절) 한도. `null`이면 조건 없음. 0 이상 |
-| `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. **받아서 검증만 하고 적용하지 않는다**(지형 경사 분석 미구현). 값이 있으면 `summary.warnings`에 "적용하지 않았습니다" 경고가 남는다 |
+| `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. 후보 중심 250 m 반경의 DEM 경사 P95에 적용(160 m 경사 기준, 400 m 거칠기 창). 유효 지형 표본 100%와 P95 ≤ 한도를 모두 만족해야 통과. `null`이면 지형 필터를 적용하지 않는다 |
 | `search_region` | `"south"`만 가능. `"global"`은 422 ("hybrid global search is planned and not available yet") |
 | `optimization_priority` | `"balanced"`(일조 0.5 : 지구 0.5), `"solar"`(0.75 : 0.25), `"earth"`(0.25 : 0.75). 점수 가중치이며 적격 여부와는 별개 |
 | `observer_height_m` | 0~100 또는 `null`(= 0, 지표면) |
@@ -250,6 +273,152 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 각 좌표 표본은 `{seconds, spacecraft_km: [x,y,z], moon_km: [x,y,z]}`. 시간은 출발부터 경과한 초, 위치는 지구 중심 J2000의 km. 전이 마지막 표본과 진입 첫 표본은 동일 시각·동일 위치이며 진입에서 접선 방향을 유지하며 속력만 순간 변경한다. LOI 전후 각각 10분 구간에 5초 간격 표본을 추가한다. 확대도는 각 표본의 달 위치를 뺀 뒤 진입 궤도면에 투영한다.
 
 오류: `422` 입력 오류·비수렴·충돌 경로, `503` SPICE 파일 없음, `429` 동시 계산 한도(2건) 초과. 계산 한 건은 최대 약 20초로 제한한다. 정적 궤도로 대체하지 않는다.
+
+
+### 후보지 탐색의 실제 지형 경사 필터
+
+`POST /candidates/search`와 `/search/dev` 모두 `max_terrain_slope_degrees`를
+거친 단계의 적격 판정·세밀화 우선순위와 세밀 단계의 최종 적격 판정에 적용한다.
+수평선 테이블을 재사용하더라도 지역 지형은 주 DEM에서 별도로 계산한다.
+넓은 보충 DEM은 수평선 광선에만 쓰며 지역 지형 결측을 메우지 않는다.
+지역 유효 표본은 경사와 400 m 거칠기 창 모두 유효해야 한다.
+
+- 초과 사유: `terrain_slope_above_max`. 결측/불완전 사유: `terrain_incomplete`.
+- 새 결과의 `config.thresholds.max_terrain_slope_degrees`가 실제 적용 한도다.
+- 후보의 nullable `terrain`: `slope_p95_deg`, `coverage_fraction`,
+  `assessment_radius_m`(250), `slope_baseline_m`(160), `roughness_window_m`(400),
+  `dem_pixel_m`, `landing_safety_status`(`UNVERIFIED`). 비활성화/과거 실행은 null 또는 생략.
+- `candidates.csv`와 `sites.npz`에도 경사 및 유효 표본 비율을 저장한다.
+- 임무 실행 캐시 버전을 2로 올려 과거 미적용 결과를 새 탐색에 재사용하지 않는다.
+  과거 결과는 계속 읽을 수 있으며 화면에는 미적용으로 표시한다.
+
+이는 DEM 규모의 환경 선별이다. 80 m 지형으로 발판·미세 장애물·지반 지지력 등
+착륙 안전성을 인증하지 않으며, 경사 조건 비활성화는 안전 확인을 뜻하지 않는다.
+
+## Eligible-grid pricing (`/pricing`)
+
+These additive endpoints use the completed precision searches from #13. They do
+not change the candidate search contract, thresholds, ranking or selection.
+
+`POST /pricing/calendar` reads saved runs; it **does not launch a search**.
+
+```json
+{
+  "mission": {
+    "landing_date": "2027-01-10",
+    "mission_duration_days": 14,
+    "max_continuous_darkness_hours": 24,
+    "max_communication_blackout_hours": 6,
+    "max_terrain_slope_degrees": null,
+    "search_region": "south",
+    "optimization_priority": "balanced",
+    "observer_height_m": null
+  },
+  "landing_dates": ["2027-01-08", "2027-01-09", "2027-01-10", "2027-01-11", "2027-01-12"],
+  "mass_kg": 24,
+  "delivery": "surface"
+}
+```
+
+`mass_kg` is finite, >0 and <=1,000,000. Delivery is `orbit`, `surface` or
+`rover_delivery` ($300,000, $1,200,000, $4,500,000/kg respectively, from the
+[2022 Astrobotic PUG](https://www.astrobotic.com/wp-content/uploads/2022/01/PUGLanders_011222.pdf)).
+These are published reference tariffs, not a verified current booking quote.
+Dates must be 1–5 unique ISO dates; every date + mission duration must be within
+the existing ephemeris coverage. Invalid input returns 422.
+
+Each date replaces only `mission.landing_date` to derive the same deterministic
+run ID as `POST /candidates/search`. The response echoes `mass_kg`, `delivery`,
+`tariff_usd_per_kg`, and includes `dates` and term-level `evidence`.
+
+Each date row contains `landing_date`, `run_id`, `state`, `message` (nullable),
+and `pricing` (nullable). States:
+
+- `ready`: completed run, at least one priced cell.
+- `no_eligible`: completed run, no priced cells; mean is null, never zero.
+- `not_computed`: no complete saved result. Start with the existing search API.
+- `running`: queued/running search; message includes its stage and point counts.
+- `failed`: failed search, with its recorded error.
+- `unavailable`: inconsistent/missing artifacts or a non-500m run. Do not substitute prices.
+
+`pricing` has `run_id`, `landing_date`, `mission_duration_days`, `grid_spacing_m`
+(always 500), `counts`, `mean` (nullable), and `cells` (empty for calendar requests).
+Counts are `fine`, `eligible`, `priced`, `terrain_excluded`, `terrain_unknown`,
+`unevaluated`, and `coarse_ignored`.
+
+The population is **all evaluated fine samples** with `stage=1`, `spacing_m=500`,
+`status=eligible`, and no skipped required constraints, read from `sites.npz`.
+It is not the final Top-K selection, a viewport, or all unsampled terrain in the
+ROI. Coarse-only samples, development (10km) runs, excluded and unevaluated points
+are not included. A 500m cell is represented by its sample point; this does not
+certify conditions at every location inside that cell.
+
+For each eligible sample, native 80m DEM samples in a projected 500m-radius disk
+are used to derive slopes by centered height differences. `r` is the fraction
+with slope <=10 degrees. The price model adds landing-safety gates: no price if
+r<0.05 or the aim-point slope>10 degrees. These modeled lander limits are separate
+from the optional customer slope constraint enforced by the candidate search
+using the 250 m regional DEM slope P95.
+If terrain is unavailable or any required disk sample is missing, r is unknown:
+use destination multiplier 1.10 and count/label the fallback. A known unsafe aim
+point remains excluded even if r is unknown. Missing values are never zero-filled.
+
+`P = F + c * m * (1 + 0.30 * (1-r)) * F_demand`, with default F=$500,000.
+The six-persona model is not connected, so F_demand=1.00 and demand_unknown=true.
+The pure pricing engine also supports n=1..6 with multiplier `1+0.08*(n-1)`.
+The mean is an equal-weight arithmetic mean of **unrounded per-cell USD prices**.
+The low/high range changes only F between $500,000 and $5,000,000; it is not
+geographical min/max or a statistical confidence interval.
+
+Every Price object (mean or individual) contains `baseline_usd`, `transport_usd`,
+`destination_adjustment_usd`, `demand_adjustment_usd`, `fixed_usd`, `adjusted_usd`,
+`range_low_usd`, `range_high_usd`, `destination_multiplier`, `demand_multiplier`,
+`destination_unknown`, `demand_unknown`, and `grade` (always `modeled`).
+Destination adjustment precedes demand adjustment, and fixed cost stays outside
+multipliers. Display USD millions with two significant digits; do not round
+before averaging. Evidence distinguishes the derived terrain ratio from modeled
+coefficients and unknown sources (`source: null`). Vehicle capacity, flight
+availability, rocks and actual commercial demand are not verified by this model.
+
+`GET /pricing/runs/{run_id}?mass_kg=24&delivery=surface&include_cells=true`
+returns the same `pricing` object, with all eligible samples in `cells`:
+`id`, `x_m`, `y_m`, `landable_fraction`, `aim_slope_deg`, `price` (nullable), and
+`excluded_reason` (nullable). Terrain exclusions retain a row with no price.
+`include_cells` defaults to false. Missing runs return 404, unsuitable/incomplete
+artifacts return 409, and invalid cargo/IDs return 422.
+
+The date planner starts missing dates using `POST /pricing/calculate` (below).
+Departure affects only the 3–150 day transit eligibility gate; it adds no price
+multiplier. The planner makes no flight-availability claim.
+
+### Batch calendar calculation
+
+`POST /pricing/calculate` accepts the same body as `/pricing/calendar`. It returns
+`{run_ids: string[], state: "queued" | "running" | "done", cached: boolean}` with
+202 for one new background batch, or 200 when all dates are already complete or
+one of the requested runs is already running. IDs remain the ordinary #13 mission
+IDs in input date order. Completed dates are reused; only missing/failed dates
+are included in the new job. A different active search returns 409 with its
+`running_run_id`, using the same guard as `/candidates/search`. Launch failures
+mark every queued date failed. Clients poll `/pricing/calendar` for progress,
+failures and final prices; the planner uses a 250ms interval. Closing the planner
+stops browser updates; an already launched batch continues on the server.
+
+The batch shares worker startup and horizon reads across dates. Each date retains
+its independently generated SPICE timestamps, thresholds, weights, coarse
+promotion mask, fine 500m grid, eligibility, ranking, terrain gates and arithmetic
+price average. Only the union of the requested fine points is scheduled, and each
+date receives exactly its original subset. Visibility summaries are evaluated in
+array batches; mean elevations retain the original compressed-array summation
+order. Standard candidate JSON/NPZ and map artifacts are still produced, with
+independent exports overlapping in at most three threads.
+
+A complete matching horizon table is required for the batch path. Missing tables
+or uncovered grid points fail visibly rather than falling back to slow terrain
+ray tracing. The ordinary single-date search endpoint retains its existing
+fallback behavior. The 15-second calendar target is measured with the local
+precomputed table, five consecutive landing dates and a 14-day mission; it is
+not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ## 격자 예약 (추가 계약)
 

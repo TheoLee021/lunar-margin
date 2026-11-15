@@ -62,6 +62,7 @@ from lunar_margin.pipeline.candidate_schema import (
     Summary,
     SummaryFile,
     SunMetrics,
+    TerrainMetrics,
     WindowSource,
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, StatusKeeper
@@ -76,6 +77,8 @@ _REASON_KEYS = (
     "earth_fraction_below_min",
     "earth_blackout_hours_above_max",
     "horizon_incomplete",
+    "terrain_slope_above_max",
+    "terrain_incomplete",
     "no_metrics",
     "not_refined",
     "within_min_separation",
@@ -142,16 +145,17 @@ def _hashes(directory: Path, names: list[str]) -> dict[str, str]:
     return {name: str(entries.get(name, {}).get("sha256", "")) for name in names}
 
 
-def _field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettings:
+def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettings:
     return FieldSettings(
         window=config.window,
         azimuth_step_deg=azimuth_step_deg,
         max_range_m=config.max_range_m,
         observer_height_m=config.observer_height_m,
+        assess_terrain=config.thresholds.max_terrain_slope_degrees is not None,
     )
 
 
-def _promotion_mask(
+def promotion_mask(
     field: MetricField,
     filtered: FilterResult,
     scores: RankScores,
@@ -209,6 +213,7 @@ def run_search(
     log: Callable[[str], None] = print,
     progress: ProgressFn | None = None,
     extra_warnings: list[str] | None = None,
+    field_provider: Callable[[SitePoints, FieldSettings], MetricField] | None = None,
 ) -> SearchOutcome:
     started = time.perf_counter()
     selection = resolve_dems(config, data_dir)
@@ -269,14 +274,18 @@ def run_search(
         assert config.coarse_spacing_m is not None
         coarse = polar_grid(config.roi, config.coarse_spacing_m)
         log(f"[1/2] 거친 격자 {config.coarse_spacing_m:g} m: {len(coarse):,}개 지점 계산")
-        coarse_field = compute_field(
-            dem,
-            coarse,
-            _field_settings(config, config.coarse_azimuth_step_deg),
-            workers=workers,
-            dem_files=dem_pairs,
-            on_progress=reporter("coarse"),
-            table=table,
+        coarse_field = (
+            field_provider(coarse, field_settings(config, config.coarse_azimuth_step_deg))
+            if field_provider
+            else compute_field(
+                dem,
+                coarse,
+                field_settings(config, config.coarse_azimuth_step_deg),
+                workers=workers,
+                dem_files=dem_pairs,
+                on_progress=reporter("coarse"),
+                table=table,
+            )
         )
         coarse_filter = evaluate(
             coarse_field,
@@ -284,7 +293,7 @@ def run_search(
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
         coarse_scores = score_sites(coarse_field, config.weights)
-        promoted = _promotion_mask(
+        promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
         )
         fine = refine_points(coarse, promoted, config.roi, config.grid_spacing_m)
@@ -298,14 +307,18 @@ def run_search(
         )
 
     log(f"[2/2] 세밀 격자 {config.grid_spacing_m:g} m: {len(fine):,}개 지점 계산")
-    fine_field = compute_field(
-        dem,
-        fine,
-        _field_settings(config, config.fine_azimuth_step_deg),
-        workers=workers,
-        dem_files=dem_pairs,
-        on_progress=reporter("fine"),
-        table=table,
+    fine_field = (
+        field_provider(fine, field_settings(config, config.fine_azimuth_step_deg))
+        if field_provider
+        else compute_field(
+            dem,
+            fine,
+            field_settings(config, config.fine_azimuth_step_deg),
+            workers=workers,
+            dem_files=dem_pairs,
+            on_progress=reporter("fine"),
+            table=table,
+        )
     )
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
@@ -408,6 +421,12 @@ def run_search(
             "나갑니다. DEM 밖 지형은 알 수 없어 수평선이 낮게 계산됐을 수 있습니다"
             "(data_quality.horizon_complete=false). 이 지점들은 "
             "탐색 거리 안에 DEM이 없는 방향이 있습니다."
+        )
+    if config.thresholds.max_terrain_slope_degrees is not None:
+        warnings.append(
+            "지형 경사는 후보 중심 250 m 원의 DEM 경사 P95로 판정합니다(160 m 기준). "
+            "유효 표본이 100%인 지점만 통과합니다. DEM 규모 환경 선별이며 "
+            "미세 장애물·발판·지반 안전성은 검증하지 않습니다."
         )
     if counts["missing_all_metrics"]:
         warnings.append(
@@ -516,6 +535,13 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
         x_m=round(float(outcome.x_m[k]), 3),
         y_m=round(float(outcome.y_m[k]), 3),
         grid_spacing_m=spacing,
+        terrain=None
+        if outcome.config.thresholds.max_terrain_slope_degrees is None
+        else TerrainMetrics(
+            slope_p95_deg=_json_float(f.terrain_slope_p95_deg[k]),
+            coverage_fraction=_json_float(f.terrain_coverage_fraction[k]),
+            dem_pixel_m=outcome.source.dem.resolution_m,
+        ),
         sun=SunMetrics(
             fraction=_json_float(f.sun_fraction[k]),
             longest_dark_hours=_json_float(f.sun_longest_dark_h[k]),
@@ -618,6 +644,8 @@ def write_outputs(outcome: SearchOutcome, out_dir: Path) -> None:
         earth_fraction=outcome.field.earth_fraction,
         earth_longest_blackout_h=outcome.field.earth_longest_blackout_h,
         horizon_complete=outcome.field.horizon_complete,
+        terrain_slope_p95_deg=outcome.field.terrain_slope_p95_deg,
+        terrain_coverage_fraction=outcome.field.terrain_coverage_fraction,
     )
 
     counts = outcome.summary.counts

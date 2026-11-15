@@ -10,16 +10,3 @@ export const short = (day: number) =>
     day: '2-digit',
     timeZone: 'UTC',
   }).format(day * DAY)
-export function exampleCost(departure: number, landing: number): number | null {
-  const flight = landing - departure
-  if (flight < 1) return null
-  return (
-    Math.round(
-      (76 +
-        Math.abs(flight - 4) * 9 +
-        (Math.sin(departure * 0.8) + 1) * 8 +
-        (Math.cos(landing * 0.7) + 1) * 5) *
-        10,
-    ) / 10
-  )
-}
