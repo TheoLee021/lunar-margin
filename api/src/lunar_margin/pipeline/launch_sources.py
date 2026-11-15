@@ -192,6 +192,13 @@ def collect_sls(
             end = date_value
             if row.date_precision == "year":
                 end = date(date_value.year, 12, 31)
+            elif row.date_precision == "quarter":
+                last_month = ((date_value.month - 1) // 3 + 1) * 3
+                end = date(
+                    date_value.year,
+                    last_month,
+                    calendar.monthrange(date_value.year, last_month)[1],
+                )
             elif row.date_precision == "month":
                 end = date(
                     date_value.year,

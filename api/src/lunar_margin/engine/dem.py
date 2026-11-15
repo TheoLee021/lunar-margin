@@ -6,6 +6,7 @@
 """
 
 import math
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, Self
 
@@ -75,6 +76,97 @@ class PolarDem:
         if math.isnan(value):
             raise ValueError(f"({lat_deg}, {lon_deg}) is outside the DEM or on a missing pixel")
         return value
+
+
+class RasterDem:
+    """극 입체투영 평면의 사각형 고도 래스터 (예: 5 m 지역 DEM). 높이는 구 기준 상대 높이(m).
+
+    heights_m[row, col] 픽셀의 중심은 x = left_m + (col + 0.5) * pixel_size_m,
+    y = top_m - (row + 0.5) * pixel_size_m 이다. 바깥 픽셀 중심들이 이루는 사각형 밖과
+    결측(NaN) 픽셀이 걸리는 곳은 NaN.
+    """
+
+    def __init__(
+        self,
+        heights_m: NDArray[np.float32],
+        *,
+        left_m: float,
+        top_m: float,
+        pixel_size_m: float,
+        radius_m: float = 1_737_400.0,
+    ) -> None:
+        self._h = heights_m
+        self.left_m = left_m
+        self.top_m = top_m
+        self.pixel_size_m = pixel_size_m
+        self.radius_m = radius_m
+
+    @property
+    def bounds_m(self) -> tuple[float, float, float, float]:
+        """값이 있을 수 있는 범위 (x 최소, y 최소, x 최대, y 최대)."""
+        rows, cols = self._h.shape
+        half = self.pixel_size_m / 2.0
+        return (
+            self.left_m + half,
+            self.top_m - (rows - 0.5) * self.pixel_size_m,
+            self.left_m + (cols - 0.5) * self.pixel_size_m,
+            self.top_m - half,
+        )
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """쌍선형 보간."""
+        rows, cols = self._h.shape
+        col = (x_m - self.left_m) / self.pixel_size_m - 0.5
+        row = (self.top_m - y_m) / self.pixel_size_m - 0.5
+        inside = (col >= 0) & (col <= cols - 1) & (row >= 0) & (row <= rows - 1)
+        col = np.where(inside, col, 0.0)
+        row = np.where(inside, row, 0.0)
+        c0 = np.minimum(np.floor(col).astype(np.int64), cols - 2)
+        r0 = np.minimum(np.floor(row).astype(np.int64), rows - 2)
+        fc, fr = col - c0, row - r0
+        h = self._h
+        top = h[r0, c0] * (1 - fc) + h[r0, c0 + 1] * fc
+        bottom = h[r0 + 1, c0] * (1 - fc) + h[r0 + 1, c0 + 1] * fc
+        return np.where(inside, (top * (1 - fr) + bottom * fr).astype(np.float64), np.nan)
+
+
+class HeightField(Protocol):
+    """극 입체투영 좌표(m)로 높이를 읽을 수 있는 것. 이 모듈의 DEM이 모두 이를 만족한다."""
+
+    @property
+    def radius_m(self) -> float: ...
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]: ...
+
+
+class LayeredHeights:
+    """여러 DEM을 겹친 높이: 앞선 것의 값을 쓰고, 값이 없는(NaN) 곳만 다음 것으로 메운다.
+
+    좁고 세밀한 DEM(5 m 지역)을 넓은 DEM 위에 얹을 때 쓴다. 모두 같은 극 입체투영이어야 한다.
+    """
+
+    def __init__(self, layers: Sequence[HeightField]) -> None:
+        if not layers:
+            raise ValueError("at least one layer is needed")
+        if any(abs(layer.radius_m - layers[0].radius_m) > 1e-6 for layer in layers):
+            raise ValueError("all layers must use the same reference sphere")
+        self._layers = tuple(layers)
+        self.radius_m = layers[0].radius_m
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        values = self._layers[0].sample_height_m(x_m, y_m)
+        for layer in self._layers[1:]:
+            missing = np.isnan(values)
+            if not missing.any():
+                break
+            values = np.where(missing, layer.sample_height_m(x_m, y_m), values)
+        return values
 
 
 class Dem(Protocol):
