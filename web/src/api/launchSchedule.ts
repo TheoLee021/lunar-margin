@@ -12,6 +12,19 @@ export const LaunchScheduleSchema = z.object({
       departure_date: z.iso.date().nullable(),
       label: z.string(),
       confirmed: z.literal(false),
+      date_precision: z
+        .enum(['day', 'month', 'year', 'quarter', 'unknown'])
+        .optional()
+        .default('unknown'),
+      participants: z
+        .array(
+          z.object({
+            provider_id: ProviderIdSchema,
+            role: z.enum(['delivery', 'launch', 'partner']),
+          }),
+        )
+        .optional()
+        .default([]),
       sources: z
         .array(z.object({ name: z.string(), url: z.url(), label: z.string() }))
         .min(1),
@@ -24,6 +37,9 @@ export const LaunchScheduleSchema = z.object({
       fetched_at: z.iso.datetime({ offset: true }),
       stale: z.boolean(),
       error: z.string().nullable(),
+      scanned_records: z.number().int().nonnegative().optional().default(0),
+      scanned_pages: z.number().int().nonnegative().optional().default(0),
+      complete: z.boolean().optional().default(true),
     }),
   ),
 })

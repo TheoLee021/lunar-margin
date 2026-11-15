@@ -118,7 +118,9 @@ test('launch departure changes independently from the user landing date', async 
     '/?planner=1&departure=2027-01-04&arrival=2027-01-10&duration=14',
   )
   const picker = page.getByRole('region', { name: '발사 일정에서 출발일 선택' })
-  await picker.getByRole('combobox').selectOption('griffin-1')
+  await picker
+    .getByLabel('발사 일정에서 출발일 선택 · UTC')
+    .selectOption('griffin-1')
   await expect(
     page.getByLabel('기준 출발일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-06')
@@ -129,10 +131,31 @@ test('launch departure changes independently from the user landing date', async 
     page.getByLabel('기준 출발일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-06')
   await expect(landing).toHaveValue('2027-01-12')
+  const allMissions = picker.getByRole('region', {
+    name: '회사별 전체 달 임무 목록',
+  })
+  await expect(allMissions.getByRole('heading')).toHaveCount(6)
+  await picker
+    .getByLabel('회사별 일정', { exact: true })
+    .selectOption('blue_origin')
+  await expect(allMissions).toContainText('March 2027')
+  await expect(allMissions).toContainText('출발 일자 미정')
+  await expect(
+    allMissions.getByRole('button', { name: /출발일로 선택/ }),
+  ).toHaveCount(0)
+  await picker
+    .getByLabel('회사별 일정', { exact: true })
+    .selectOption('lockheed_martin')
+  await expect(allMissions).toContainText(
+    '두 사이트에 등록된 달 임무 일정 없음',
+  )
+  await expect(landing).toHaveValue('2027-01-12')
   await expect(
     picker.locator('option[value="blue-moon-pathfinder"]'),
   ).toBeDisabled()
-  await expect(picker.getByRole('link')).toHaveAttribute(
+  await expect(
+    picker.getByLabel('선택한 발사 임무 출처').getByRole('link'),
+  ).toHaveAttribute(
     'href',
     'https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/',
   )
