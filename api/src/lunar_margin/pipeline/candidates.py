@@ -221,6 +221,7 @@ def run_search(
     if table is None:
         warnings.append(
             "수평선 테이블이 없어 지점마다 수평선을 직접 계산했습니다(느림). "
+            "`uv run python -m lunar_margin.pipeline.horizons --download`로 Storage에서 받거나 "
             "`uv run python -m lunar_margin.pipeline.horizons`로 미리 계산해 두면 "
             "같은 조건의 이후 탐색이 훨씬 빨라집니다."
         )
