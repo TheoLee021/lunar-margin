@@ -65,6 +65,41 @@ def test_schedule_endpoint_keeps_dated_snapshot_when_sources_are_unavailable(
     assert not griffin["confirmed"]
 
 
+def test_concurrent_schedule_read_returns_dated_stale_snapshot_during_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from lunar_margin.app.launch_schedule import ScheduleReader
+
+    started = Event()
+    release = Event()
+
+    def delayed_offline(*args: object, **kwargs: object) -> None:
+        started.set()
+        if not release.wait(timeout=5):
+            raise OSError("test source timed out")
+        raise OSError("offline")
+
+    monkeypatch.setattr("lunar_margin.app.launch_schedule.urlopen", delayed_offline)
+    reader = ScheduleReader()
+    previous = reader.peek()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        refresh = pool.submit(reader.read)
+        try:
+            assert started.wait(timeout=2)
+            snapshot = pool.submit(reader.read).result(timeout=1)
+            assert snapshot.launches == previous.launches
+            assert [source.fetched_at for source in snapshot.sources] == [
+                source.fetched_at for source in previous.sources
+            ]
+            assert all(source.stale for source in snapshot.sources)
+        finally:
+            release.set()
+        refresh.result(timeout=2)
+
+
 def test_conflicting_day_sources_do_not_select_a_departure() -> None:
     from lunar_margin.engine.launch_schedule import Launch, LaunchSource
 

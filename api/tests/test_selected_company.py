@@ -5,6 +5,47 @@ from lunar_margin.engine.provider_pricing import load_catalog
 from lunar_margin.engine.selected_company import company_model
 
 
+@pytest.mark.parametrize(
+    ("minimum_kg", "increment_kg", "expected_mass", "assumption"),
+    [
+        (100.0, None, 100.0, "청구 단위 미확인 · 추가 올림 없음 가정"),
+        (None, 10.0, 30.0, "최소 청구량 미확인 · 입력 질량을 하한으로 가정"),
+    ],
+)
+def test_selected_company_preserves_each_published_billing_rule(
+    minimum_kg: float | None,
+    increment_kg: float | None,
+    expected_mass: float,
+    assumption: str,
+) -> None:
+    catalog = load_catalog()
+    provider = next(provider for provider in catalog.providers if provider.id == "spacex")
+    flight = provider.flights[0]
+    assert flight.pricing is not None
+    pricing = flight.pricing.model_copy(
+        update={"minimum_billable_kg": minimum_kg, "billing_increment_kg": increment_kg}
+    )
+    updated = provider.model_copy(
+        update={"flights": [flight.model_copy(update={"pricing": pricing})]}
+    )
+    catalog = catalog.model_copy(
+        update={
+            "providers": [updated if item.id == provider.id else item for item in catalog.providers]
+        }
+    )
+    launch = Launch(
+        id="partial-billing",
+        provider_id="spacex",
+        name="SpaceX flight",
+        launch_provider="SpaceX",
+        label="January 6",
+        sources=[],
+    )
+    model = company_model(catalog, launch, mass_kg=24, delivery="surface")
+    assert model.billable_mass_kg == expected_mass
+    assert assumption in model.assumptions
+
+
 def test_selected_launch_uses_operator_tariff_not_delivery_owner_or_another_company_minimum() -> (
     None
 ):

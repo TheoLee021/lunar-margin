@@ -15,7 +15,7 @@ from lunar_margin.engine.provider_pricing import (
     Model,
     ProviderId,
     Source,
-    billable_mass,
+    estimated_billable_mass,
 )
 
 
@@ -56,13 +56,7 @@ def company_model(
     reference = min(public, key=lambda pricing: pricing.usd_per_kg, default=None)
     tariff = reference.usd_per_kg if reference else TARIFFS[delivery]
     fixed = reference.fixed_usd if reference and reference.fixed_usd is not None else FIXED_LOW
-    mass = (
-        billable_mass(reference, mass_kg)
-        if reference
-        and reference.minimum_billable_kg is not None
-        and reference.billing_increment_kg is not None
-        else mass_kg
-    )
+    mass, billing_assumptions = estimated_billable_mass(reference, mass_kg)
     assumptions = [
         "선택한 발사사의 단가를 적용한 달 배송 데모 모델",
         "실제 발사 임무·운항 기간·배송 가능 여부와의 연계 미확인",
@@ -72,12 +66,7 @@ def company_model(
         assumptions.append("회사 단가 미공개 · 배송 방식별 공통 참조 단가 사용")
     if reference is None or reference.fixed_usd is None:
         assumptions.append("고정비 $500,000 모델값 적용")
-    if (
-        reference is None
-        or reference.minimum_billable_kg is None
-        or reference.billing_increment_kg is None
-    ):
-        assumptions.append("최소 청구량·청구 단위 미확인 · 입력 질량 비례 가정")
+    assumptions.extend(billing_assumptions)
     return CompanyModel(
         launch_id=launch.id,
         launch_name=launch.name,

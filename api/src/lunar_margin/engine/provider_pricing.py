@@ -223,6 +223,26 @@ def billable_mass(pricing: PublishedPricing, mass_kg: float) -> float:
     return float(units * Decimal(str(step)))
 
 
+def estimated_billable_mass(
+    pricing: PublishedPricing | None, mass_kg: float
+) -> tuple[float, list[str]]:
+    """Retain each known billing rule and disclose assumptions for missing components."""
+    if pricing is None:
+        return mass_kg, ["최소 청구량·청구 단위 미확인 · 입력 질량 비례 가정"]
+    assumptions: list[str] = []
+    if pricing.minimum_billable_kg is None:
+        assumptions.append("최소 청구량 미확인 · 입력 질량을 하한으로 가정")
+    if pricing.billing_increment_kg is None:
+        assumptions.append("청구 단위 미확인 · 추가 올림 없음 가정")
+    modeled = pricing.model_copy(
+        update={
+            "minimum_billable_kg": pricing.minimum_billable_kg or 0.0,
+            "billing_increment_kg": pricing.billing_increment_kg or 0.0,
+        }
+    )
+    return billable_mass(modeled, mass_kg), assumptions
+
+
 def assess_catalog(catalog: Catalog, context: QuoteContext) -> list[ProviderOffer]:
     return [
         ProviderOffer(
@@ -337,15 +357,8 @@ def estimate_terms(flight: Flight, context: QuoteContext) -> tuple[float, float,
         assumptions.append("회사 단가 미공개 · 기존 배송 방식별 공통 참조 단가 사용")
     if pricing is None or pricing.fixed_usd is None:
         assumptions.append("고정비 $500,000 모델값 적용")
-    if (
-        pricing
-        and pricing.minimum_billable_kg is not None
-        and pricing.billing_increment_kg is not None
-    ):
-        mass = billable_mass(pricing, context.mass_kg)
-    else:
-        mass = context.mass_kg
-        assumptions.append("최소 청구량·청구 단위 미확인 · 입력 질량 비례 가정")
+    mass, billing_assumptions = estimated_billable_mass(pricing, context.mass_kg)
+    assumptions.extend(billing_assumptions)
     if flight.destination is None:
         assumptions.append("이 위치의 배송 가능 여부 미확인")
     return tariff, fixed, mass, assumptions

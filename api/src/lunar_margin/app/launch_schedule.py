@@ -67,7 +67,24 @@ class ScheduleReader:
         return self.data
 
     def read(self) -> LaunchSchedule:
-        with self.lock:
+        if time.monotonic() < self.expires:
+            return self.data
+        if not self.lock.acquire(blocking=False):
+            previous = self.data
+            return previous.model_copy(
+                update={
+                    "sources": [
+                        source.model_copy(
+                            update={
+                                "stale": True,
+                                "error": source.error or "일정 갱신 중 · 마지막 확인 자료",
+                            }
+                        )
+                        for source in previous.sources
+                    ]
+                }
+            )
+        try:
             if time.monotonic() < self.expires:
                 return self.data
             records: list[Launch] = []
@@ -126,6 +143,8 @@ class ScheduleReader:
             self.data = LaunchSchedule(launches=merge_launches(records), sources=states)
             self.expires = time.monotonic() + 600
             return self.data
+        finally:
+            self.lock.release()
 
 
 @lru_cache(maxsize=1)

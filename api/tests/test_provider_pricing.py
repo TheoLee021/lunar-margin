@@ -190,6 +190,46 @@ def test_published_decimal_billing_step_does_not_round_fourteen_units_up_to_fift
     assert billable_mass(step, 0.14) == 0.14
 
 
+@pytest.mark.parametrize(
+    ("minimum_kg", "increment_kg", "mass_kg", "expected_usd", "assumption"),
+    [
+        (3.0, None, 1.0, 300.0, "청구 단위 미확인 · 추가 올림 없음 가정"),
+        (None, 2.0, 1.0, 200.0, "최소 청구량 미확인 · 입력 질량을 하한으로 가정"),
+        (None, 0.01, 0.14, 14.0, "최소 청구량 미확인 · 입력 질량을 하한으로 가정"),
+    ],
+)
+def test_estimates_preserve_each_published_billing_rule_without_creating_a_quote(
+    minimum_kg: float | None,
+    increment_kg: float | None,
+    mass_kg: float,
+    expected_usd: float,
+    assumption: str,
+) -> None:
+    catalog = published_catalog()
+    provider = catalog.providers[0]
+    flight = provider.flights[0]
+    assert flight.pricing is not None
+    pricing = flight.pricing.model_copy(
+        update={"minimum_billable_kg": minimum_kg, "billing_increment_kg": increment_kg}
+    )
+    updated = provider.model_copy(
+        update={"flights": [flight.model_copy(update={"pricing": pricing})]}
+    )
+    catalog = catalog.model_copy(update={"providers": [updated, *catalog.providers[1:]]})
+    context = QuoteContext(
+        estimate=True,
+        departure_date=date(2027, 1, 6),
+        landing_date=date(2027, 1, 10),
+        mass_kg=mass_kg,
+        delivery="surface",
+    )
+    offer = compare_grid(catalog, context, x_m=0, y_m=0, destination_multiplier=1)[0]
+    assert offer.minimum_estimate_usd == pytest.approx(expected_usd)
+    assert assumption in offer.flights[0].estimate_assumptions
+    assert offer.minimum_usd is None
+    assert offer.flights[0].price_usd is None
+
+
 def test_api_averages_all_original_grids_and_detail_lists_all_six_providers(tmp_path: Path) -> None:
     mission = MissionRequest(landing_date=date(2027, 1, 10), mission_duration_days=14)
     root = tmp_path / "candidates" / mission.run_id()

@@ -640,7 +640,7 @@ flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
 `POST /pricing/providers/calendar`는 `estimate: true`일 때만
 `selected_launch_id?: string|null`을 받는다. `/launches`에서 선택한 실제 ID를 보내면
 캐시된 일정의 **발사사**로 회사 모델을 결정한다. 브라우저가 보낸 회사명·단가를 신뢰하지
-않는다. ID가 없으면 기존 6사 최저가 평균 모드다. 존재하지 않는 ID는 409,
+않는다. ID가 없으면 해당 UTC 출발일에 등록된 발사사들의 격자별 최저가 평균 모드다. 존재하지 않는 ID는 409,
 견적 모드에서 ID 지정은 422다. 계산 중 외부 일정 수집을 기다리거나 다시 실행하지 않는다.
 
 선택 시 응답 `selection`은 `{launch_id, launch_name, company_id: ProviderId|null,
