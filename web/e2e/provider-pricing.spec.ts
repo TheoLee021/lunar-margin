@@ -149,23 +149,11 @@ test('launch departure changes independently from the user landing date', async 
     page.getByLabel('기준 출발일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-06')
   await expect(landing).toHaveValue('2027-01-12')
-  const allMissions = picker.getByRole('region', {
-    name: '전체 발사 일정 목록',
-  })
-  await expect(allMissions.getByRole('heading')).toHaveCount(7)
-  await picker
-    .getByLabel('회사별 일정', { exact: true })
-    .selectOption('blue_origin')
-  await expect(allMissions).toContainText('March 2027')
-  await expect(allMissions).toContainText('출발 일자 미정')
   await expect(
-    allMissions.getByRole('button', { name: /출발일로 선택/ }),
+    picker.getByRole('region', { name: '전체 발사 일정 목록' }),
   ).toHaveCount(0)
-  await picker
-    .getByLabel('회사별 일정', { exact: true })
-    .selectOption('lockheed_martin')
-  await expect(allMissions).toContainText('두 사이트에 등록된 발사 일정 없음')
-  await expect(landing).toHaveValue('2027-01-12')
+  await expect(picker.getByLabel('회사별 일정', { exact: true })).toHaveCount(0)
+  await expect(picker.getByRole('searchbox')).toHaveCount(0)
   await expect(
     picker.locator('option[value="blue-moon-pathfinder"]'),
   ).toBeDisabled()
@@ -175,14 +163,9 @@ test('launch departure changes independently from the user landing date', async 
     'href',
     'https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/',
   )
-  await picker.getByLabel('회사별 일정', { exact: true }).selectOption('other')
-  await picker.getByLabel('임무·발사사 검색', { exact: true }).fill('Amazon')
-  await expect(allMissions).toContainText('일반 발사 · 데모')
-  await allMissions
-    .getByRole('button', {
-      name: 'Amazon Leo (LV-01) 2026-11-15 출발일로 선택',
-    })
-    .click()
+  await picker
+    .getByLabel('발사 일정에서 출발일 선택 · UTC')
+    .selectOption('amazon-demo')
   await expect(
     page.getByLabel('기준 출발일 · UTC', { exact: true }),
   ).toHaveValue('2026-11-15')

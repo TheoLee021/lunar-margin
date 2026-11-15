@@ -122,8 +122,8 @@ reference model. Clearing the selection restores the six-company minimum compari
 Only published exact departure days have prices and links; selecting a flight enables
 only its scheduled day, and unscheduled departure dates cannot be applied.
 The selected launch ID persists through applying dates and opening candidate searches.
-Source precision, update time and stale fallback
-are visible. Clicking a completed date opens its saved candidate search and carries
+A compact selector retains date precision and source links without a separate
+launch catalog, company filter, or search panel. Clicking a completed date opens its saved candidate search and carries
 departure, landing, duration, mass and delivery mode. Details display all six companies.
 The strict public-quote API remains available separately and never fills unknown
 quotes with model estimates. See [schedule integration and assumptions](docs/launch-schedule.md).
