@@ -284,7 +284,7 @@ def evaluate_reference(
             speed_mps=round(float(np.linalg.norm(v[i])), 2),
             thrust_n=round(float(thrust[i]), 2),
             mass_kg=round(float(mass[i]), 3),
-            moon_me_xyz_m=[round(float(value), 2) for value in r[i]],
+            moon_me_xyz_m=[round(float(r[i, j]), 2) for j in range(3)],
         )
         for i in indices
     ]
