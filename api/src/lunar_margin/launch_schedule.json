@@ -1,11 +1,327 @@
 {
   "launches": [
     {
-      "id": "griffin-1",
+      "id": "sfn-5f670312-f15b-4daf-9ef5-09b3101f05e9",
+      "provider_id": null,
+      "name": "Amazon Leo (LV-01)",
+      "launch_provider": "United Launch Alliance (ULA)",
+      "lunar_related": false,
+      "departure_date": "2026-11-15",
+      "label": "November 15 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 15"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-vc6l-amazon-leo-lv-01/",
+          "label": "Sun • Nov 15th, 2026 5:11 PM GMT"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-1a36fa8c-5265-4438-8f54-ebd4f482c30a",
+      "provider_id": "spacex",
+      "name": "USSF-317",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": "2026-11-18",
+      "label": "November 18 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 18"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-ussf-317/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-170906",
+      "provider_id": null,
+      "name": "Unknown Payload",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": "2026-11-18",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-2d-unknown-payload/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-170364",
+      "provider_id": null,
+      "name": "SatNet LEO Group TBD?",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": "2026-11-20",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-8a-satnet-leo-group-tbd/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-be31d750-3ec2-48c4-a2c1-205f4a28ef80",
+      "provider_id": "spacex",
+      "name": "NROL-136",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": "2026-11-21",
+      "label": "November 21 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 21"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-nrol-136/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "northrop_grumman",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-07420725-9772-4803-b9e2-e09ae341a4ce",
+      "provider_id": null,
+      "name": "Amazon Leo (LE-04)",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": "2026-11-23",
+      "label": "November 23 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 23"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-64-block-2-amazon-leo-le-04/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-7a6e95ed-b3a1-4091-835d-705367bcf3b5",
+      "provider_id": "spacex",
+      "name": "USSF-266",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": "2026-11-23",
+      "label": "November 23 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 23"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-ussf-266/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-b2589c5c-af7f-46bf-92de-ab4082b81c93",
+      "provider_id": null,
+      "name": "Progress MS-36",
+      "launch_provider": "Roscosmos",
+      "lunar_related": false,
+      "departure_date": "2026-11-24",
+      "label": "November 24 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 24"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/soyuz-21b-progress-ms-36-97p/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-170365",
+      "provider_id": null,
+      "name": "SatNet LEO Group TBD?",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": "2026-11-24",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-12-satnet-leo-group-tbd/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-1495",
+      "provider_id": null,
+      "name": "Shenzhou 24",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": "2026-11-25",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-2fg-shenzhou-24/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-102287",
+      "provider_id": null,
+      "name": "AT-Astra and Others (Spectrum Flight 3)",
+      "launch_provider": "Isar Aerospace",
+      "lunar_related": false,
+      "departure_date": "2026-11-26",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spectrum-at-astra-and-others-spectrum-flight-3/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-1500",
+      "provider_id": "spacex",
+      "name": "Cygnus CRS-2 NG-25",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": "2026-11-29",
+      "label": "November, 2026 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-cygnus-crs-2-ng-25/",
+          "label": "November, 2026"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "northrop_grumman",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "sfn-61d32bcb-d7f2-4a12-9657-855ba6e01f82",
+      "provider_id": "spacex",
+      "name": "Cygnus NG-25",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": "2026-11-29",
+      "label": "November 29 · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "November 29"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "northrop_grumman",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-170397",
       "provider_id": "voyager",
       "name": "Griffin Mission One",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": "2027-01-06",
-      "label": "Wed • Jan 6th, 2027 · NET/TBD",
+      "label": "January, 2027 · NET/TBD",
       "confirmed": false,
       "sources": [
         {
@@ -16,7 +332,7 @@
         {
           "name": "Space Launch Schedule",
           "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-griffin-mission-one/",
-          "label": "Wed • Jan 6th, 2027"
+          "label": "January, 2027"
         }
       ],
       "participants": [
@@ -32,9 +348,192 @@
       "date_precision": "day"
     },
     {
-      "id": "artemis-iii",
+      "id": "sls-169062",
+      "provider_id": null,
+      "name": "Starliner-1",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": "2027-01-14",
+      "label": "January, 2027 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/atlas-v-n22-starliner-1/",
+          "label": "January, 2027"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-137446",
+      "provider_id": null,
+      "name": "Aspera",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": "2027-01-29",
+      "label": "January, 2027 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-aspera/",
+          "label": "January, 2027"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-156884",
+      "provider_id": null,
+      "name": "QuickSounder",
+      "launch_provider": "Firefly Aerospace",
+      "lunar_related": false,
+      "departure_date": "2027-02-15",
+      "label": "February, 2027 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/firefly-alpha-block-2-quicksounder/",
+          "label": "February, 2027"
+        }
+      ],
+      "participants": [],
+      "date_precision": "day"
+    },
+    {
+      "id": "sls-114418",
+      "provider_id": null,
+      "name": "1 x Pelican satellite",
+      "launch_provider": "Isar Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spectrum-1-x-pelican-satellite/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63912",
+      "provider_id": null,
+      "name": "2 x Tritó",
+      "launch_provider": "Payload Aerospace S.L.",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/miura-5-2-x-trito/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-146598",
+      "provider_id": null,
+      "name": "ADRAS-J2",
+      "launch_provider": "Isar Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spectrum-adras-j2/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63877",
+      "provider_id": "spacex",
+      "name": "Al Yah 4",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-al-yah-4/",
+          "label": "2027년 하반기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63920",
+      "provider_id": null,
+      "name": "Amazonia-1B",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-amazonia-1b/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63871",
+      "provider_id": "spacex",
+      "name": "Arabsat 7A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-10 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-arabsat-7a/",
+          "label": "2027-10 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63254",
       "provider_id": "blue_origin",
       "name": "Artemis III",
+      "launch_provider": "NASA Artemis III SLS Block 1 Rocket Launch",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027-06 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -58,9 +557,30 @@
       "date_precision": "month"
     },
     {
-      "id": "astrobotic-3",
+      "id": "sls-151450",
+      "provider_id": null,
+      "name": "AstroForge Autonomy-1 (Demo Flight)",
+      "launch_provider": "Stoke Space",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/nova-astroforge-autonomy-1-demo-flight/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63905",
       "provider_id": "voyager",
       "name": "Astrobotic-3",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -84,9 +604,97 @@
       "date_precision": "year"
     },
     {
-      "id": "blue-ghost-lunar-lander-2",
+      "id": "sls-63234",
+      "provider_id": "spacex",
+      "name": "Axiom Space Mission 5",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-01 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-axiom-space-mission-5/",
+          "label": "2027-01 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-165137",
+      "provider_id": "spacex",
+      "name": "Bandwagon 6 (Dedicated Mid-Inclination Rideshare)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-04 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-bandwagon-6-dedicated-mid-inclina/",
+          "label": "2027-04 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170566",
+      "provider_id": null,
+      "name": "BlackSky Gen-3 8",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-blacksky-gen-3-8/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170567",
+      "provider_id": null,
+      "name": "BlackSky Gen-3 9",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-blacksky-gen-3-9/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-137450",
       "provider_id": "spacex",
       "name": "Blue Ghost Lunar Lander Mission 2",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -106,9 +714,11 @@
       "date_precision": "year"
     },
     {
-      "id": "blue-moon-pathfinder",
+      "id": "sls-102281",
       "provider_id": "blue_origin",
       "name": "Blue Moon Pathfinder",
+      "launch_provider": "Blue Origin",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -128,9 +738,11 @@
       "date_precision": "quarter"
     },
     {
-      "id": "blue-moon-pathfinder-2-viper",
+      "id": "sls-63875",
       "provider_id": "blue_origin",
       "name": "Blue Moon Pathfinder Mission 2 & VIPER",
+      "launch_provider": "Blue Origin Blue Moon Pathfinder Mission 2 & VIPER New Glenn Rocket Launch",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 4분기 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -150,9 +762,1468 @@
       "date_precision": "quarter"
     },
     {
-      "id": "nova-c-im-3",
+      "id": "sls-170565",
+      "provider_id": "blue_origin",
+      "name": "Blue Ring-1",
+      "launch_provider": "Blue Origin",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-01 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/new-glenn-blue-ring-1/",
+          "label": "2027-01 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "blue_origin",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170131",
+      "provider_id": "spacex",
+      "name": "BlueBird 14-16 (Block 2 #9-11)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-bluebird-14-16-block-2-9-11/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-1486",
+      "provider_id": "spacex",
+      "name": "CHORUS",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-12 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-chorus/",
+          "label": "2026-12 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63869",
+      "provider_id": "spacex",
+      "name": "COSI (Compton Spectrometer and Imager)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-08 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-cosi-compton-spectrometer-and-ima/",
+          "label": "2027-08 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "northrop_grumman",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170189",
+      "provider_id": null,
+      "name": "CRISTAL-A",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-cristal-a/",
+          "label": "2027년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63256",
+      "provider_id": null,
+      "name": "CSG-4",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 상반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-csg-4/",
+          "label": "2027년 상반기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63909",
+      "provider_id": null,
+      "name": "Chandrayaan-4 First Launch",
+      "launch_provider": "ISRO",
+      "lunar_related": true,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/lvm-3-chandrayaan-4-first-launch/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63910",
+      "provider_id": null,
+      "name": "Chandrayaan-4 Second Launch",
+      "launch_provider": "ISRO",
+      "lunar_related": true,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/lvm-3-chandrayaan-4-second-launch/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sfn-90f7eb63-aa5e-4bbc-a570-48b74b188d79",
+      "provider_id": null,
+      "name": "Chang'e 7",
+      "launch_provider": "CASC",
+      "lunar_related": true,
+      "departure_date": null,
+      "label": "TBD · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "TBD"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-5-change-7/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "unknown"
+    },
+    {
+      "id": "sls-63892",
+      "provider_id": "spacex",
+      "name": "Chinggis Sat",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-chinggis-sat/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170883",
+      "provider_id": null,
+      "name": "ConnectedCosmos Launch 3",
+      "launch_provider": "Firefly Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/firefly-alpha-block-2-connectedcosmos-launch-3/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170884",
+      "provider_id": null,
+      "name": "ConnectedCosmos Launch 4",
+      "launch_provider": "Firefly Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/firefly-alpha-block-2-connectedcosmos-launch-4/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-165109",
+      "provider_id": "spacex",
+      "name": "Crew-14",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-03 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-crew-14/",
+          "label": "2027-03 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170030",
+      "provider_id": "spacex",
+      "name": "Cygnus CRS-2 NG-22",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-cygnus-crs-2-ng-22/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-102288",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "Deep Blue Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/nebula-1-demo-flight/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-128599",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "MaiaSpace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/maia-demo-flight/",
+          "label": "2027년 하반기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-144158",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "Agency for Defense Development",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/mir-demo-flight/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-1560",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "i-Space",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/hyperbola-3-demo-flight/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-1561",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-10a-demo-flight/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63907",
+      "provider_id": null,
+      "name": "Demo Flight",
+      "launch_provider": "CASC",
+      "lunar_related": true,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-10-demo-flight/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-161495",
+      "provider_id": null,
+      "name": "ELS-R1",
+      "launch_provider": "Isar Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spectrum-els-r1/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-137447",
+      "provider_id": null,
+      "name": "EOS-10 (Oceansat-3A)",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-01 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/pslv-xl-eos-10-oceansat-3a/",
+          "label": "2027-01 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-90623",
+      "provider_id": "northrop_grumman",
+      "name": "EWS OD-1",
+      "launch_provider": "Northrop Grumman",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 상반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/minotaur-iv-ews-od-1/",
+          "label": "2027년 상반기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "northrop_grumman",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-84133",
+      "provider_id": "spacex",
+      "name": "Exolaunch Exo-1",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-exolaunch-exo-1/",
+          "label": "2027년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63878",
+      "provider_id": "spacex",
+      "name": "FOO Fighter (F2)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-foo-fighter-f2/",
+          "label": "2027년 하반기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63923",
+      "provider_id": null,
+      "name": "FORUM",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-forum/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63886",
+      "provider_id": null,
+      "name": "Flight 1",
+      "launch_provider": "National Center of Space Research",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/callisto-flight-1/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-157675",
+      "provider_id": null,
+      "name": "Flight 2",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-12a-flight-2/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-167125",
+      "provider_id": null,
+      "name": "Flight 2",
+      "launch_provider": "HyImpulse",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 2분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/sr75-flight-2/",
+          "label": "2027년 2분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-102280",
+      "provider_id": null,
+      "name": "Flight Two",
+      "launch_provider": "Gilmour Space Technologies",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/eris-1-flight-two/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63879",
+      "provider_id": "spacex",
+      "name": "GEO-KOMPSAT-3",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-geo-kompsat-3/",
+          "label": "2027년 하반기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-135047",
+      "provider_id": null,
+      "name": "Gaganyaan-1",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/lvm-3-gaganyaan-1/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-137451",
+      "provider_id": null,
+      "name": "Gaganyaan-2",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/lvm-3-gaganyaan-2/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-169518",
+      "provider_id": null,
+      "name": "Galileo L15 (FOC FM28 & FM31)",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-62-galileo-l15-foc-fm28-fm31/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63241",
+      "provider_id": null,
+      "name": "Galileo L16 (FOC FM29 & FM30)",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-62-galileo-l16-foc-fm29-fm30/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-1524",
+      "provider_id": "spacex",
+      "name": "Globalstar 2-R Mission 2 (x 9)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-12 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-globalstar-2-r-mission-2-x-9/",
+          "label": "2026-12 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-169358",
+      "provider_id": null,
+      "name": "HTV-X2",
+      "launch_provider": "Mitsubishi Heavy Industries",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/h3-24-htv-x2/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-90624",
+      "provider_id": "spacex",
+      "name": "Haven-1 Crew-1",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-07 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-haven-1-crew-1/",
+          "label": "2027-07 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63881",
+      "provider_id": null,
+      "name": "Hellas Sat 5",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-64-hellas-sat-5/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-165140",
+      "provider_id": null,
+      "name": "IDRSS-1",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/gslv-mk-ii-idrss-1/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-161493",
+      "provider_id": null,
+      "name": "IGS Optical Diversification 2",
+      "launch_provider": "Mitsubishi Heavy Industries",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/h3-30-igs-optical-diversification-2/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-90625",
+      "provider_id": null,
+      "name": "INCUS",
+      "launch_provider": "Firefly Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/firefly-alpha-block-2-incus/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170946",
+      "provider_id": null,
+      "name": "IRIDE 1",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-iride-1/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170947",
+      "provider_id": null,
+      "name": "IRIDE 2",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-iride-2/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-151452",
+      "provider_id": null,
+      "name": "IRNSS-1M (NVS-04)",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/gslv-mk-ii-irnss-1m-nvs-04/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-151453",
+      "provider_id": null,
+      "name": "IRNSS-1N (NVS-05)",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/gslv-mk-ii-irnss-1n-nvs-05/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63250",
+      "provider_id": null,
+      "name": "ISSA-J1",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 2분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/pslv-ca-issa-j1/",
+          "label": "2027년 2분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-167126",
+      "provider_id": null,
+      "name": "InnoSat-0",
+      "launch_provider": "Innospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 상반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/hanbit-nano-innosat-0/",
+          "label": "2027년 상반기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170940",
+      "provider_id": null,
+      "name": "Intelsat-1",
+      "launch_provider": "Relativity Space",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/terran-r-intelsat-1/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63874",
+      "provider_id": "spacex",
+      "name": "JPSS 4 (Joint Polar Satellite System spacecraft No. 4)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-12 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-jpss-4-joint-polar-satellite-syst/",
+          "label": "2027-12 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63893",
+      "provider_id": "spacex",
+      "name": "JSAT-32",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-jsat-32/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170658",
+      "provider_id": null,
+      "name": "JV-LOTUSat-1",
+      "launch_provider": "Japan Aerospace Exploration Agency",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/epsilon-s-jv-lotusat-1/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-102285",
+      "provider_id": null,
+      "name": "KOMPSAT-6 & PLATiNO 1",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-04 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-kompsat-6-platino-1/",
+          "label": "2027-04 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-109179",
+      "provider_id": "spacex",
+      "name": "KOMPSAT-7A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-06 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-kompsat-7a/",
+          "label": "2027-06 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170145",
+      "provider_id": null,
+      "name": "Leidos-3",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/haste-leidos-3/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170146",
+      "provider_id": null,
+      "name": "Leidos-4",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/haste-leidos-4/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-1559",
+      "provider_id": null,
+      "name": "Leidos-5",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/haste-leidos-5/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-156882",
+      "provider_id": null,
+      "name": "Maiden Flight",
+      "launch_provider": "Astra Space",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/astra-rocket-4-maiden-flight/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170029",
+      "provider_id": null,
+      "name": "Maiden Flight",
+      "launch_provider": "Payload Aerospace S.L.",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 상반기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/miura-5-maiden-flight/",
+          "label": "2027년 상반기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170660",
+      "provider_id": null,
+      "name": "Maiden Flight",
+      "launch_provider": "Rocket Factory Augsburg",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/rfa-one-maiden-flight/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170964",
+      "provider_id": null,
+      "name": "Maiden Flight",
+      "launch_provider": "Latitude",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/zephyr-maiden-flight/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63915",
+      "provider_id": null,
+      "name": "Maiden flight",
+      "launch_provider": "Skyrora",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/skyrora-xl-maiden-flight/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63924",
+      "provider_id": null,
+      "name": "Maiden flight",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-e-maiden-flight/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170942",
+      "provider_id": null,
+      "name": "Mars Lander",
+      "launch_provider": "Relativity Space",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/terran-r-mars-lander/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170128",
+      "provider_id": null,
+      "name": "Metop-SG B1",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-12 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-62-metop-sg-b1/",
+          "label": "2026-12 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sfn-a26d2987-8703-400a-9bab-05f41a5d8456",
+      "provider_id": "spacex",
+      "name": "NROL-195",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "TBD · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "TBD"
+        },
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-nrol-195/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        },
+        {
+          "provider_id": "northrop_grumman",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "unknown"
+    },
+    {
+      "id": "sls-170952",
+      "provider_id": null,
+      "name": "NROL-73",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-nrol-73/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170953",
+      "provider_id": null,
+      "name": "NROL-83",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-nrol-83/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63258",
+      "provider_id": "spacex",
+      "name": "NROL-86",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "FY 2027 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-heavy-nrol-86/",
+          "label": "FY 2027 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "unknown"
+    },
+    {
+      "id": "sls-63913",
+      "provider_id": null,
+      "name": "NZSA Venus Mission",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/neutron-nzsa-venus-mission/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63914",
+      "provider_id": null,
+      "name": "NeonSat-7 to 11",
+      "launch_provider": "Korea Aerospace Research Institute",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/nuri-neonsat-7-to-11/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-137449",
       "provider_id": "spacex",
       "name": "Nova-C IM-3",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -172,9 +2243,11 @@
       "date_precision": "quarter"
     },
     {
-      "id": "nova-c-im-4-2-lunar-data-relay-satellites",
+      "id": "sls-63880",
       "provider_id": "spacex",
       "name": "Nova-C IM-4 & 2 Lunar Data Relay Satellites",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027년 하반기 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -194,9 +2267,982 @@
       "date_precision": "year"
     },
     {
-      "id": "spacex-hls-leo-demo",
+      "id": "sls-170232",
+      "provider_id": "spacex",
+      "name": "OneWeb 21",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-oneweb-21/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63911",
+      "provider_id": null,
+      "name": "OneWeb L?",
+      "launch_provider": "MaiaSpace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/maia-oneweb-l/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170944",
+      "provider_id": null,
+      "name": "Owlet-01",
+      "launch_provider": "Unknown",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/unknown-owlet-01/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63233",
+      "provider_id": null,
+      "name": "PLATO",
+      "launch_provider": "Arianespace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-03 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/ariane-62-block-2-plato/",
+          "label": "2027-03 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-146597",
+      "provider_id": null,
+      "name": "PLATiNO 2",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-platino-2/",
+          "label": "2027-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-102283",
+      "provider_id": null,
+      "name": "PolSIR-1",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-06 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-polsir-1/",
+          "label": "2027-06 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-102284",
+      "provider_id": null,
+      "name": "PolSIR-2",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-06 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-polsir-2/",
+          "label": "2027-06 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63918",
+      "provider_id": null,
+      "name": "Purdue 1",
+      "launch_provider": "Virgin Galactic",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spaceshiptwo-purdue-1/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-165144",
+      "provider_id": null,
+      "name": "RISAT-2A",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/pslv-risat-2a/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-1529",
+      "provider_id": "spacex",
+      "name": "Rivada 1",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-1/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-67833",
+      "provider_id": "spacex",
+      "name": "Rivada 10",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-10/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-67834",
+      "provider_id": "spacex",
+      "name": "Rivada 11",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-11/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-67835",
+      "provider_id": "spacex",
+      "name": "Rivada 12",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-12/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170139",
+      "provider_id": "spacex",
+      "name": "Rivada 2",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-2/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-1531",
+      "provider_id": "spacex",
+      "name": "Rivada 3",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-3/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170140",
+      "provider_id": "spacex",
+      "name": "Rivada 4",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-4/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-67838",
+      "provider_id": "spacex",
+      "name": "Rivada 9",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-rivada-9/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-165110",
+      "provider_id": null,
+      "name": "SBS-3",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-03 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/sslv-sbs-3/",
+          "label": "2027-03 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170133",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 1 Tracking Layer A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-1-tracking-layer-a/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170954",
+      "provider_id": null,
+      "name": "SDA Tranche 1 Tracking Layer B",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-sda-tranche-1-tracking-layer-b/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-144153",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 1 Tracking Layer C",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-1-tracking-layer-c/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-30507",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 1 Tracking Layer D",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-1-tracking-layer-d/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170955",
+      "provider_id": null,
+      "name": "SDA Tranche 1 Tracking Layer E",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-sda-tranche-1-tracking-layer-e/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170134",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 1 Transport Layer D",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-1-transport-layer-d/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-144156",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 1 Transport Layer F",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 4분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-1-transport-layer-f/",
+          "label": "2026년 4분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170142",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Tracking Layer A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-tracking-layer-a/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-119883",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Tracking Layer B",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-tracking-layer-b/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63249",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Tracking Layer D",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 2분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-tracking-layer-d/",
+          "label": "2027년 2분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-119884",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-a/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170956",
+      "provider_id": null,
+      "name": "SDA Tranche 2 Transport Layer B",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-sda-tranche-2-transport-layer-b/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63235",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer C",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-01 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-c/",
+          "label": "2027-01 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-1475",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer D",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-12 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-d/",
+          "label": "2026-12 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63236",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer F",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-01 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-f/",
+          "label": "2027-01 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63237",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer G",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-02 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-g/",
+          "label": "2027-02 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63240",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer H",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-03 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-h/",
+          "label": "2027-03 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63245",
+      "provider_id": "spacex",
+      "name": "SDA Tranche 2 Transport Layer I",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-05 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sda-tranche-2-transport-layer-i/",
+          "label": "2027-05 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63238",
+      "provider_id": "spacex",
+      "name": "SICRAL 3A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-02 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sicral-3a/",
+          "label": "2027-02 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63872",
+      "provider_id": "spacex",
+      "name": "SICRAL 3B",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-sicral-3b/",
+          "label": "2027-11 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170957",
+      "provider_id": null,
+      "name": "SILENTBARKER 2/NROL-118",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-silentbarker-2nrol-118/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-109182",
+      "provider_id": null,
+      "name": "STP-5",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-stp-5/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63873",
+      "provider_id": null,
+      "name": "Sentinel CO2M-A",
+      "launch_provider": "Avio S.p.A",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vega-c-sentinel-co2m-a/",
+          "label": "2027-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63894",
+      "provider_id": "spacex",
+      "name": "Skynet 6A",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-skynet-6a/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-128598",
+      "provider_id": null,
+      "name": "Soyuz MS-30",
+      "launch_provider": "ROSCOSMOS",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-03 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/soyuz-21a-soyuz-ms-30/",
+          "label": "2027-03 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63919",
+      "provider_id": null,
+      "name": "Space MAITRI",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/sslv-space-maitri/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-140196",
       "provider_id": "spacex",
       "name": "SpaceX HLS LEO Demo",
+      "launch_provider": "SpaceX SpaceX HLS LEO Demo Starship Rocket Launch",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027-06 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -220,9 +3266,533 @@
       "date_precision": "month"
     },
     {
-      "id": "turkish-lunar-mission-1",
+      "id": "sfn-dac4829a-e825-448d-9fee-5b3f13de3e3e",
+      "provider_id": "spacex",
+      "name": "Starlink 15-21",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "TBD · 잠정 일정",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Spaceflight Now",
+          "url": "https://spaceflightnow.com/launch-schedule/",
+          "label": "TBD"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "unknown"
+    },
+    {
+      "id": "sls-170127",
+      "provider_id": "spacex",
+      "name": "Starlink Group 15-21",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-starlink-group-15-21/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170983",
+      "provider_id": null,
+      "name": "StriX Launch 14",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-strix-launch-14/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-63888",
+      "provider_id": null,
+      "name": "StriX Launch 15",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-strix-launch-15/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63889",
+      "provider_id": null,
+      "name": "StriX Launch 16",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-strix-launch-16/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-30500",
+      "provider_id": null,
+      "name": "TDS-01",
+      "launch_provider": "ISRO",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/pslv-xl-tds-01/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-102279",
+      "provider_id": null,
+      "name": "TSIS-2",
+      "launch_provider": "Rocket Lab",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/electron-tsis-2/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170885",
+      "provider_id": "lockheed_martin",
+      "name": "TacSat",
+      "launch_provider": "Firefly Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/firefly-alpha-block-2-tacsat/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "lockheed_martin",
+          "role": "partner"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170354",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 1",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 3분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-1/",
+          "label": "2027년 3분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63895",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 10",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-10/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63896",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 11",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-11/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63897",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 12",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-12/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63898",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 13",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-13/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170033",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 4",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-4/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170035",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 6",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-6/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170036",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 7",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-7/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63900",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 8",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-8/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63901",
+      "provider_id": "spacex",
+      "name": "Telesat Lightspeed 9",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-telesat-lightspeed-9/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63902",
+      "provider_id": "spacex",
+      "name": "Thaicom 10",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-thaicom-10/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-90622",
+      "provider_id": null,
+      "name": "Tom & Jerry",
+      "launch_provider": "Isar Aerospace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 2분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/spectrum-tom-jerry/",
+          "label": "2027년 2분기 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-165108",
+      "provider_id": "spacex",
+      "name": "Transporter 19 (Dedicated SSO Rideshare)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-02 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-transporter-19-dedicated-sso-ride/",
+          "label": "2027-02 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-165139",
+      "provider_id": "spacex",
+      "name": "Transporter 21 (Dedicated SSO Rideshare)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027-10 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-transporter-21-dedicated-sso-ride/",
+          "label": "2027-10 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-156885",
+      "provider_id": "spacex",
+      "name": "Trinity",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 2분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-trinity/",
+          "label": "2027년 2분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-169356",
       "provider_id": "spacex",
       "name": "Turkish Lunar Mission-1 (TLM-1)",
+      "launch_provider": "SpaceX",
+      "lunar_related": true,
       "departure_date": null,
       "label": "2027-04 · 정확일 미정 · NET/TBD",
       "confirmed": false,
@@ -240,13 +3810,228 @@
         }
       ],
       "date_precision": "month"
+    },
+    {
+      "id": "sls-170958",
+      "provider_id": null,
+      "name": "USSF-114",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-ussf-114/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63257",
+      "provider_id": "spacex",
+      "name": "USSF-149",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "FY 2027 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-ussf-149/",
+          "label": "FY 2027 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "unknown"
+    },
+    {
+      "id": "sls-1541",
+      "provider_id": "spacex",
+      "name": "USSF-31",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-ussf-31/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-170630",
+      "provider_id": null,
+      "name": "Unknown Payload",
+      "launch_provider": "ExPace",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026-11 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/kuaizhou-11-unknown-payload/",
+          "label": "2026-11 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "month"
+    },
+    {
+      "id": "sls-170945",
+      "provider_id": null,
+      "name": "VCLS Demo 2 Mission One",
+      "launch_provider": "Unknown",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/unknown-vcls-demo-2-mission-one/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-1542",
+      "provider_id": "spacex",
+      "name": "VICTUS SURGO",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-victus-surgo/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-63870",
+      "provider_id": "spacex",
+      "name": "Vast-PAM-1 (Vast ISS Mission 1)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 3분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-vast-pam-1-vast-iss-mission-1/",
+          "label": "2027년 3분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-170963",
+      "provider_id": null,
+      "name": "WGS-11",
+      "launch_provider": "ULA",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2026년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/vulcan-wgs-11/",
+          "label": "2026년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
+    },
+    {
+      "id": "sls-140194",
+      "provider_id": "spacex",
+      "name": "WSF-M2 & BLAZE-2 (USSF-178)",
+      "launch_provider": "SpaceX",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 1분기 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/falcon-9-block-5-wsf-m2-blaze-2-ussf-178/",
+          "label": "2027년 1분기 · 정확일 미정"
+        }
+      ],
+      "participants": [
+        {
+          "provider_id": "spacex",
+          "role": "launch"
+        }
+      ],
+      "date_precision": "quarter"
+    },
+    {
+      "id": "sls-63908",
+      "provider_id": null,
+      "name": "Xuntian Telescope",
+      "launch_provider": "CASC",
+      "lunar_related": false,
+      "departure_date": null,
+      "label": "2027년 · 정확일 미정 · NET/TBD",
+      "confirmed": false,
+      "sources": [
+        {
+          "name": "Space Launch Schedule",
+          "url": "https://www.spacelaunchschedule.com/launch/long-march-5b-xuntian-telescope/",
+          "label": "2027년 · 정확일 미정"
+        }
+      ],
+      "participants": [],
+      "date_precision": "year"
     }
   ],
   "sources": [
     {
       "name": "Spaceflight Now",
       "url": "https://spaceflightnow.com/launch-schedule/",
-      "fetched_at": "2026-11-15T08:56:58.427503Z",
+      "fetched_at": "2026-11-15T09:04:23.635720Z",
       "stale": false,
       "error": null,
       "scanned_records": 11,
@@ -256,13 +4041,14 @@
     {
       "name": "Space Launch Schedule",
       "url": "https://www.spacelaunchschedule.com/",
-      "fetched_at": "2026-11-15T08:57:00.978714Z",
+      "fetched_at": "2026-11-15T09:04:29.082737Z",
       "stale": false,
       "error": null,
-      "scanned_records": 242,
+      "scanned_records": 238,
       "scanned_pages": 26,
       "complete": true
     }
   ],
+  "scope": "all_launches_demo",
   "timezone": "UTC"
 }

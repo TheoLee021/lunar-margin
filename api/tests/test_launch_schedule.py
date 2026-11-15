@@ -59,8 +59,10 @@ def test_schedule_endpoint_keeps_dated_snapshot_when_sources_are_unavailable(
     body = response.json()
     assert body["timezone"] == "UTC"
     assert all(source["stale"] and source["error"] for source in body["sources"])
-    assert body["launches"][0]["departure_date"] == "2027-01-06"
-    assert not body["launches"][0]["confirmed"]
+    # All-launch demo scope adds earlier flights; the saved lunar record must still survive.
+    griffin = next(row for row in body["launches"] if "Griffin Mission" in row["name"])
+    assert griffin["departure_date"] == "2027-01-06"
+    assert not griffin["confirmed"]
 
 
 def test_conflicting_day_sources_do_not_select_a_departure() -> None:
@@ -241,3 +243,42 @@ def test_collection_reads_all_upcoming_pages_and_all_search_pages() -> None:
     assert all(
         row.date_precision == "year" and row.departure_date is None for row in result.launches
     )
+
+
+def test_demo_scope_includes_non_lunar_launches_and_ula() -> None:
+    rows = parse_sfn(
+        json.dumps(
+            {
+                "launches": [
+                    {
+                        "id": "amazon",
+                        "mission_name": "Amazon Leo (LV-01)",
+                        "provider": "United Launch Alliance (ULA)",
+                        "description": "Internet satellites in low Earth orbit",
+                        "launch_date_label": "November 15",
+                        "launch_date_iso": "2026-11-15T17:11:30Z",
+                    },
+                    {
+                        "id": "ussf",
+                        "mission_name": "USSF-317",
+                        "provider": "SpaceX",
+                        "description": "Military LEO mission",
+                        "launch_date_label": "November 18",
+                        "launch_date_iso": "2026-11-18T03:14:00Z",
+                    },
+                ]
+            }
+        ),
+        all_launches=True,
+    )
+    assert [row.name for row in rows] == ["Amazon Leo (LV-01)", "USSF-317"]
+    assert rows[0].provider_id is None
+    assert rows[0].launch_provider == "United Launch Alliance (ULA)"
+    assert str(rows[1].departure_date) == "2026-11-18"
+    assert not any(row.lunar_related for row in rows)
+    # Unnamed payloads can be separate flights from the same operator.
+    first = rows[1].model_copy(
+        update={"id": "sfn-a", "name": "Unknown Payload", "departure_date": None}
+    )
+    second = first.model_copy(update={"id": "sfn-b"})
+    assert len(merge_launches([first, second])) == 2

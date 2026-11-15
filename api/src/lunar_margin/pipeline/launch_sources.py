@@ -1,4 +1,4 @@
-"""Discover a source's complete paginated indexes, then hydrate lunar mission records."""
+"""Discover complete launch indexes and preserve optional lunar-only filtering."""
 
 import calendar
 import re
@@ -99,11 +99,18 @@ def last_page(text: str) -> int:
     return last
 
 
-def collect_sls(fetch: Callable[[str], Fetched], today: date) -> Collected:
+def collect_sls(
+    fetch: Callable[[str], Fetched], today: date, *, all_launches: bool = False
+) -> Collected:
     home = fetch(SLS_URL)
     count = last_page(home.text)
     with ThreadPoolExecutor(max_workers=4) as pool:
         pages = list(pool.map(fetch, [f"{SLS_URL}page/{n}/" for n in range(2, count + 1)]))
+    article_html: dict[int, str] = {}
+    for document in [home, *pages]:
+        for article in re.findall(r"<article\b.*?</article>", document.text, re.S):
+            for post_id in listing_ids(article):
+                article_html[post_id] = article
     ids_set = listing_ids(home.text)
     for page in pages:
         ids_set.update(listing_ids(page.text))
@@ -136,12 +143,15 @@ def collect_sls(fetch: Callable[[str], Fetched], today: date) -> Collected:
     for post in all_posts.values():
         description = unescape(post.yoast_head_json.og_description)
         name = unescape(post.title.rendered).split("|")[-1].strip()
-        if launch_url(post.link) and LUNAR.search(name + " " + description):
-            if participants(name, description, unescape(post.yoast_head_json.og_title)):
+        if launch_url(post.link) and (all_launches or LUNAR.search(name + " " + description)):
+            if all_launches or participants(
+                name, description, unescape(post.yoast_head_json.og_title)
+            ):
                 candidates.append(post)
 
     def detail(post: Post) -> Launch | None:
-        html = fetch(post.link).text
+        html = article_html.get(post.id) if all_launches else None
+        html = html or fetch(post.link).text
         page = Page()
         page.feed(html)
         visible = " ".join(page.text)
@@ -155,13 +165,22 @@ def collect_sls(fetch: Callable[[str], Fetched], today: date) -> Collected:
         ):
             return None
         name = unescape(post.title.rendered).split("|")[-1].strip()
+        agency = re.search(
+            r'<h2[^>]*class=["\x27]entry-title["\x27][^>]*>\s*<span[^>]*>(.*?)</span>', html, re.S
+        )
+        launcher = (
+            unescape(re.sub(r"<[^>]*>", "", agency[1])).strip()
+            if agency
+            else unescape(post.yoast_head_json.og_title)
+        )
         row = parse_sls(
             html,
-            mission_id(name),
+            f"sls-{post.id}" if all_launches else mission_id(name),
             name=name,
             description=unescape(post.yoast_head_json.og_description),
-            launcher=unescape(post.yoast_head_json.og_title),
+            launcher=launcher,
             url=post.link,
+            all_launches=all_launches,
         )
         stamp = re.search(r'launch-time-utc=["\x27]([^"\x27]+)', html)
         date_value = (

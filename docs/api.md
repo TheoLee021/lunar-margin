@@ -534,8 +534,8 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ### 발사 예정일과 모델 예상 비용 (추가)
 
-`GET /pricing/providers/launches` → `{timezone: "UTC", launches, sources}`.
-각 launch는 `{id, provider_id, name, departure_date: date|null, label, confirmed: false,
+`GET /pricing/providers/launches` → `{timezone: "UTC", scope: "all_launches_demo", launches, sources}`.
+각 launch는 `{id, provider_id: ProviderId|null, launch_provider: string, lunar_related: boolean, name, departure_date: date|null, label, confirmed: false,
 sources: [{name, url, label}], date_precision, participants: [{provider_id, role}]}`이다. 월 단위·TBD 일정은 날짜를 null로 반환한다.
 각 source 상태는 `{name, url, fetched_at, stale, error: string|null, scanned_records, scanned_pages, complete}`이다.
 `date_precision`은 day/month/quarter/year/unknown, role은 delivery/launch/partner(본문 관련 언급)다.
@@ -552,3 +552,5 @@ flight의 `estimate_usd`, `estimate_basis` (`public_tariff`|`common_model`),
 `/calendar`의 `estimate`는 요청 모드를 반환하며 모델 평균은 cell.status `estimated`,
 `mean_min_usd`에 담긴다. 기존 전체 격자 평균·부분 산정 규칙은 동일하다.
 날짜와 청구 조건의 해석은 [launch-schedule.md](launch-schedule.md)를 참고한다.
+
+데모에서는 목적지·회사로 목록을 제한하지 않습니다. 일반 발사도 분석용 출발일로 선택할 수 있으며 실제 달 배송 가능성을 뜻하지 않습니다.
