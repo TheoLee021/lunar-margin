@@ -77,10 +77,14 @@ def _sample_descriptors(
     xs = np.concatenate((x - half, x + half, x, x))
     ys = np.concatenate((y, y, y - half, y + half))
     h = dem.sample_height_m(xs, ys).reshape(4, n)
-    slopes = np.degrees(np.arctan(np.hypot(
-        (h[1] - h[0]) / slope_baseline_m,
-        (h[3] - h[2]) / slope_baseline_m,
-    )))
+    slopes = np.degrees(
+        np.arctan(
+            np.hypot(
+                (h[1] - h[0]) / slope_baseline_m,
+                (h[3] - h[2]) / slope_baseline_m,
+            )
+        )
+    )
     win = np.linspace(-roughness_window_m / 2.0, roughness_window_m / 2.0, 5)
     wx, wy = np.meshgrid(win, win)
     ox, oy = wx.ravel(), wy.ravel()
@@ -136,9 +140,7 @@ def evaluate_landing_grid(
     within = (gx * gx + gy * gy) <= limit * limit + 1e-9
     dx, dy = gx[within], gy[within]
     x, y = x0 + dx, y0 + dy
-    slopes, roughness = _sample_descriptors(
-        dem, x, y, slope_baseline_m, roughness_window_m
-    )
+    slopes, roughness = _sample_descriptors(dem, x, y, slope_baseline_m, roughness_window_m)
     valid = np.isfinite(slopes) & np.isfinite(roughness)
     interior = (dx * dx + dy * dy) <= assessment_radius_m**2 + 1e-9
     cells = tuple(
@@ -171,23 +173,33 @@ def evaluate_landing_grid(
             reasons.append("terrain_incomplete")
         if max_slope is not None and max_slope > max_slope_deg:
             reasons.append("terrain_slope_above_max")
-        if (max_roughness_m is not None and max_roughness is not None
-                and max_roughness > max_roughness_m):
+        if (
+            max_roughness_m is not None
+            and max_roughness is not None
+            and max_roughness > max_roughness_m
+        ):
             reasons.append("terrain_roughness_above_max")
         latitude, longitude = polar_xy_to_lonlat(
-            np.array([x[k]], dtype=np.float64), np.array([y[k]], dtype=np.float64),
+            np.array([x[k]], dtype=np.float64),
+            np.array([y[k]], dtype=np.float64),
             dem.radius_m,
         )
-        targets.append(TargetCircle(
-            dx_m=float(dx[k]), dy_m=float(dy[k]),
-            lat_deg=float(latitude[0]), lon_deg=float(longitude[0]),
-            cells_intersecting=total, valid_cells=count,
-            coverage_fraction=count / total if total else 0.0,
-            slope_p95_deg=p95_slope, slope_max_deg=max_slope,
-            roughness_max_m=max_roughness,
-            terrain_screen_pass=not reasons,
-            reasons=tuple(reasons),
-        ))
+        targets.append(
+            TargetCircle(
+                dx_m=float(dx[k]),
+                dy_m=float(dy[k]),
+                lat_deg=float(latitude[0]),
+                lon_deg=float(longitude[0]),
+                cells_intersecting=total,
+                valid_cells=count,
+                coverage_fraction=count / total if total else 0.0,
+                slope_p95_deg=p95_slope,
+                slope_max_deg=max_slope,
+                roughness_max_m=max_roughness,
+                terrain_screen_pass=not reasons,
+                reasons=tuple(reasons),
+            )
+        )
     # Best *screened* center by worst-slope first, then roughness, then distance.
     passed = [target for target in targets if target.terrain_screen_pass]
     ordered = sorted(
@@ -196,14 +208,22 @@ def evaluate_landing_grid(
             not t.terrain_screen_pass,
             float("inf") if t.slope_max_deg is None else t.slope_max_deg,
             float("inf") if t.roughness_max_m is None else t.roughness_max_m,
-            math.hypot(t.dx_m, t.dy_m), t.dy_m, t.dx_m,
+            math.hypot(t.dx_m, t.dy_m),
+            t.dy_m,
+            t.dx_m,
         ),
     )
     return LandingGridResult(
-        assessment_radius_m=assessment_radius_m, target_radius_m=target_radius_m,
-        sample_step_m=step, slope_baseline_m=slope_baseline_m,
-        roughness_window_m=roughness_window_m, max_slope_deg=max_slope_deg,
+        assessment_radius_m=assessment_radius_m,
+        target_radius_m=target_radius_m,
+        sample_step_m=step,
+        slope_baseline_m=slope_baseline_m,
+        roughness_window_m=roughness_window_m,
+        max_slope_deg=max_slope_deg,
         max_roughness_m=max_roughness_m,
-        total_target_centers=len(targets), passing_target_centers=len(passed),
-        cells=cells, targets=tuple(ordered), best_target=ordered[0] if passed else None,
+        total_target_centers=len(targets),
+        passing_target_centers=len(passed),
+        cells=cells,
+        targets=tuple(ordered),
+        best_target=ordered[0] if passed else None,
     )
