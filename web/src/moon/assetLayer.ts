@@ -17,6 +17,7 @@ import {
   Polyline,
   PolylineCollection,
   Quaternion,
+  Ray,
   Transforms,
   VerticalOrigin,
   type Viewer,
@@ -126,15 +127,34 @@ const BODY_OUTLINE = Color.fromCssColorString('#0f172a')
 const EARTH_CLEAR = Color.fromCssColorString('#4ade80')
 const EARTH_BLOCKED = Color.fromCssColorString('#f87171')
 /**
- * An arrow from the unit's observer point toward the Earth. The length is a display
- * choice, not a distance to anything: long enough to leave the terrain behind and read
- * as a direction. Translucent, because it crosses the view rather than belonging to it.
+ * An arrow from the unit's observer point toward the Earth, drawn until it either runs
+ * out or meets the ground. Near the pole the Earth sits within a couple of degrees of
+ * the horizontal and often below it, so a fixed-length ray spends almost all of itself
+ * inside a hillside; stopping at the hit puts the head on the ridge that is in the way
+ * instead, and leaves the full length for the sights that are actually clear.
  */
 const SIGHT_LENGTH_M = 40_000
+/** Start clear of the unit's own body, and stop short of the surface it hits. */
+const SIGHT_START_M = 4
+const SIGHT_HIT_BACKOFF_M = 3
+const SIGHT_MIN_M = 25
 const SIGHT_WIDTH_PX = 9
 const SIGHT_ALPHA = 0.55
 /** Translucent so the card reads as an overlay on the surface, not a sticker on it. */
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191eb3')
+
+/**
+ * `pickFromRay` is in Cesium's runtime but not in its published types, and it is the
+ * only way to ask where a ray meets the loaded tiles: everything public samples a
+ * height at a point. Declared narrowly and called through a guard, so a Cesium upgrade
+ * that drops it degrades to drawing the ray at full length rather than breaking.
+ */
+interface RayPicker {
+  pickFromRay?: (
+    ray: Ray,
+    objectsToExclude?: readonly unknown[],
+  ) => { position?: Cartesian3 } | undefined
+}
 
 export interface AssetLayer {
   /**
@@ -270,8 +290,16 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         }
   }
 
-  /** From the observer point on the mast out toward the Earth, in the unit's frame. */
-  const sightPositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
+  /**
+   * From the observer point on the mast out toward the Earth, cut short at the first
+   * terrain the ray meets. Only tiles that have loaded can be hit, so the answer sharpens
+   * as the viewer zooms, the same way the ground height under a unit does.
+   */
+  const sightPositions = (
+    asset: MoonAsset,
+    ground: number,
+    own: Drawn | undefined,
+  ): Cartesian3[] => {
     if (!asset.earth) return []
     const frame = Transforms.eastNorthUpToFixedFrame(
       positionAt(asset.location, ground),
@@ -283,12 +311,41 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       new Cartesian3(),
     )
     const [east, north, up] = rayOffsetEnu(asset.earth, SIGHT_LENGTH_M)
-    const tip = Matrix4.multiplyByPoint(
+    const far = Matrix4.multiplyByPoint(
       frame,
       new Cartesian3(east, north, asset.observerHeightM + up),
       new Cartesian3(),
     )
-    return [eye, tip]
+    const direction = Cartesian3.normalize(
+      Cartesian3.subtract(far, eye, new Cartesian3()),
+      new Cartesian3(),
+    )
+    const start = Cartesian3.add(
+      eye,
+      Cartesian3.multiplyByScalar(direction, SIGHT_START_M, new Cartesian3()),
+      new Cartesian3(),
+    )
+    let reach = SIGHT_LENGTH_M
+    const picker = viewer.scene as unknown as RayPicker
+    try {
+      const hit = picker.pickFromRay?.(
+        new Ray(start, direction),
+        own ? [own.anchor, own.mast, ...own.pieces] : [],
+      )
+      if (hit?.position) {
+        const distance = Cartesian3.distance(start, hit.position)
+        if (distance < reach)
+          reach = Math.max(SIGHT_MIN_M, distance - SIGHT_HIT_BACKOFF_M)
+      }
+    } catch {
+      // Not every device can answer this; a full-length ray is the honest fallback.
+    }
+    const tip = Cartesian3.add(
+      start,
+      Cartesian3.multiplyByScalar(direction, reach, new Cartesian3()),
+      new Cartesian3(),
+    )
+    return [start, tip]
   }
 
   const create = (asset: MoonAsset): Drawn => {
@@ -397,7 +454,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       )
     entities.mast.show = wantsMast(asset)
 
-    const positions = sightPositions(asset, ground)
+    const positions = sightPositions(asset, ground, entities)
     entities.sight.positions = positions
     entities.sight.show = sightsVisible && positions.length > 0
 
