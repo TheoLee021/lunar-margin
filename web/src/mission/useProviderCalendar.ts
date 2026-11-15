@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { startCalendar } from '../api/pricing'
+import type { RunStatus } from '../api/candidates'
 import {
   fetchProviderCalendar,
   type ProviderCalendar,
@@ -36,6 +37,10 @@ export function useProviderCalendar(input: ProviderCalendarInput | null) {
   })
   const [revision, setRevision] = useState(0)
   const [active, setActive] = useState<string | null>(null)
+  const [waiting, setWaiting] = useState<{
+    key: string
+    status: RunStatus
+  } | null>(null)
   const job = useRef<AbortController | null>(null)
   useEffect(() => {
     job.current?.abort()
@@ -84,6 +89,7 @@ export function useProviderCalendar(input: ProviderCalendarInput | null) {
     const controller = new AbortController()
     job.current = controller
     setActive(key)
+    setWaiting(null)
     try {
       let data = await fetchProviderCalendar(input, {
         signal: controller.signal,
@@ -95,7 +101,13 @@ export function useProviderCalendar(input: ProviderCalendarInput | null) {
       if (missing.length) {
         const started = await startCalendar(
           { ...input, landing_dates: missing.map((d) => d.landing_date) },
-          { signal: controller.signal },
+          {
+            signal: controller.signal,
+            onBusy: (status) => {
+              if (!controller.signal.aborted)
+                setWaiting(status ? { key, status } : null)
+            },
+          },
         )
         if (started.run_ids.some((id, i) => id !== missing[i]?.run_id))
           throw new Error('탐색 실행이 요청한 일정과 일치하지 않습니다.')
@@ -127,6 +139,7 @@ export function useProviderCalendar(input: ProviderCalendarInput | null) {
   return {
     ...current,
     calculating: active === key,
+    waiting: active === key && waiting?.key === key ? waiting.status : null,
     calculate,
     reload: () => setRevision((v) => v + 1),
     stop: () => {

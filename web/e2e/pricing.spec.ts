@@ -318,3 +318,85 @@ test('candidate ranks show per-grid prices and recover from a price-only failure
   await expect(region).toContainText('24 kg · 표면 하역')
   expect(requests).toBe(failedRequests + 1)
 })
+
+test('a busy search waits and automatically starts the missing dates when the worker is free', async ({
+  page,
+}) => {
+  let released = false
+  let batchCalls = 0
+  let launched = false
+  let statusCalls = 0
+  await page.route('**/api/candidates/runs', (route) =>
+    route.fulfill({ json: { runs: [] } }),
+  )
+  await page.route('**/api/pricing/providers/launches', (route) =>
+    route.fulfill({ json: { timezone: 'UTC', sources: [], launches: [] } }),
+  )
+  await page.route('**/api/pricing/providers/calendar', (route) =>
+    route.fulfill({
+      json: providerCalendarFixture(route.request().postDataJSON(), (date) => ({
+        run_id: `m-${date}`,
+        state: launched ? 'completed' : 'not_computed',
+        status: launched ? 'quoted' : 'search_required',
+        mean: launched ? 29300000 : null,
+        eligible: launched ? 1 : null,
+        priced: launched ? 1 : 0,
+      })),
+    }),
+  )
+  await page.route('**/api/candidates/runs/m-busy/status', (route) => {
+    statusCalls++
+    return route.fulfill({
+      json: {
+        run_id: 'm-busy',
+        state: released ? 'done' : 'running',
+        stage: 'fine',
+        done: 2,
+        total: 10,
+        error: null,
+        started_at: null,
+        updated_at: '2026-11-15T09:00:00Z',
+      },
+    })
+  })
+  await page.route('**/api/pricing/calculate', (route) => {
+    batchCalls++
+    if (!released)
+      return route.fulfill({
+        status: 409,
+        json: {
+          detail: {
+            message: 'another search is running',
+            running_run_id: 'm-busy',
+          },
+        },
+      })
+    launched = true
+    const input = route.request().postDataJSON() as { landing_dates: string[] }
+    return route.fulfill({
+      status: 202,
+      json: {
+        run_ids: input.landing_dates.map((date) => `m-${date}`),
+        state: 'queued',
+        cached: false,
+      },
+    })
+  })
+  await page.goto('/?planner=1')
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
+  await expect(
+    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+  ).toBeVisible()
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+  expect(batchCalls).toBe(1)
+  expect(statusCalls).toBeGreaterThan(0)
+  released = true
+  await expect(
+    dialog.getByRole('table').getByText('$29M', { exact: true }),
+  ).toHaveCount(19)
+  expect(batchCalls).toBe(2)
+  await expect(
+    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+  ).toHaveCount(0)
+})

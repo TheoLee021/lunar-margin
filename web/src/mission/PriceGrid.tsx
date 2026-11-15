@@ -245,7 +245,9 @@ export function PriceGrid({
             }}
           >
             {calendar.calculating
-              ? '날짜별 탐색 중…'
+              ? calendar.waiting
+                ? '다른 탐색 완료 대기 중…'
+                : '날짜별 탐색 중…'
               : '미계산 날짜 탐색 · 500m'}
           </button>
           {calendar.calculating ? (
@@ -296,7 +298,17 @@ export function PriceGrid({
           </button>
         </p>
       ) : null}
-      {calendar.calculating ? <p role="status">날짜별 가격 계산 중…</p> : null}
+      {calendar.waiting ? (
+        <p role="status">
+          다른 탐색이 진행 중입니다 · {calendar.waiting.run_id}
+          {calendar.waiting.total > 0
+            ? ` · ${calendar.waiting.done.toLocaleString()}/${calendar.waiting.total.toLocaleString()}`
+            : ''}
+          {' · '}완료 후 선택한 날짜 계산을 자동으로 시작합니다.
+        </p>
+      ) : calendar.calculating ? (
+        <p role="status">날짜별 가격 계산 중…</p>
+      ) : null}
       {data?.selection ? (
         <section
           aria-label="선택한 발사사의 가격 모델"
