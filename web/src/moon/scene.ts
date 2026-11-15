@@ -12,6 +12,7 @@ import {
   Ion,
   KeyboardEventModifier,
   Math as CesiumMath,
+  Matrix4,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   UniformType,
@@ -90,6 +91,17 @@ export interface MoonScene {
   setAssets(assets: readonly MoonAsset[]): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
+  /**
+   * Lock the camera onto a point and hold it there, for following something that moves.
+   * Call `releaseFollow` to hand control back to the user.
+   */
+  follow(
+    location: LunarLocation,
+    rangeM: number,
+    pitchDeg: number,
+    headingDeg: number,
+  ): void
+  releaseFollow(): void
   resetNorth(): void
   destroy(): void
 }
@@ -241,6 +253,27 @@ export async function createMoonScene(
       const [x, y, z] = parseSunDirection(direction)
       moonShader.setUniform('u_sunDirectionWC', new Cartesian3(x, y, z))
       moonShader.setUniform('u_sunLit', 1)
+    },
+    follow(location, rangeM, pitchDeg, headingDeg) {
+      // Aim at the terrain, not the reference sphere: the two are kilometres apart
+      // at the pole, and the equipment stands on the terrain.
+      const onEllipsoid = Cartesian3.fromDegrees(
+        location.lon,
+        location.lat,
+        0,
+        Ellipsoid.MOON,
+      )
+      camera.lookAt(
+        scene.clampToHeight(onEllipsoid) ?? onEllipsoid,
+        new HeadingPitchRange(
+          CesiumMath.toRadians(headingDeg),
+          CesiumMath.toRadians(pitchDeg),
+          rangeM,
+        ),
+      )
+    },
+    releaseFollow() {
+      camera.lookAtTransform(Matrix4.IDENTITY)
     },
     resetNorth() {
       const canvas = scene.canvas

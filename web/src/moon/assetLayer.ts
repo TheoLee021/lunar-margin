@@ -3,13 +3,13 @@ import {
   CallbackProperty,
   Cartesian2,
   Cartesian3,
+  Cartographic,
   Color,
   ConstantProperty,
   DistanceDisplayCondition,
   Ellipsoid,
   Entity,
   HeadingPitchRoll,
-  HeightReference,
   Material,
   Math as CesiumMath,
   Matrix4,
@@ -117,8 +117,12 @@ interface Live {
   mast: Cartesian3
   color: Color
   label: string
-  /** Last ground point that sampled cleanly, so a streaming tileset cannot drop the ray. */
-  ground?: Cartesian3
+  /**
+   * Terrain height under the unit, metres above the reference sphere, re-read every
+   * frame from whatever tiles have streamed in. The last clean reading is kept so a
+   * tile that has not arrived yet cannot throw the unit to the sphere.
+   */
+  ground: number
 }
 
 interface Drawn {
@@ -144,24 +148,24 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
     Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
 
   /**
-   * Surface point under a location. `clampToHeight` is a scene pick, so it answers
-   * differently while tiles stream in; the last clean answer is kept per asset and the
-   * ellipsoid is only the first-frame fallback.
+   * Terrain height under a location, metres above the reference sphere.
+   *
+   * Cesium's own height references latch onto the first tile they see, so as the
+   * viewer zooms and the tileset refines, the terrain moves and anything placed that
+   * way is left buried or hovering. Reading the height every frame instead means the
+   * unit follows the terrain down to the finest tile that has loaded.
    */
-  const groundAt = (location: LunarLocation, live: Live): Cartesian3 => {
-    const onEllipsoid = positionAt(location, 0)
-    const clamped = viewer.scene.clampToHeight(onEllipsoid)
-    if (clamped && Number.isFinite(clamped.x)) {
-      live.ground = clamped
-      return clamped
-    }
-    return live.ground ?? onEllipsoid
+  const groundAt = (location: LunarLocation, live: Live): number => {
+    const clamped = viewer.scene.clampToHeight(positionAt(location, 0))
+    if (clamped && Number.isFinite(clamped.x))
+      live.ground = Cartographic.fromCartesian(clamped, Ellipsoid.MOON).height
+    return live.ground
   }
 
-  const sightPositions = (asset: MoonAsset, live: Live): Cartesian3[] => {
+  const sightPositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
     if (!asset.earth) return []
     const frame = Transforms.eastNorthUpToFixedFrame(
-      groundAt(asset.location, live),
+      positionAt(asset.location, ground),
       Ellipsoid.MOON,
     )
     const eye = Matrix4.multiplyByPoint(
@@ -196,14 +200,15 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
 
   const create = (asset: MoonAsset): Drawn => {
     const { shape, symbol } = asset
-    const anchor = positionAt(asset.location, anchorHeight(asset))
     const live: Live = {
-      body: anchor,
-      orientation: facing(asset, anchor),
+      body: positionAt(asset.location, anchorHeight(asset)),
+      orientation: Quaternion.IDENTITY,
       mast: positionAt(asset.location, asset.observerHeightM / 2),
       color: SIGHT_CLEAR,
       label: asset.label,
+      ground: 0,
     }
+    live.orientation = facing(asset, live.body)
 
     const body = viewer.entities.add({
       position: new CallbackPositionProperty(() => live.body, false),
@@ -215,7 +220,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         // The ray itself can be buried in terrain; the name always shows, so it
         // carries the verdict too.
         fillColor: new CallbackProperty(() => live.color, false),
-        heightReference: HeightReference.RELATIVE_TO_3D_TILE,
         pixelOffset: new Cartesian2(0, -18),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         distanceDisplayCondition: NEAR_BODY,
@@ -228,7 +232,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
                 false,
               ),
               verticalOrigin: VerticalOrigin.BOTTOM,
-              heightReference: HeightReference.RELATIVE_TO_3D_TILE,
               pixelOffset: new Cartesian2(0, -32),
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
               distanceDisplayCondition: BADGE_RANGE,
@@ -241,7 +244,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
             model: {
               uri: asset.model.uri,
               scale: asset.model.scale,
-              heightReference: HeightReference.RELATIVE_TO_3D_TILE,
               distanceDisplayCondition: NEAR_BODY,
             },
           }
@@ -256,7 +258,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
                 material: BODY_COLOR,
                 outline: true,
                 outlineColor: BODY_OUTLINE,
-                heightReference: HeightReference.RELATIVE_TO_3D_TILE,
                 distanceDisplayCondition: NEAR_BODY,
               },
             }
@@ -268,7 +269,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
                 material: BODY_COLOR,
                 outline: true,
                 outlineColor: BODY_OUTLINE,
-                heightReference: HeightReference.RELATIVE_TO_3D_TILE,
                 distanceDisplayCondition: NEAR_BODY,
               },
             }),
@@ -282,7 +282,6 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
         topRadius: MAST_RADIUS_M,
         bottomRadius: MAST_RADIUS_M,
         material: MAST_COLOR,
-        heightReference: HeightReference.RELATIVE_TO_3D_TILE,
         distanceDisplayCondition: NEAR_BODY,
       },
     })
@@ -300,16 +299,17 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
   const paint = (asset: MoonAsset, entities: Drawn): void => {
     const { live, sight } = entities
     live.label = asset.label
-    live.body = positionAt(asset.location, anchorHeight(asset))
+    const ground = groundAt(asset.location, live)
+    live.body = positionAt(asset.location, ground + anchorHeight(asset))
     live.orientation = facing(asset, live.body)
-    live.mast = positionAt(asset.location, asset.observerHeightM / 2)
+    live.mast = positionAt(asset.location, ground + asset.observerHeightM / 2)
     if (entities.mast.cylinder)
       entities.mast.cylinder.length = new ConstantProperty(
         asset.observerHeightM,
       )
     entities.mast.show = asset.observerHeightM >= MAST_MIN_M
 
-    const positions = sightPositions(asset, live)
+    const positions = sightPositions(asset, ground)
     sight.positions = positions
     sight.show = positions.length > 0
 

@@ -12,19 +12,15 @@ import {
 import type { CandidateSite, MissionSelection } from './types'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
 
-/** Close enough that metre-scale equipment reads on screen. */
-const EQUIPMENT_RANGE_M = 800
 /**
- * Near ground level, not the usual look-down view. The Earth sits about 4 degrees up
- * at the pole, so from above a line of sight lies flat on the terrain and disappears
- * into it; from here it rises clear of the ridge line against the black sky.
+ * The camera rides behind the trencher while it drives. A 2.4 m machine is three
+ * pixels wide from the far side of the site, so the only way to watch it work is to
+ * go with it; the badges carry the other units while it is away.
  */
-const EQUIPMENT_PITCH_DEG = -20
-/**
- * Stand at right angles to the rays. Looking along them they are edge-on and read as
- * dots; from the side they cross the screen and climb away from the ridge.
- */
-const SIDE_ON_DEG = 90
+const FOLLOW_RANGE_M = 45
+const FOLLOW_PITCH_DEG = -15
+/** Sit behind the machine, looking the way it is going. */
+const FOLLOW_BEHIND_DEG = 180
 
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
 export function MissionMoonViewer({
@@ -58,14 +54,18 @@ export function MissionMoonViewer({
   }>({ site: undefined, sky: EMPTY_SKY, progress: 0 })
   const frame = useRef(0)
 
+  /** Redraws the set and hands back the trencher, which is the one that moves. */
   const draw = useCallback(() => {
     const { site, sky: measured, progress } = traverse.current
-    if (!site) return
-    viewer.current?.setAssets(buildEquipmentAssets(site, progress, measured))
+    if (!site) return undefined
+    const assets = buildEquipmentAssets(site, progress, measured)
+    viewer.current?.setAssets(assets)
+    return assets.at(-1)
   }, [])
 
   useEffect(() => {
     cancelAnimationFrame(frame.current)
+    viewer.current?.releaseFollow()
     traverse.current = {
       site: selected,
       sky: sky.kind === 'ready' ? sky.sky : EMPTY_SKY,
@@ -75,27 +75,32 @@ export function MissionMoonViewer({
     draw()
   }, [selected, sky, draw])
 
-  useEffect(() => () => cancelAnimationFrame(frame.current), [])
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(frame.current)
+      viewer.current?.releaseFollow()
+    },
+    [],
+  )
 
   const runTraverse = () => {
     if (!selected) return
     cancelAnimationFrame(frame.current)
-    const earthAzimuth =
-      sky.kind === 'ready'
-        ? (sky.sky.waypoints.find((point) => point)?.azimuthDeg ?? 0)
-        : 0
-    viewer.current?.flyTo(
-      { lat: selected.latitude, lon: selected.longitude },
-      EQUIPMENT_RANGE_M,
-      EQUIPMENT_PITCH_DEG,
-      earthAzimuth - SIDE_ON_DEG,
-    )
+    traverse.current.progress = 0
     const started = performance.now()
     const step = (now: number) => {
       const progress = Math.min(1, (now - started) / TRAVERSE_DURATION_MS)
       traverse.current.progress = progress
-      draw()
+      const trencher = draw()
+      if (trencher)
+        viewer.current?.follow(
+          trencher.location,
+          FOLLOW_RANGE_M,
+          FOLLOW_PITCH_DEG,
+          (trencher.headingDeg ?? 0) + FOLLOW_BEHIND_DEG,
+        )
       if (progress < 1) frame.current = requestAnimationFrame(step)
+      else viewer.current?.releaseFollow()
     }
     frame.current = requestAnimationFrame(step)
   }

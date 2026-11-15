@@ -33,6 +33,14 @@ export interface MoonViewerHandle {
    * redraws every frame, which React state must not do.
    */
   setAssets(assets: readonly MoonAsset[]): void
+  /** Hold the camera on a moving point. `releaseFollow` hands control back. */
+  follow(
+    location: LunarLocation,
+    rangeM: number,
+    pitchDeg: number,
+    headingDeg: number,
+  ): void
+  releaseFollow(): void
 }
 
 interface MoonViewerProps {
@@ -112,6 +120,12 @@ export default function MoonViewer({
       setAssets(assets) {
         if (sceneRef.current) sceneRef.current.setAssets(assets)
         else pending.current.assets = assets
+      },
+      follow(location, rangeM, pitchDeg, headingDeg) {
+        sceneRef.current?.follow(location, rangeM, pitchDeg, headingDeg)
+      },
+      releaseFollow() {
+        sceneRef.current?.releaseFollow()
       },
     }),
     [],
