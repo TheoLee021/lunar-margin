@@ -7,7 +7,7 @@
 
 import math
 from pathlib import Path
-from typing import Self
+from typing import Protocol, Self
 
 import numpy as np
 from numpy.typing import NDArray
@@ -75,3 +75,68 @@ class PolarDem:
         if math.isnan(value):
             raise ValueError(f"({lat_deg}, {lon_deg}) is outside the DEM or on a missing pixel")
         return value
+
+
+class Dem(Protocol):
+    """수평선 계산이 DEM에 요구하는 것. PolarDem과 CompositeDem이 이를 만족한다."""
+
+    @property
+    def radius_m(self) -> float: ...
+
+    @property
+    def label(self) -> PolarGridLabel: ...
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]: ...
+
+    def sample_height_lonlat_m(
+        self, lat_deg: NDArray[np.float64], lon_deg: NDArray[np.float64]
+    ) -> NDArray[np.float64]: ...
+
+    def height_at(self, lat_deg: float, lon_deg: float) -> float: ...
+
+
+class CompositeDem:
+    """고해상도 DEM(primary)을 우선 쓰고, 그 밖이나 결측인 곳은 더 넓은 DEM(fallback)으로 메운다.
+
+    두 DEM이 같은 극 입체투영(같은 구, 극이 원점)이라 투영 좌표(m)로 바로 겹쳐 쓸 수 있다.
+    수평선 탐색 간격과 격자 정보는 primary를 따른다.
+    """
+
+    def __init__(self, primary: PolarDem, fallback: PolarDem) -> None:
+        if abs(primary.radius_m - fallback.radius_m) > 1e-6:
+            raise ValueError("both DEMs must use the same reference sphere")
+        self.primary = primary
+        self.fallback = fallback
+        self.label = primary.label
+        self.radius_m = primary.radius_m
+
+    def sample_height_m(
+        self, x_m: NDArray[np.float64], y_m: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        values = self.primary.sample_height_m(x_m, y_m)
+        missing = np.isnan(values)
+        if missing.any():
+            values = np.where(missing, self.fallback.sample_height_m(x_m, y_m), values)
+        return values
+
+    def sample_height_lonlat_m(
+        self, lat_deg: NDArray[np.float64], lon_deg: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        values = self.primary.sample_height_lonlat_m(lat_deg, lon_deg)
+        missing = np.isnan(values)
+        if missing.any():
+            values = np.where(
+                missing, self.fallback.sample_height_lonlat_m(lat_deg, lon_deg), values
+            )
+        return values
+
+    def height_at(self, lat_deg: float, lon_deg: float) -> float:
+        try:
+            return self.primary.height_at(lat_deg, lon_deg)
+        except ValueError:
+            return self.fallback.height_at(lat_deg, lon_deg)
+
+    def contains(self, lat_deg: float, lon_deg: float) -> bool:
+        return self.primary.contains(lat_deg, lon_deg) or self.fallback.contains(lat_deg, lon_deg)

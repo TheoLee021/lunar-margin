@@ -31,6 +31,8 @@ DEM_SOURCES: dict[str, tuple[Source, Source]] = {
     "80s_80m": _dem("ldem_80s_80m", 231_040_000),
     "80s_40m": _dem("ldem_80s_40m", 924_160_000),
     "85s_20m": _dem("ldem_85s_20m", 920_272_896),
+    # 75°S 이남(극에서 약 457 km). 85°S 이남 ROI의 수평선을 200 km까지 DEM 안에서 계산할 수 있다
+    "75s_120m": _dem("ldem_75s_120m", 232_501_504),
 }
 
 SPICE_SOURCES: tuple[Source, ...] = (

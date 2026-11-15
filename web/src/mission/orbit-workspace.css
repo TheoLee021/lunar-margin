@@ -1,0 +1,109 @@
+@layer components {
+  .orbit-workspace {
+    min-height: 100svh;
+    color: var(--fg);
+    background: #080c0f;
+    padding: 36px 28px 56px;
+  }
+  .orbit-page-content {
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  .orbit-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .orbit-page-header p {
+    margin: 0 0 9px;
+    color: var(--muted);
+    font: 12px var(--f-mono);
+  }
+  .orbit-page-header h1 {
+    margin: 0 0 10px;
+    font: 600 28px var(--f-display);
+  }
+  .orbit-page-header span {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .orbit-page-header button {
+    padding: 10px 14px;
+  }
+  .orbit-date-form {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 24px 0;
+    flex-wrap: wrap;
+  }
+  .orbit-date-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .orbit-date-form input {
+    color-scheme: dark;
+    color: var(--fg);
+    background: var(--raise);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 10px 14px;
+    font: 16px var(--f-mono);
+  }
+  .orbit-date-form > span {
+    color: var(--sun);
+    padding-top: 20px;
+  }
+  .orbit-date-form p {
+    margin: 18px 0 0 auto;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .orbit-workspace .transfer-section {
+    padding: 24px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .orbit-date-error {
+    border: 1px solid var(--line);
+    padding: 24px;
+    color: var(--sun);
+    font-size: 13px;
+  }
+  @media (max-width: 680px) {
+    .orbit-workspace {
+      padding: 24px 14px;
+    }
+    .orbit-page-header h1 {
+      font-size: 24px;
+    }
+    .orbit-date-form {
+      gap: 12px;
+    }
+    .orbit-date-form label {
+      flex: 1;
+      min-width: 130px;
+    }
+    .orbit-date-form input {
+      min-width: 0;
+      width: 100%;
+      font-size: 14px;
+    }
+    .orbit-date-form > span {
+      display: none;
+    }
+    .orbit-date-form p {
+      width: 100%;
+      margin: 0;
+    }
+    .orbit-workspace .transfer-section {
+      padding: 20px 0 0;
+    }
+  }
+}

@@ -53,7 +53,7 @@ export function MissionWorkspace({
       </header>
       <button
         type="button"
-        className="hud-button absolute bottom-4 left-4 z-10"
+        className="hud-button absolute bottom-10 left-4 z-10"
         aria-pressed={collapsed}
         onClick={() => setCollapsed((value) => !value)}
       >
@@ -63,7 +63,7 @@ export function MissionWorkspace({
         <>
           <aside
             aria-label="미션 조건"
-            className="hud-panel absolute bottom-16 left-4 top-24 w-72 overflow-y-auto max-sm:bottom-32 max-sm:w-60"
+            className="hud-panel absolute bottom-20 left-4 top-24 w-72 overflow-y-auto max-sm:bottom-32 max-sm:w-60"
           >
             <section className="hud-section">
               <h2>미션 · UTC</h2>

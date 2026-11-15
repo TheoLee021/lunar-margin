@@ -98,3 +98,15 @@ def test_azimuth_grid_follows_step() -> None:
     result = profile(make_dem(), azimuth_step_deg=10.0)
 
     assert result.azimuth_deg.tolist() == list(np.arange(0.0, 360.0, 10.0))
+
+
+def test_horizon_is_complete_when_all_rays_stay_inside_dem() -> None:
+    assert profile(make_dem()).complete is True
+
+
+def test_horizon_is_incomplete_when_rays_leave_the_dem() -> None:
+    # 격자는 극에서 ±20 km인데 60 km까지 탐색하면 광선 끝이 DEM 밖으로 나간다
+    result = horizon_profile(make_dem(), -90.0, 0.0, max_range_m=60_000.0)
+
+    assert result.complete is False
+    assert np.all(np.isfinite(result.elevation_deg))  # 값은 그대로 유효 (DEM 안쪽 구간 기준)

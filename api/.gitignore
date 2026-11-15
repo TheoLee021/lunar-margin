@@ -4,4 +4,4 @@ __pycache__/
 .ruff_cache/
 .env
 # 대용량 NASA 데이터(DEM, SPICE 커널)는 git에 넣지 않는다
-data/
+data
