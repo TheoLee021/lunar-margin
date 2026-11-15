@@ -222,7 +222,49 @@
 
 ### `GET /tiles/{layer}/{z}/{x}/{y}.png`
 
-TBD (layer 목록, 타일링 스킴, 투영)
+렌더링용 오버레이. `python -m lunar_margin.pipeline.overlay_tiles`가 수평선 테이블과 DEM으로 `DATA_DIR/tiles/`에 미리 굽는다. 없는 레이어·레벨·타일은 404.
+
+| layer | 내용 |
+| --- | --- |
+| `horizon` | 지점마다 방위각 5° 간격(72개) 지형 수평선 고도. 셰이더의 지형 그림자(cast shadow)용 |
+| `normal` | 지점마다 지역 동쪽·북쪽 경사. 셰이더의 햇빛 조명용. 레벨 0(500 m) 위에 더 촘촘한 레벨 1(160 m), 2(80 m)가 있고, 5 m 지역 DEM이 있는 곳에는 레벨 3(20 m), 4(5 m)가 더 있다 |
+
+### `GET /tiles/{layer}/meta.json`
+
+```json
+{
+  "version": 1,
+  "layer": "horizon",
+  "levels": [{ "z": 0, "pixel_size_m": 500.0, "size_px": 607, "center_px": 303, "tile_px": 607, "tiles_per_side": 1 }],
+  "encoding": { "azimuth_step_deg": 5.0, "azimuths": 72, "atlas_cols": 6, "atlas_rows": 3, "offset_deg": -5.0, "step_deg": 0.05 }
+}
+```
+
+- 투영은 남극 입체투영(후보지 레이어와 같음). 레벨 전체 이미지의 픽셀 `(col, row)`는 `x_m = (col - center_px) * pixel_size_m`, `y_m = (center_px - row) * pixel_size_m` (경도 0°가 위쪽, 동쪽이 오른쪽). 격자 한 칸이 한 픽셀이다.
+- 타일 `(x, y)`는 레벨 이미지의 열 `[x*tile_px, (x+1)*tile_px)`, 행 `[y*tile_px, (y+1)*tile_px)`를 덮는다 (`0 <= x, y < tiles_per_side`). 레벨 이미지(`size_px`)를 넘는 마지막 타일의 여백은 데이터 없음이다.
+- 레벨 0은 두 레이어 모두 수평선 테이블 격자 그대로 타일 한 장이다 (500 m, ROI 밖은 데이터 없음). `horizon`은 레벨 0뿐이다.
+- `normal`의 `levels`에는 같은 영역(극에서 `center_px * pixel_size_m`까지)을 더 촘촘히 덮는 레벨이 거친 것부터 이어진다. 한 장으로 받기에는 크므로(80 m 레벨 약 50 MB) 256px 타일로 나누고, 클라이언트는 보는 곳 주변 타일만 받는다. 이 레벨들은 원형 ROI 밖의 정사각형 모서리까지 DEM 값으로 채운다.
+
+  ```json
+  "levels": [
+    { "z": 0, "pixel_size_m": 500.0, "size_px": 607, "center_px": 303, "tile_px": 607, "tiles_per_side": 1 },
+    { "z": 1, "pixel_size_m": 160.0, "size_px": 1895, "center_px": 947, "tile_px": 256, "tiles_per_side": 8 },
+    { "z": 2, "pixel_size_m": 80.0, "size_px": 3789, "center_px": 1894, "tile_px": 256, "tiles_per_side": 15 },
+    { "z": 3, "pixel_size_m": 20.0, "size_px": 15151, "center_px": 7575, "tile_px": 256, "tiles_per_side": 60, "tile_ranges": [[24, 31, 28, 35]] },
+    { "z": 4, "pixel_size_m": 5.0, "size_px": 60601, "center_px": 30300, "tile_px": 256, "tiles_per_side": 237, "tile_ranges": [[98, 124, 113, 139]] }
+  ]
+  ```
+
+- `tile_ranges`가 있는 레벨은 희소 레벨이다: 5 m 지역 DEM(Artemis III 후보 지역의 Shape-from-Shading DEM, [data.md](data.md))이 덮는 곳에만 타일이 있다. 항목 하나가 지역 하나의 타일 범위 `[x0, y0, x1, y1]`(양 끝 포함)이고, 범위 안의 타일은 모두 있으며 밖의 타일은 404다. 범위 안이어도 지역 밖 픽셀은 데이터 없음이므로, 클라이언트는 그런 곳에서 더 거친 레벨을 쓴다. 지역 DEM을 받지 않았으면 이 레벨들은 `levels`에 없다. ROI(85°S) 밖의 지역은 들어가지 않는다.
+- 20 m 레벨의 값은 5 m 간격으로 잰 경사를 픽셀 안에서 평균한 것이다.
+- `normal`의 `encoding`은 `{ "bias": 32768, "scale": 16384 }`.
+
+### `GET /tiles/{layer}/{z}/{x}/{y}.png`
+
+8비트 RGBA PNG.
+
+- `horizon`: `tile_px` 크기 셀 18개를 6열 x 3행으로 배치한 아틀라스 (`6*tile_px` x `3*tile_px`). 셀 `k`(열 `k % 6`, 행 `k // 6`)의 R, G, B, A가 방위각 `4k`, `4k+1`, `4k+2`, `4k+3`번(각 `5°` 간격, 0° = 북, 시계방향)이다. 값 `v = 0`은 데이터 없음, `1..255`는 고도 `offset_deg + v * step_deg`도 (범위 밖은 끝값으로 자름). 값은 수평선 테이블(엔진 `horizon_profile`)의 1° 값을 5°마다 그대로 뽑은 것이다.
+- `normal`: `tile_px` x `tile_px`. R·G가 동쪽 경사, B·A가 북쪽 경사(북 = 위도가 커지는 방향, 즉 남극에서 멀어지는 방향. 수평선 방위각 0°와 같다)의 16비트 값 `u = hi*256 + lo`이고 경사 tan = `(u - bias) / scale`. 네 바이트가 모두 0이면 데이터 없음. 극점(경도 정의 안 됨)은 경도 0°로 본다. 동·북 방향은 픽셀마다 경도에 따라 돌아가므로, 이웃 픽셀 값을 보간할 때는 투영 평면의 공통 축으로 돌린 뒤 섞는다 (`horizon`의 방위각도 같다). 16비트 값이 두 바이트로 나뉘어 있어 GPU 선형 필터링·밉맵에 맡기면 값이 깨진다.
 
 ### 개발용 빠른 탐색: `POST /candidates/search/dev`
 
