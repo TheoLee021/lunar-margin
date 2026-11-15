@@ -281,9 +281,7 @@ def evaluate_reference(
             altitude_agl_m=round(float(altitude[i]), 2)
             if math.isfinite(float(altitude[i]))
             else None,
-            speed_mps=round(
-                math.hypot(float(v[i, 0]), float(v[i, 1]), float(v[i, 2])), 2
-            ),
+            speed_mps=round(math.hypot(float(v[i, 0]), float(v[i, 1]), float(v[i, 2])), 2),
             thrust_n=round(float(thrust[i]), 2),
             mass_kg=round(float(mass[i]), 3),
             moon_me_xyz_m=[round(float(r[i, j]), 2) for j in range(3)],
