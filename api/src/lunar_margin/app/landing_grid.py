@@ -101,7 +101,9 @@ def get_grid_evaluator(settings: Annotated[Settings, Depends(get_settings)]) -> 
             max_slope_deg=query.max_slope_deg,
             max_roughness_m=query.max_roughness_m,
         )
-        return LandingGridResponse.model_validate({"lat": query.lat, "lon": query.lon, **asdict(result)})
+        return LandingGridResponse.model_validate(
+            {"lat": query.lat, "lon": query.lon, **asdict(result)}
+        )
 
     return evaluate
 
