@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
+import { ReferenceTools } from './ReferenceTools'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -221,6 +222,13 @@ export function MissionWorkspace({
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
               <MissionMetrics result={analysis} />
+              <ReferenceTools
+                site={{
+                  latitude: selected.latitude,
+                  longitude: selected.longitude,
+                  landing: selection.landing,
+                }}
+              />
               {selectedCandidate?.rf ? (
                 <section
                   aria-label="저장된 RF 통신 평가"
