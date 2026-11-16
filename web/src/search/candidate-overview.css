@@ -1,6 +1,6 @@
 .co {
   min-height: 100svh;
-  background: rgb(11 17 20 / 62%);
+  background: rgba(15, 18, 23, 0.94);
   color: #deebe9;
   padding: 0 clamp(14px, 2.6vw, 48px) 30px;
   font-family: var(--f-body), sans-serif;
@@ -66,9 +66,9 @@
   align-items: start;
 }
 .co-card {
-  border: 1px solid #334448;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgb(17 27 31 / 62%);
+  background: var(--raise);
   overflow: hidden;
 }
 .co-right,
@@ -84,7 +84,7 @@
 }
 .co-head {
   padding: 13px 16px;
-  border-bottom: 1px solid #304045;
+  border-bottom: 1px solid var(--line);
   min-height: 50px;
 }
 .co h2 {
@@ -100,7 +100,7 @@
   gap: 2px;
   padding: 3px;
   border-radius: 6px;
-  background: #081115;
+  background: #101216;
   width: max-content;
 }
 .co-toggle button {
@@ -111,11 +111,11 @@
   cursor: pointer;
 }
 .co-toggle button[aria-pressed='true'] {
-  background: #314646;
+  background: #323439;
   color: #ebfaf5;
 }
 .co-field {
-  background: rgb(6 14 18 / 45%);
+  background: rgba(0, 0, 0, 0.45);
   padding: 14px;
   display: grid;
   place-items: center;
@@ -193,7 +193,7 @@
 .co-legend {
   justify-content: flex-end;
   padding: 9px 16px;
-  background: #0a1418;
+  background: #101216;
 }
 .co-legend span {
   margin-right: auto;
@@ -233,7 +233,7 @@
 .co-table th {
   position: sticky;
   top: 0;
-  background: #19272b;
+  background: #202328;
   color: #a9bcbc;
   font-weight: 500;
 }
@@ -247,11 +247,11 @@
   cursor: pointer;
 }
 .co-table tr[data-active='true'] {
-  background: #2b3937;
+  background: #303033;
   box-shadow: inset 3px 0 #f4cf7d;
 }
 .co-table tr:hover {
-  background: #25383a;
+  background: #26292e;
 }
 .co-table td:nth-child(2) {
   font-family: monospace;
@@ -334,16 +334,18 @@
   overscroll-behavior: contain;
   border: 1px solid #465959;
   border-radius: 12px;
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
   box-shadow: 0 16px 80px #0008;
 }
 .co-panel::backdrop {
-  background: rgba(4, 9, 12, 0.16);
+  background: rgba(5, 6, 7, 0.3);
 }
 .co-bar {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #0b1114;
+  background: #0f1217;
 }
 .co-close {
   margin-left: auto;
@@ -395,7 +397,7 @@
   overflow: auto;
   border: 1px solid #526660;
   border-radius: 12px;
-  background: #121e21;
+  background: rgba(15, 18, 23, 0.94);
   color: #edf5f0;
 }
 .co-reservation::backdrop {

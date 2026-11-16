@@ -1,19 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import { layerUrl, type Candidate, type RunDetail } from '../api/candidates'
 import { formatPrice } from '../api/pricing'
-import {
-  fractionText,
-  funnelSteps,
-  reasonLabel,
-  scoreText,
-  xyToImage,
-} from './derive'
+import { fractionText, funnelSteps, scoreText, xyToImage } from './derive'
 import { ReservationPanel } from './ReservationPanel'
 import { Distribution } from './Distribution'
 import { useRun } from './useRuns'
 import { useAvailability } from './useAvailability'
 import { useCandidatePrices } from './useCandidatePrices'
 import './candidate-overview.css'
+
+const overviewLabels: Readonly<Record<string, string>> = {
+  sampled: 'Sites sampled',
+  computed: 'Sites evaluated',
+  eligible: 'Sites meeting requirements',
+  in_regions: 'Sites in connected regions',
+  selected: 'Selected sites',
+  rf_incomplete: 'Missing radio link data',
+  rf_fraction_below_min: 'Radio link available too infrequently',
+  rf_blackout_hours_above_max: 'Radio blackout exceeds limit',
+  sun_fraction_below_min: 'Insufficient sunlight',
+  sun_dark_hours_above_max: 'Continuous darkness exceeds limit',
+  earth_fraction_below_min: 'Insufficient Earth visibility',
+  earth_blackout_hours_above_max: 'Loss of Earth visibility exceeds limit',
+  horizon_incomplete: 'Horizon extends beyond terrain coverage',
+  terrain_slope_above_max: 'Local slope exceeds limit (95th percentile)',
+  terrain_incomplete: 'Incomplete terrain data',
+  terrain_roughness_above_max:
+    'Local roughness exceeds limit (95th percentile)',
+  no_metrics: 'No metrics available',
+  not_refined: 'Not selected for finer sampling',
+  within_min_separation: 'Too close to a higher-ranked site',
+  beyond_top_k: 'Outside the shortlist',
+}
 
 export default function CandidateOverview({
   runId,
@@ -31,8 +49,9 @@ export default function CandidateOverview({
   }, [])
   return (
     <dialog
+      lang="en"
       ref={dialog}
-      aria-label="후보지 선정"
+      aria-label="Landing site selection"
       className="co co-panel"
       onCancel={(event) => {
         event.preventDefault()
@@ -43,9 +62,9 @@ export default function CandidateOverview({
         <strong>
           LUNAR <b>MARGIN</b>
         </strong>
-        <span>후보지 선정</span>
+        <span>Landing site selection</span>
         <button type="button" className="co-close hud-button" onClick={onClose}>
-          닫기 ×
+          Close ×
         </button>
       </header>
       {state.status === 'ok' ? (
@@ -53,11 +72,11 @@ export default function CandidateOverview({
       ) : (
         <p role="status">
           {state.status === 'loading' ? (
-            '저장 결과를 불러오는 중…'
+            'Loading saved results…'
           ) : (
             <>
-              결과 조회 실패 · {state.message}{' '}
-              <button onClick={reload}>다시 시도</button>
+              Couldn’t load the saved results.{' '}
+              <button onClick={reload}>Try again</button>
             </>
           )}
         </p>
@@ -86,7 +105,7 @@ function Board({ run }: { run: RunDetail }) {
           reservationDialog.current?.showModal()
         }}
       >
-        예약 가능
+        Available
       </button>
     )
   }
@@ -107,8 +126,15 @@ function Board({ run }: { run: RunDetail }) {
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
   const bars = reasons
-    ? excluded.map(([id, value]) => ({ id, label: reasonLabel(id), value }))
-    : steps
+    ? excluded.map(([id, value]) => ({
+        id,
+        label: overviewLabels[id] ?? id.replaceAll('_', ' '),
+        value,
+      }))
+    : steps.map((step) => ({
+        ...step,
+        label: overviewLabels[step.id] ?? step.id,
+      }))
   const pins = sites.filter((c) => c.rank <= 5 || c.id === picked)
   const placed: { x: number; y: number }[] = []
   function location(c: Candidate) {
@@ -143,7 +169,7 @@ function Board({ run }: { run: RunDetail }) {
     <>
       <dialog
         className="co-reservation"
-        aria-label="후보지 예약"
+        aria-label="Reserve a landing site"
         ref={reservationDialog}
         onClose={() => setReservationOpen(false)}
         onCancel={(event) => event.stopPropagation()}
@@ -151,13 +177,13 @@ function Board({ run }: { run: RunDetail }) {
         {reservationOpen && (
           <>
             <header className="co-head">
-              <h2>후보지 예약 · {picked}</h2>
+              <h2>Reserve a landing site · {picked}</h2>
               <button
                 type="button"
                 className="hud-button"
                 onClick={() => reservationDialog.current?.close()}
               >
-                닫기 ×
+                Close ×
               </button>
             </header>
             <ReservationPanel
@@ -171,19 +197,23 @@ function Board({ run }: { run: RunDetail }) {
       </dialog>
       <div className="co-title">
         <div>
-          <small>남극 착륙지 분석</small>
-          <h1>후보지 선정</h1>
+          <small>Lunar south pole</small>
+          <h1>Landing site selection</h1>
         </div>
         <p>
-          {run.mission?.landing_date} 착륙 <b> / </b>
-          {run.mission?.mission_duration_days}일 임무 <b> / </b>
-          {run.config.grid_spacing_m} m 격자
+          {run.mission && (
+            <>
+              Landing {run.mission.landing_date} <b> / </b>
+              {run.mission.mission_duration_days}-day mission <b> / </b>
+            </>
+          )}
+          {run.config.grid_spacing_m} m grid
         </p>
       </div>
       <div className="co-layout">
         <section className="co-card co-map">
           <div className="co-head">
-            <h2>남극 탐색 지도</h2>
+            <h2>South pole map</h2>
             <div className="co-toggle">
               {(['sun', 'earth'] as const).map((m) => (
                 <button
@@ -191,7 +221,7 @@ function Board({ run }: { run: RunDetail }) {
                   aria-pressed={m === metric}
                   onClick={() => setMetric(m)}
                 >
-                  {m === 'sun' ? '일조율' : '지구 LOS'}
+                  {m === 'sun' ? 'Sunlight' : 'Earth visibility'}
                 </button>
               ))}
             </div>
@@ -210,7 +240,10 @@ function Board({ run }: { run: RunDetail }) {
                   }
                 />
               ))}
-              <svg viewBox="0 0 100 100" aria-label="남극 지도 후보 위치">
+              <svg
+                viewBox="0 0 100 100"
+                aria-label="Candidate sites near the lunar south pole"
+              >
                 <circle
                   cx="50"
                   cy="50"
@@ -222,7 +255,17 @@ function Board({ run }: { run: RunDetail }) {
                 />
                 {sites.map((c) => {
                   const { x, y } = location(c)
-                  return <circle key={c.id} cx={x} cy={y} r=".6" fill="white" />
+                  return (
+                    <circle
+                      key={c.id}
+                      cx={x}
+                      cy={y}
+                      r=".6"
+                      fill="#101216"
+                      stroke="white"
+                      strokeWidth=".15"
+                    />
+                  )
                 })}
                 {markers.map(({ site, point, label }) => (
                   <path
@@ -239,7 +282,7 @@ function Board({ run }: { run: RunDetail }) {
                   type="button"
                   className="co-marker"
                   style={{ left: `${label.x}%`, top: `${label.y}%` }}
-                  aria-label={`지도 후보 ${site.rank}위`}
+                  aria-label={`Candidate ranked ${site.rank}`}
                   aria-pressed={picked === site.id}
                   onClick={() => setPicked(site.id)}
                 >
@@ -253,46 +296,46 @@ function Board({ run }: { run: RunDetail }) {
             </div>
           </div>
           {(!layers.length || layers.some((l) => failed.includes(l))) && (
-            <p role="status">지도 레이어를 불러올 수 없습니다.</p>
+            <p role="status">This map layer could not be loaded.</p>
           )}
           <div className="co-legend">
-            <span>{metric === 'sun' ? '일조율' : '지구 가시율'}</span>0% <i />{' '}
-            100%
+            <span>{metric === 'sun' ? 'Sunlight' : 'Earth visibility'}</span>0%{' '}
+            <i /> 100%
           </div>
           {active && (
             <div className="co-selected">
-              <small>선택한 후보 · 과학 순위 {active.rank}위</small>
+              <small>Selected site · Science rank #{active.rank}</small>
               <h3>{active.id}</h3>
               <p>
-                {active.lat_deg.toFixed(3)}° 위도　{active.lon_deg.toFixed(2)}°E
-                경도
+                {Math.abs(active.lat_deg).toFixed(3)}°
+                {active.lat_deg < 0 ? 'S' : 'N'}, {active.lon_deg.toFixed(2)}°E
               </p>
               <div className="co-booking">
                 <div>
-                  <h4>예약 정보</h4>
+                  <h4>Reservation details</h4>
                   <button
                     type="button"
                     onClick={availability.reload}
                     disabled={availability.state.status === 'loading'}
                   >
-                    새로고침
+                    Refresh
                   </button>
                 </div>
                 <div role="status">
                   {availability.state.status === 'loading'
-                    ? '예약 조회 중…'
+                    ? 'Checking availability…'
                     : availability.state.status === 'error'
-                      ? availability.state.message
+                      ? 'Couldn’t check availability. Try refreshing.'
                       : booking?.status === 'available'
                         ? reserveButton(picked!)
                         : booking?.status === 'reserved'
-                          ? '예약됨'
-                          : '예약 정보 미확인'}
+                          ? 'Reserved'
+                          : 'Availability unknown'}
                 </div>
                 {period && (
                   <p>
-                    조회 기간 {period.starts_at.slice(0, 10)} →{' '}
-                    {period.ends_at.slice(0, 10)} UTC · 종료일 제외
+                    Reservation window: {period.starts_at.slice(0, 10)} →{' '}
+                    {period.ends_at.slice(0, 10)} UTC · end date excluded
                   </p>
                 )}
                 {booking?.conflicts.map((item) => (
@@ -313,22 +356,22 @@ function Board({ run }: { run: RunDetail }) {
           <section className="co-card">
             <div className="co-head">
               <h2>
-                선정된 후보 <em>{sites.length}곳</em>
+                Ranked sites <em>{sites.length}</em>
               </h2>
-              <small>과학 점수순</small>
+              <small>By science score</small>
             </div>
             <div className="co-table">
               <table>
                 <thead>
                   <tr>
                     {[
-                      '순위',
-                      '후보 ID',
-                      '일조율',
-                      '지구 LOS',
-                      '가격¹',
-                      '점수',
-                      '예약',
+                      'Rank',
+                      'Site ID',
+                      'Sunlight',
+                      'Earth visibility',
+                      'Price¹',
+                      'Score',
+                      'Availability',
                     ].map((h) => (
                       <th key={h}>{h}</th>
                     ))}
@@ -369,46 +412,52 @@ function Board({ run }: { run: RunDetail }) {
                           {status === 'available'
                             ? reserveButton(c.id)
                             : status === 'reserved'
-                              ? '예약됨'
+                              ? 'Reserved'
                               : availability.state.status === 'loading'
-                                ? '조회 중'
-                                : '미확인'}
+                                ? 'Checking…'
+                                : 'Unknown'}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
-              {!sites.length && <p>조건을 만족하는 후보가 없습니다.</p>}
+              {!sites.length && <p>No sites meet the mission requirements.</p>}
             </div>
             <footer>
-              ¹ 24 kg 표면 하역 기준 · USD 추정{' '}
+              ¹ Estimated price in USD for a 24 kg payload delivered to the
+              surface.{' '}
               {availability.state.status === 'error' &&
-                '　|　예약 정보 연결 안 됨'}
+                ' Availability could not be verified.'}
             </footer>
           </section>
           <div className="co-stats">
             <section className="co-card">
               <div className="co-head">
-                <h2>지표 분포</h2>
+                <h2>Metric distributions</h2>
               </div>
               <div className="co-pad">
                 {(
                   [
-                    { key: 'sun_fraction', title: '일조율', unit: 'fraction' },
+                    {
+                      key: 'sun_fraction',
+                      title: 'Sunlight',
+                      unit: 'fraction',
+                    },
                     {
                       key: 'earth_fraction',
-                      title: '지구 가시율',
+                      title: 'Earth visibility',
                       unit: 'fraction',
                     },
                     {
                       key: 'sun_longest_dark_h',
-                      title: '최장 연속 암흑',
+                      title: 'Longest period of darkness',
                       unit: 'hours',
                     },
                   ] as const
                 ).map((d) => (
                   <Distribution
+                    english
                     key={d.key}
                     title={d.title}
                     hint=""
@@ -420,11 +469,11 @@ function Board({ run }: { run: RunDetail }) {
             </section>
             <section className="co-card">
               <div className="co-head">
-                <h2>결과 요약</h2>
+                <h2>Selection summary</h2>
               </div>
               <div className="co-pad">
                 <div className="co-toggle">
-                  {['선정 단계', '탈락 사유'].map((s, i) => (
+                  {['Selection stages', 'Reasons for exclusion'].map((s, i) => (
                     <button
                       key={s}
                       aria-pressed={Number(reasons) === i}
@@ -450,7 +499,7 @@ function Board({ run }: { run: RunDetail }) {
                     </div>
                   </div>
                 ))}
-                {!bars.length && <small>집계된 항목이 없습니다.</small>}
+                {!bars.length && <small>No counts are available.</small>}
               </div>
             </section>
           </div>
