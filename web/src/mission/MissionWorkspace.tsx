@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
+import { RequirementMarginPanel } from './RequirementMarginPanel'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -221,6 +222,12 @@ export function MissionWorkspace({
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
               <MissionMetrics result={analysis} />
+              {run && selectedCandidate ? (
+                <RequirementMarginPanel
+                  candidate={selectedCandidate}
+                  config={run.config}
+                />
+              ) : null}
               {selectedCandidate?.rf ? (
                 <section
                   aria-label="저장된 RF 통신 평가"
