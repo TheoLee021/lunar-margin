@@ -25,7 +25,7 @@ from lunar_margin.engine.descent_reference import (
 )
 from lunar_margin.engine.doi_pdi_reference import DoiPdiReference, reference_doi_pdi
 from lunar_margin.engine.ephemeris import inertial_moon_state_to_moon_me
-from lunar_margin.engine.transfer import calculate_transfer
+from lunar_margin.engine.transfer import LandingApproach, calculate_transfer
 
 router = APIRouter(prefix="/trajectory", tags=["trajectory"])
 _slots = BoundedSemaphore(1)
@@ -63,6 +63,8 @@ class FlightPreviewResponse:
     descent_epoch_utc: str | None
     descent: PathResult | None
     estimated_touchdown_utc: datetime | None
+    capture_delta_v_mps: float
+    planned_downrange_m: float
 
 
 @router.post("/flight-preview", response_model=FlightPreviewResponse)
@@ -74,8 +76,11 @@ def flight_preview(
     if not _slots.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Reference flight computation busy")
     try:
+        approach = LandingApproach(query.latitude, query.longitude, query.duration_s)
         with transfer_slot():
-            transfer = calculate_transfer(query.departure, query.arrival, settings.data_dir)
+            transfer = calculate_transfer(
+                query.departure, query.arrival, settings.data_dir, landing_approach=approach
+            )
         handoff = transfer.loi_handoff
         post_loi = np.asarray(handoff.post_loi_j2000_km_kmps, dtype=np.float64) * 1000
         orbit = reference_doi_pdi(
@@ -85,6 +90,8 @@ def flight_preview(
             query.longitude,
             inertial_moon_state_to_moon_me,
             tolerance_m=query.alignment_tolerance_m,
+            downrange_m=approach.downrange_m,
+            descent_duration_s=query.duration_s,
         )
         if orbit.aligned_pdi_moon_me_m_mps is None:
             return FlightPreviewResponse(
@@ -98,6 +105,8 @@ def flight_preview(
                 None,
                 None,
                 None,
+                transfer.metrics.loi_delta_v_km_s * 1000,
+                approach.downrange_m,
             )
 
         # Use the SAME 6D PDI state from the orbit reference; never reconstruct
@@ -108,7 +117,7 @@ def flight_preview(
             velocity_mps=pdi[3:],
             doi_delta_v_mps=orbit.doi_delta_v_mps,
             doi_to_pdi_s=orbit.coast_time_s,
-            approach_range_km=orbit.approach_error_m / 1000.0,
+            approach_range_km=approach.downrange_m / 1000.0,
         )
         vehicle = Lander(
             wet_mass_kg=query.wet_mass_kg,
@@ -141,6 +150,8 @@ def flight_preview(
             orbit.pdi.epoch_utc.isoformat(),
             path,
             orbit.pdi.epoch_utc + timedelta(seconds=path.duration_s) if path.feasible else None,
+            transfer.metrics.loi_delta_v_km_s * 1000,
+            approach.downrange_m,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail="Required NASA SPICE/DEM data missing") from exc
