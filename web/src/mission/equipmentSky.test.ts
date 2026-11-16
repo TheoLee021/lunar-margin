@@ -74,3 +74,8 @@ describe('skyFromAnalysis', () => {
     expect(() => skyFromAnalysis(empty)).toThrow()
   })
 })
+
+it('uses the API clearance before rounding the card angles', () => {
+  const series = { ...response.series, terrain_clearance_deg: [0.0004] }
+  expect(skyFromAnalysis({ ...response, series }).clearanceDeg).toBe(0.0004)
+})

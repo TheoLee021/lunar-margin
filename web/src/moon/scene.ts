@@ -1004,6 +1004,7 @@ export async function createMoonScene(
 
   // How long the camera leaves a viewer's own framing alone before resuming the chase.
   const HANDS_OFF_MS = 3000
+  let following = false
   let lastInputAt = 0
   const noteInput = () => {
     lastInputAt = performance.now()
@@ -1218,6 +1219,11 @@ export async function createMoonScene(
       assets.setSightsVisible(visible)
     },
     follow(location, rangeM, pitchDeg, headingDeg) {
+      if (!following) {
+        flight++
+        camera.cancelFlight()
+        following = true
+      }
       // Aim at the terrain, not the reference sphere: the two are kilometres apart
       // at the pole, and the equipment stands on the terrain.
       const surface = tileset.getHeight(
@@ -1248,6 +1254,8 @@ export async function createMoonScene(
       )
     },
     releaseFollow() {
+      if (!following) return
+      following = false
       camera.lookAtTransform(Matrix4.IDENTITY)
     },
     setSelectedMarker(id) {

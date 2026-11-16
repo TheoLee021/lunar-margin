@@ -163,6 +163,7 @@ export function MissionWorkspace({
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
+        siteAnalysisLoading={analysis.kind === 'loading'}
         reviewDays={reviewDays}
         ref={moon}
         selection={selection}

@@ -55,22 +55,6 @@ export interface Company {
   placement: Placement
 }
 
-/**
- * rover.glb measured from its own bounding box with the scale stored inside the file
- * applied: 12.71 m from wheels to mast top, with the origin 4.18 m above the lowest
- * point. Both numbers scale together, so a unit only has to say how tall it really is.
- */
-const ROVER_HEIGHT_M = 12.7079
-const ROVER_BELOW_ORIGIN_M = 4.1836
-function roverModel(targetHeightM: number): AssetModel {
-  const scale = targetHeightM / ROVER_HEIGHT_M
-  return {
-    uri: '/models/rover.glb',
-    scale,
-    baseLiftM: ROVER_BELOW_ORIGIN_M * scale,
-  }
-}
-
 const box = (widthM: number, depthM: number, heightM: number): AssetShape => ({
   kind: 'box',
   widthM,
@@ -398,7 +382,14 @@ export const COMPANIES: readonly Company[] = [
         offset: { eastM: -62, northM: 125 },
         observerHeightM: 1.5,
         shape: box(1.5, 2.6, 2.2),
-        model: roverModel(2.2),
+        // Original metre-scale glTF, grounded at the wheels. Cesium maps its
+        // forward axis to east; align it with the route's north-zero bearing.
+        model: {
+          uri: '/models/rover.glb',
+          scale: 1,
+          baseLiftM: 0,
+          headingOffsetDeg: -90,
+        },
         symbol: 'rover',
       },
       speedMS: 0.25,

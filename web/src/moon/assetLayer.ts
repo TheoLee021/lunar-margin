@@ -60,12 +60,7 @@ export interface AssetShape {
   parts?: readonly ShapePart[]
 }
 
-/**
- * A glTF model standing in for the plain shape. Every number is measured from the
- * file's own bounding box, because a downloaded model arrives in whatever units and
- * origin its author used: ours is 12.7 m tall in its own units with the origin 4.2 m
- * up inside the body.
- */
+/** Local glTF geometry and its alignment in the unit frame. */
 export interface AssetModel {
   uri: string
   /** Multiplier that brings the file's height to the asset's `shape.heightM`. */
@@ -139,26 +134,19 @@ const EARTH_BLOCKED = Color.fromCssColorString('#f87171')
  * instead, and leaves the full length for the sights that are actually clear.
  */
 const SIGHT_LENGTH_M = 40_000
-/** Start clear of the unit's own body, and stop short of the surface it hits. */
-const SIGHT_START_M = 4
-const SIGHT_HIT_BACKOFF_M = 3
-const SIGHT_MIN_M = 25
 const SIGHT_WIDTH_PX = 9
 const SIGHT_ALPHA = 0.55
 /** Translucent so the card reads as an overlay on the surface, not a sticker on it. */
 const LABEL_BACKGROUND = Color.fromCssColorString('#15191eb3')
 
-/**
- * `pickFromRay` is in Cesium's runtime but not in its published types, and it is the
- * only way to ask where a ray meets the loaded tiles: everything public samples a
- * height at a point. Declared narrowly and called through a guard, so a Cesium upgrade
- * that drops it degrades to drawing the ray at full length rather than breaking.
- */
-interface RayPicker {
-  pickFromRay?: (
+// Cesium's getHeight uses this same CPU intersection against the selected Moon
+// tiles. Its arbitrary-ray overload is available at runtime but absent from the types.
+interface TerrainRayPicker {
+  pick?(
     ray: Ray,
-    objectsToExclude?: readonly unknown[],
-  ) => { position?: Cartesian3; object?: { primitive?: unknown } } | undefined
+    frameState: unknown,
+    result: Cartesian3,
+  ): Cartesian3 | undefined
 }
 
 export interface AssetLayer {
@@ -329,34 +317,17 @@ export function createAssetLayer(
       Cartesian3.subtract(far, eye, new Cartesian3()),
       new Cartesian3(),
     )
-    const start = Cartesian3.add(
-      eye,
-      Cartesian3.multiplyByScalar(direction, SIGHT_START_M, new Cartesian3()),
-      new Cartesian3(),
-    )
-    let reach = SIGHT_LENGTH_M
-    const picker = viewer.scene as unknown as RayPicker
-    try {
-      const hit =
-        !asset.earth.visible &&
-        picker.pickFromRay?.(new Ray(start, direction), [
-          sights,
-          ...viewer.entities.values,
-        ])
-      if (hit && hit.position && hit.object?.primitive === tileset) {
-        const distance = Cartesian3.distance(start, hit.position)
-        if (distance < reach)
-          reach = Math.max(SIGHT_MIN_M, distance - SIGHT_HIT_BACKOFF_M)
-      }
-    } catch {
-      // Not every device can answer this; a full-length ray is the honest fallback.
-    }
-    const tip = Cartesian3.add(
-      start,
-      Cartesian3.multiplyByScalar(direction, reach, new Cartesian3()),
-      new Cartesian3(),
-    )
-    return [start, tip]
+    const picker: TerrainRayPicker = tileset as Cesium3DTileset &
+      TerrainRayPicker
+    const hit =
+      'frameState' in viewer.scene &&
+      picker.pick?.(
+        new Ray(eye, direction),
+        viewer.scene.frameState,
+        new Cartesian3(),
+      )
+    if (hit && Cartesian3.distance(eye, hit) < SIGHT_LENGTH_M) return [eye, hit]
+    return [eye, far]
   }
 
   const create = (asset: MoonAsset): Drawn => {

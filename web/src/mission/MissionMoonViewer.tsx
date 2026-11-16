@@ -39,8 +39,6 @@ import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
  */
 const FOLLOW_RANGE_M = 45
 const FOLLOW_PITCH_DEG = -15
-/** Sit behind the machine, looking the way it is going. */
-const FOLLOW_BEHIND_DEG = 180
 
 export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
@@ -74,6 +72,7 @@ export function MissionMoonViewer({
   sun,
   operatorId: givenOperatorId,
   sunDirection,
+  siteAnalysisLoading,
   reviewDays,
   sunMoving,
   photo,
@@ -95,6 +94,7 @@ export function MissionMoonViewer({
    * The shown time is being dragged or played: the Sun of each frame comes through `previewSun`,
    * and `sunDirection` is taken again, with its precise shadows, once this is over.
    */
+  siteAnalysisLoading: boolean
   reviewDays: number
   sunMoving: boolean
   /** Show the photo instead of the sunlight. */
@@ -155,7 +155,13 @@ export function MissionMoonViewer({
     return () => controller.abort()
   }, [key, lat, lon, height, center, demName])
   const current = result?.key === key ? result : null
+  const frame = useRef(0)
+  const stopDrive = () => {
+    cancelAnimationFrame(frame.current)
+    viewer.current?.releaseFollow()
+  }
   const focusSite = (site: CandidateSite) => {
+    stopDrive()
     setPicked(null)
     setDetail(true)
     viewer.current?.flyTo(
@@ -197,12 +203,12 @@ export function MissionMoonViewer({
     .toISOString()
     .replace('.000Z', 'Z')
   const sky = useEquipmentSky(
-    sunMoving ? undefined : selected,
+    sunMoving || siteAnalysisLoading ? undefined : selected,
     instant,
     operator,
     skyAttempt,
   )
-  const measured = sky.kind === 'ready' ? sky.sky : EMPTY_SKY
+  const measured = 'sky' in sky ? sky.sky : EMPTY_SKY
   const { mobile } = operator
 
   // The drive redraws every frame, so its state lives in a ref and goes straight to
@@ -213,7 +219,6 @@ export function MissionMoonViewer({
     sky: EquipmentSky
     progress: number
   }>({ site: undefined, operator, sky: EMPTY_SKY, progress: 0 })
-  const frame = useRef(0)
 
   /** Redraws the set and hands back the mobile unit, which is the one that moves. */
   const draw = useCallback(() => {
@@ -260,7 +265,7 @@ export function MissionMoonViewer({
           unit.location,
           FOLLOW_RANGE_M,
           FOLLOW_PITCH_DEG,
-          (unit.headingDeg ?? 0) + FOLLOW_BEHIND_DEG,
+          unit.headingDeg ?? 0,
         )
       if (progress < 1) frame.current = requestAnimationFrame(step)
       else viewer.current?.releaseFollow()
@@ -283,7 +288,11 @@ export function MissionMoonViewer({
     ) : sunMoving && selected ? (
       '재생 중 · 정지하면 장비 가시성을 계산합니다.'
     ) : sky.kind === 'idle' ? (
-      '후보를 선택하면 장비를 배치합니다.'
+      selected ? (
+        '후보 분석 후 장비 가시성을 계산합니다.'
+      ) : (
+        '후보를 선택하면 장비를 배치합니다.'
+      )
     ) : showControls ? (
       <>
         {sky.missing > 0 ? (
@@ -311,6 +320,7 @@ export function MissionMoonViewer({
           markers={markers}
           selectedMarkerId={selection.siteId}
           onPick={(location) => {
+            stopDrive()
             onSelect(null)
             setPicked(location)
             viewer.current?.flyTo(location, 18000)
@@ -374,6 +384,7 @@ export function MissionMoonViewer({
             type="button"
             className="hud-button"
             onClick={() => {
+              stopDrive()
               setPicked(null)
               setDetail(false)
               viewer.current?.flyToOverview()
@@ -386,6 +397,7 @@ export function MissionMoonViewer({
             className="hud-button"
             disabled={!selected && !observer}
             onClick={() => {
+              stopDrive()
               setDetail(true)
               const location =
                 observer ??

@@ -15,7 +15,7 @@ export type EquipmentSkyState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'ready'; sky: EquipmentSky; missing: number }
-  | { kind: 'error' }
+  | { kind: 'error'; sky: EquipmentSky }
 
 export const EMPTY_SKY: EquipmentSky = { statics: {}, waypoints: [] }
 
@@ -103,14 +103,14 @@ export function useEquipmentSky(
           key,
           state: received
             ? { kind: 'ready', missing, sky: { statics, waypoints } }
-            : { kind: 'error' },
+            : { kind: 'error', sky: { statics, waypoints } },
         })
     }
 
     const timer = window.setTimeout(() => {
       void load().catch(() => {
         if (!controller.signal.aborted)
-          setStored({ key, state: { kind: 'error' } })
+          setStored({ key, state: { kind: 'error', sky: EMPTY_SKY } })
       })
     }, 200)
 

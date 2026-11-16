@@ -81,3 +81,15 @@ describe('assetCardText', () => {
     ).toContain('관측 높이 10 m')
   })
 })
+
+it('distinguishes a failed measurement and a small positive clearance', () => {
+  const card = assetCardText({
+    label: '안테나',
+    observerHeightM: 2,
+    measured: true,
+    earth: { ...clear, visible: true, clearanceDeg: 0.0004 },
+    sun: null,
+  })
+  expect(card).toContain('지구 보임 · 여유 <0.01°')
+  expect(card).toContain('태양 가시성 계산 실패')
+})
