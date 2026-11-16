@@ -1,7 +1,10 @@
 import type { PolarGridCell } from '../moon/location'
+import type { Requirements } from './requirements'
 
 /** The single selection shared by the map and mission panels. All dates are UTC. */
 export type MissionSelection = {
+  /** The limits set on the search screen; absent until a search was made there. */
+  requirements?: Requirements
   maxSlope?: number | null
   launchId?: string | null
   departure: string

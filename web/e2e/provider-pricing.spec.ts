@@ -133,7 +133,7 @@ test('launch departure changes independently from the user landing date', async 
     }),
   )
   await page.goto(
-    '/?planner=1&departure=2027-01-04&arrival=2027-01-10&duration=14',
+    '/explore?planner=1&departure=2027-01-04&arrival=2027-01-10&duration=14',
   )
   const picker = page.getByRole('region', { name: '발사 일정에서 출발일 선택' })
   await picker
@@ -287,7 +287,7 @@ test('selected launch operator reprices the same date and grids and survives nav
     })
   })
   await page.goto(
-    '/?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
+    '/explore?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
   )
   const dialog = page.getByRole('dialog')
   const picker = dialog.getByLabel('발사 일정에서 출발일 선택 · UTC')
@@ -399,7 +399,7 @@ test('dates without a published launch have no price, departure link, or applica
     })
   })
   await page.goto(
-    '/?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
+    '/explore?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
   )
   const dialog = page.getByRole('dialog')
   const grid = dialog.getByRole('table')
@@ -473,7 +473,7 @@ test('a revised launch schedule blocks applying its old departure and recovers w
     })
   })
   await page.goto(
-    '/?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
+    '/explore?planner=1&departure=2027-01-06&arrival=2027-01-10&duration=14',
   )
   const dialog = page.getByRole('dialog')
   const departure = dialog.getByLabel('기준 출발일 · UTC', { exact: true })

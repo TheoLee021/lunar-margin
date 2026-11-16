@@ -44,7 +44,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
       })),
     }),
   )
-  await page.goto('/')
+  await page.goto('/explore')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',

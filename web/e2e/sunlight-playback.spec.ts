@@ -14,7 +14,7 @@ test('playing the review time moves the sunlight and asks for precise shadows on
     if (sent.url().includes('/sunlight/south-pole'))
       sunlightMaps.push(sent.url())
   })
-  await page.goto('/')
+  await page.goto('/explore')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',

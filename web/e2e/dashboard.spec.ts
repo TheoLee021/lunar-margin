@@ -37,7 +37,7 @@ test('dashboard uses the date’s saved top five and analyzes only the selected 
         .replace(/^https?:\/\/[^/]+\/api/, 'http://localhost:8765'),
     }),
   )
-  await page.goto('/')
+  await page.goto('/explore')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   const metrics = page.getByRole('complementary', { name: '선택한 지점' })
   await expect(
@@ -113,7 +113,7 @@ test('dashboard has no example fallback for missing or failed saved results', as
         .replace(/^https?:\/\/[^/]+\/api/, 'http://localhost:8765'),
     }),
   )
-  await page.goto('/?site=site-1')
+  await page.goto('/explore?site=site-1')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   const metrics = page.getByRole('complementary', { name: '선택한 지점' })
   await expect(rail).toContainText('저장된 탐색 결과가 없습니다')

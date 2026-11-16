@@ -6,7 +6,7 @@ test('returning from candidate search keeps the selected mission site', async ({
   request,
 }) => {
   await mockDashboardRuns(page, request)
-  await page.goto('/')
+  await page.goto('/explore')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   await rail.getByRole('button', { name: /후보 2/ }).click()
   await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(

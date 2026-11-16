@@ -29,7 +29,7 @@ test('a high lunar ridge keeps its 500m footprint visible after zooming', async 
         .replace(/^https?:\/\/[^/]+\/api/, 'http://localhost:8765'),
     }),
   )
-  await page.goto('/')
+  await page.goto('/explore')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',

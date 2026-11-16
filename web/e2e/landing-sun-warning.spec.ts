@@ -6,7 +6,7 @@ test('only a candidate shadowed at landing midnight gets the landing warning', a
   request,
 }) => {
   await mockDashboardRuns(page, request)
-  await page.goto('/')
+  await page.goto('/explore')
   await expect(page.getByLabel('태양 조명 검토 시각, 30분 단위')).toHaveCount(0)
   const warning = page.getByRole('alert').filter({ hasText: '착륙 일조 경고' })
   await expect(warning).toHaveCount(0)

@@ -58,6 +58,22 @@ def test_missing_constraints_mean_no_filter_not_zero() -> None:
     assert thresholds.max_sun_dark_hours is None and thresholds.max_earth_blackout_hours is None
 
 
+def test_a_minimum_sunlight_fraction_becomes_a_hard_threshold() -> None:
+    mission = MissionRequest.model_validate({**EXAMPLE, "min_sunlight_fraction": 0.7})
+
+    assert plan_search(mission).config.thresholds.min_sun_fraction == 0.7
+
+
+def test_an_unset_sunlight_minimum_reuses_the_runs_saved_before_it_existed() -> None:
+    unset = MissionRequest.model_validate(EXAMPLE)
+    explicit_null = MissionRequest.model_validate({**EXAMPLE, "min_sunlight_fraction": None})
+    limited = MissionRequest.model_validate({**EXAMPLE, "min_sunlight_fraction": 0.7})
+
+    # 이 필드가 생기기 전에 같은 입력이 받던 id. 바뀌면 저장된 탐색 결과를 다시 계산하게 된다.
+    assert unset.run_id() == explicit_null.run_id() == "m-177865fd67"
+    assert limited.run_id() != unset.run_id()
+
+
 @pytest.mark.parametrize(
     ("priority", "sun", "earth", "visibility"),
     [
@@ -108,6 +124,8 @@ def test_other_search_settings_keep_their_defaults() -> None:
         {"mission_duration_days": 366},
         {"max_continuous_darkness_hours": -1},
         {"max_communication_blackout_hours": -0.5},
+        {"min_sunlight_fraction": -0.1},
+        {"min_sunlight_fraction": 1.5},
         {"max_terrain_slope_degrees": 0},
         {"max_terrain_slope_degrees": 91},
         {"observer_height_m": -1},

@@ -37,6 +37,7 @@ class MissionRequest(BaseModel):
 
     rf: RFScenario = RFScenario()
     min_communication_fraction: float | None = Field(default=None, ge=0, le=1)
+    min_sunlight_fraction: float | None = Field(default=None, ge=0, le=1)
     landing_date: date
     mission_duration_days: int = Field(ge=1, le=365)
     max_continuous_darkness_hours: float | None = Field(default=None, ge=0.0)
@@ -63,7 +64,9 @@ class MissionRequest(BaseModel):
 
     def run_id(self) -> str:
         """같은 입력은 항상 같은 id를 갖는다 (결과 재사용). API가 그대로 폴더 이름으로 쓴다."""
-        canonical = f"v{PLAN_VERSION}|{self.model_dump_json()}"
+        # 일조율 하한이 없는 입력은 이 필드가 생기기 전과 같은 id를 가져, 저장된 결과를 그대로 쓴다
+        added_later = {"min_sunlight_fraction"} if self.min_sunlight_fraction is None else None
+        canonical = f"v{PLAN_VERSION}|{self.model_dump_json(exclude=added_later)}"
         return "m-" + hashlib.sha256(canonical.encode()).hexdigest()[:10]
 
 
@@ -87,6 +90,7 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
                 step_minutes=MISSION_STEP_MINUTES,
             ),
             "thresholds": Thresholds(
+                min_sun_fraction=mission.min_sunlight_fraction,
                 max_sun_dark_hours=mission.max_continuous_darkness_hours,
                 max_rf_blackout_hours=mission.max_communication_blackout_hours,
                 # Retain the historical LOS bound for existing consumers. RF is stricter

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Candidate, SearchConfig } from '../api/candidates'
 import {
   comparisonAxes,
@@ -31,11 +31,14 @@ const marginText = (row: RequirementMargin) =>
     : `${row.margin >= 0 ? '+' : ''}${amount(row.margin, row.unit === '%' ? '%p' : row.unit)}`
 
 export function SiteComparisonPanel({
+  nav,
   candidates,
   config,
   onClose,
   onClear,
 }: {
+  /** The stage links: the dialog covers the ones on the page. */
+  nav?: ReactNode
   candidates: readonly Candidate[]
   config: SearchConfig
   onClose: () => void
@@ -71,18 +74,20 @@ export function SiteComparisonPanel({
       onCancel={onClose}
       className="m-auto max-h-[calc(100dvh-24px)] w-[min(900px,calc(100vw-24px))] max-w-none overflow-y-auto rounded-xl border border-white/20 bg-[#10151c] p-4 text-neutral-100 shadow-2xl backdrop:bg-black/70 sm:p-6"
     >
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="siteComparisonTitle" className="text-lg font-semibold">
           TOP 5 후보 비교
         </h2>
+        {/* After the close button in the document, so opening the dialog still focuses that. */}
         <button
           type="button"
-          className="hud-button"
+          className="hud-button order-last"
           aria-label="비교 닫기"
           onClick={onClose}
         >
           ✕
         </button>
+        {nav ? <div className="ml-auto shrink-0">{nav}</div> : null}
       </header>
       <p className="mt-2 text-xs text-neutral-400">
         {config.window.start.slice(0, 10)} → {config.window.end.slice(0, 10)}{' '}

@@ -57,7 +57,7 @@ test('missing landing dates launch one batch and display all five results', asyn
         request.postDataJSON().mission.max_terrain_slope_degrees === limit,
     )
   const unrestricted = calendarForSlope(null)
-  await page.goto('/?planner=1')
+  await page.goto('/explore?planner=1')
   await unrestricted
   const slope = page.getByLabel('최대 허용 경사', { exact: false })
   await expect(slope).toHaveValue('')
@@ -150,7 +150,7 @@ test('date prices open the saved candidate run without recalculating', async ({
       }),
     })
   })
-  await page.goto('/?planner=1')
+  await page.goto('/explore?planner=1')
   const dialog = page.getByRole('dialog')
   const grid = dialog.getByRole('table', {
     name: '출발일과 착륙일별 평균 가격',
@@ -410,7 +410,7 @@ test('a busy search waits and automatically starts the missing dates when the wo
       },
     })
   })
-  await page.goto('/?planner=1')
+  await page.goto('/explore?planner=1')
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
   await expect(

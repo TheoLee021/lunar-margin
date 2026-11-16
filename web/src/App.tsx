@@ -1,13 +1,18 @@
 import { FlightConditions, type FlightOverride } from './flight/flightPlan'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { fetchHealth } from './api/client'
+import { LandingPage } from './landing/LandingPage'
+import { applySearch } from './landing/searchForm'
 import { MissionWorkspace } from './mission/MissionWorkspace'
 import { MissionSummary } from './mission/MissionSummary'
 import { missionParams } from './mission/liveAnalysis'
 import { useDashboardRun } from './mission/useDashboardRun'
 import { useMissionAnalysis } from './mission/useMissionAnalysis'
+import { readRequirements, writeRequirements } from './mission/requirements'
 import { ScheduleSchema } from './mission/scheduleSchema'
 import type { MissionSelection, Schedule } from './mission/types'
+import { StageNav, type Stage } from './StageNav'
 
 const DatePlanner = lazy(() =>
   import('./mission/DatePlanner').then((module) => ({
@@ -24,7 +29,16 @@ const INITIAL_SELECTION: MissionSelection = {
   duration: 14,
   siteId: null,
 }
-type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
+type View = 'landing' | 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
+/** A dialog open over the 3D view. Each one is a stage of its own. */
+type Overlay = 'planner' | 'compare' | null
+
+const STAGE_VIEWS: Record<Stage, { view: View; overlay: Overlay }> = {
+  search: { view: 'landing', overlay: null },
+  schedule: { view: 'mission', overlay: 'planner' },
+  compare: { view: 'mission', overlay: 'compare' },
+  explore: { view: 'mission', overlay: null },
+}
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
@@ -35,13 +49,23 @@ function overviewRun() {
 
 function currentView(): View {
   if (overviewRun()) return 'mission'
-  if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
-  if (window.location.pathname.replace(/\/+$/, '') === '/flight')
-    return 'flight'
+  const path = window.location.pathname.replace(/\/+$/, '')
+  if (path === '/orbit') return 'orbit'
+  if (path === '/flight') return 'flight'
+  if (path === '/explore') return 'mission'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
-    : 'mission'
+    : 'landing'
+}
+
+function currentOverlay(): Overlay {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('planner') === '1'
+    ? 'planner'
+    : params.get('compare') === '1'
+      ? 'compare'
+      : null
 }
 
 function initialSelection(): MissionSelection {
@@ -61,6 +85,7 @@ function initialSelection(): MissionSelection {
   return {
     ...INITIAL_SELECTION,
     ...(schedule.success ? schedule.data : {}),
+    requirements: readRequirements(params),
     siteId,
   }
 }
@@ -68,11 +93,17 @@ function initialSelection(): MissionSelection {
 function locationFor(
   view: View,
   selection: MissionSelection,
-  planner: boolean,
+  overlay: Overlay,
 ): string {
   const url = new URL(window.location.href)
   url.pathname =
-    view === 'orbit' ? '/orbit' : view === 'flight' ? '/flight' : '/'
+    view === 'orbit'
+      ? '/orbit'
+      : view === 'flight'
+        ? '/flight'
+        : view === 'mission'
+          ? '/explore'
+          : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
@@ -82,12 +113,14 @@ function locationFor(
   if (selection.maxSlope !== undefined)
     url.searchParams.set('max_slope', String(selection.maxSlope ?? 'none'))
   else url.searchParams.delete('max_slope')
+  writeRequirements(url.searchParams, selection.requirements)
   if (selection.launchId) url.searchParams.set('launch_id', selection.launchId)
   else url.searchParams.delete('launch_id')
   if (selection.siteId) url.searchParams.set('site', selection.siteId)
   else url.searchParams.delete('site')
-  if (view === 'mission' && planner) url.searchParams.set('planner', '1')
-  else url.searchParams.delete('planner')
+  for (const name of ['planner', 'compare'] as const)
+    if (view === 'mission' && overlay === name) url.searchParams.set(name, '1')
+    else url.searchParams.delete(name)
   return `${url.pathname}${url.search}${url.hash}`
 }
 
@@ -96,16 +129,12 @@ export default function App() {
   const [view, setView] = useState<View>(currentView)
   const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
-  const [planner, setPlanner] = useState(
-    () => new URLSearchParams(window.location.search).get('planner') === '1',
-  )
+  const [overlay, setOverlay] = useState<Overlay>(currentOverlay)
   useEffect(() => {
     const pop = () => {
       setPanelRun(overviewRun())
       setView(currentView())
-      setPlanner(
-        new URLSearchParams(window.location.search).get('planner') === '1',
-      )
+      setOverlay(currentOverlay())
     }
     window.addEventListener('popstate', pop)
     return () => window.removeEventListener('popstate', pop)
@@ -115,12 +144,12 @@ export default function App() {
     window.history.replaceState(
       window.history.state,
       '',
-      locationFor(view, selection, planner),
+      locationFor(view, selection, overlay),
     )
-  }, [view, selection, planner])
+  }, [view, selection, overlay])
   function toggleOverview(runId: string | null) {
     const url = new URL(
-      locationFor('mission', selection, false),
+      locationFor('mission', selection, null),
       window.location.origin,
     )
     if (runId) {
@@ -131,22 +160,45 @@ export default function App() {
     }
     window.history.pushState(null, '', url)
     setPanelRun(runId)
-    setPlanner(false)
+    setOverlay(null)
   }
   function navigate(
     nextView: View,
-    openPlanner = false,
+    nextOverlay: Overlay = null,
     nextSelection = selection,
   ) {
     window.history.pushState(
       null,
       '',
-      locationFor(nextView, nextSelection, openPlanner),
+      locationFor(nextView, nextSelection, nextOverlay),
     )
     setSelection(nextSelection)
     setView(nextView)
-    setPlanner(openPlanner)
+    setOverlay(nextOverlay)
   }
+  const stageNav = (
+    <StageNav
+      current={
+        view === 'landing'
+          ? 'search'
+          : overlay === 'planner'
+            ? 'schedule'
+            : overlay === 'compare'
+              ? 'compare'
+              : 'explore'
+      }
+      hrefFor={(stage) =>
+        locationFor(
+          STAGE_VIEWS[stage].view,
+          selection,
+          STAGE_VIEWS[stage].overlay,
+        )
+      }
+      onNavigate={(stage) =>
+        navigate(STAGE_VIEWS[stage].view, STAGE_VIEWS[stage].overlay)
+      }
+    />
+  )
   return (
     <FlightConditions.Provider value={{ override, apply }}>
       <Suspense
@@ -156,9 +208,17 @@ export default function App() {
           </p>
         }
       >
-        {view === 'analysis' ? (
+        {view === 'landing' ? (
+          <LandingPage
+            selection={selection}
+            nav={stageNav}
+            onSearch={(search) =>
+              navigate('mission', 'planner', applySearch(selection, search))
+            }
+          />
+        ) : view === 'analysis' ? (
           <AnalysisWorkspace
-            dashboardHref={locationFor('mission', selection, false)}
+            dashboardHref={locationFor('mission', selection, null)}
             onDashboardClick={(event) => {
               if (
                 event.button !== 0 ||
@@ -188,7 +248,7 @@ export default function App() {
                     : null,
               }))
             }
-            onBack={() => navigate('mission', true)}
+            onBack={() => navigate('mission', 'planner')}
           />
         ) : view === 'search' ? (
           <SearchWorkspace
@@ -204,18 +264,21 @@ export default function App() {
             onSelect={(siteId) =>
               setSelection((current) => ({ ...current, siteId }))
             }
-            planner={planner}
-            onPlannerChange={setPlanner}
+            planner={overlay === 'planner'}
+            onPlannerChange={(open) => setOverlay(open ? 'planner' : null)}
+            comparing={overlay === 'compare'}
+            onComparingChange={(open) => setOverlay(open ? 'compare' : null)}
+            nav={stageNav}
             onApply={(schedule) => {
               setSelection((current) => ({
                 ...current,
                 ...schedule,
                 siteId: null,
               }))
-              setPlanner(false)
+              setOverlay(null)
             }}
             onViewOrbit={(schedule) =>
-              navigate('orbit', false, {
+              navigate('orbit', null, {
                 ...selection,
                 ...schedule,
                 siteId:
@@ -249,6 +312,9 @@ function MissionApp({
   onSelect,
   planner,
   onPlannerChange,
+  comparing,
+  onComparingChange,
+  nav,
   onApply,
   onViewOrbit,
 }: {
@@ -259,6 +325,10 @@ function MissionApp({
   onSelect: (siteId: string | null) => void
   planner: boolean
   onPlannerChange: (open: boolean) => void
+  comparing: boolean
+  onComparingChange: (open: boolean) => void
+  /** The stage links. An open dialog covers the page, so it shows them instead. */
+  nav: ReactNode
   onApply: (schedule: Schedule) => void
   onViewOrbit: (schedule: Schedule) => void
 }) {
@@ -330,6 +400,9 @@ function MissionApp({
         candidates={candidates}
         sites={sites}
         onSelect={onSelect}
+        comparing={comparing}
+        onComparingChange={onComparingChange}
+        nav={planner ? null : nav}
         summary={
           <button
             type="button"
@@ -365,6 +438,8 @@ function MissionApp({
             }
           >
             <DatePlanner
+              nav={nav}
+              requirements={selection.requirements}
               site={site}
               selectedSiteId={selection.siteId}
               schedule={selection}
@@ -378,7 +453,7 @@ function MissionApp({
       <div className="fixed bottom-10 left-32 z-20 flex gap-2">
         <a
           className="hud-button"
-          href={locationFor('analysis', selection, false)}
+          href={locationFor('analysis', selection, null)}
           onClick={(event) => {
             if (
               event.button !== 0 ||

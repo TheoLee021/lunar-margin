@@ -52,7 +52,7 @@ test('operator equipment follows the review time and recovers a partial visibili
     }
     return route.continue()
   })
-  await page.goto('/?operator=terra-nova-works')
+  await page.goto('/explore?operator=terra-nova-works')
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',

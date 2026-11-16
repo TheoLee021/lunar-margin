@@ -18,7 +18,7 @@ async function useStub(page: Page) {
 }
 
 async function openSearch(page: Page) {
-  await page.goto('/')
+  await page.goto('/explore')
   await page.getByRole('button', { name: '후보지 탐색' }).click()
   await expect(page.getByRole('tab', { name: /거친 격자/ })).toBeVisible()
 }
@@ -146,7 +146,7 @@ test('shows the empty and error states', async ({ page }) => {
 
 // 탭 이름이 아직 없는 상태(빈·에러)에서 쓰는 진입 헬퍼
 async function openSearch2(page: Page) {
-  await page.goto('/')
+  await page.goto('/explore')
   await page.getByRole('button', { name: '후보지 탐색' }).click()
 }
 

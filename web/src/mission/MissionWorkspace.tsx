@@ -29,6 +29,9 @@ export function MissionWorkspace({
   candidates,
   sites,
   onSelect,
+  comparing,
+  onComparingChange,
+  nav,
   summary,
   apiStatus,
   children,
@@ -39,6 +42,11 @@ export function MissionWorkspace({
   sites: readonly CandidateSite[]
   selection: MissionSelection
   onSelect: (id: string | null) => void
+  /** The comparison dialog is open. It is a stage of its own, so the page's URL decides. */
+  comparing: boolean
+  onComparingChange: (open: boolean) => void
+  /** The stage links: at the top of the page, or in the comparison dialog while that covers it. */
+  nav: ReactNode
   summary: ReactNode
   apiStatus: ReactNode
   children?: ReactNode
@@ -56,10 +64,9 @@ export function MissionWorkspace({
   const [checked, setChecked] = useState({
     key: comparisonKey,
     ids: [] as string[],
-    open: false,
   })
   if (result.kind !== 'loading' && checked.key !== comparisonKey)
-    setChecked({ key: comparisonKey, ids: [], open: false })
+    setChecked({ key: comparisonKey, ids: [] })
   const checkedIds = checked.key === comparisonKey ? checked.ids : []
   const comparisonCandidates =
     run?.candidates
@@ -368,7 +375,6 @@ export function MissionWorkspace({
                               site.id,
                               sites.map((value) => value.id),
                             ),
-                            open: false,
                           }))
                         }
                       />
@@ -415,9 +421,7 @@ export function MissionWorkspace({
                     type="button"
                     className="hud-button disabled:opacity-40"
                     disabled={checkedIds.length === 0}
-                    onClick={() =>
-                      setChecked((current) => ({ ...current, open: true }))
-                    }
+                    onClick={() => onComparingChange(true)}
                   >
                     선택 후보 비교 ({checkedIds.length}/5)
                   </button>
@@ -546,11 +550,15 @@ export function MissionWorkspace({
         {apiStatus}
       </div>
       {children}
-      {run && checked.key === comparisonKey && checked.open ? (
+      {run && comparing ? null : (
+        <div className="absolute top-4 right-4 z-20">{nav}</div>
+      )}
+      {run && comparing ? (
         <SiteComparisonPanel
+          nav={nav}
           candidates={comparisonCandidates}
           config={run.config}
-          onClose={() => setChecked((current) => ({ ...current, open: false }))}
+          onClose={() => onComparingChange(false)}
           onClear={() => setChecked((current) => ({ ...current, ids: [] }))}
         />
       ) : null}

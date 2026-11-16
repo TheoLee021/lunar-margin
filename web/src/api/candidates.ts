@@ -174,6 +174,7 @@ export type Priority = z.infer<typeof PrioritySchema>
 export const MissionRequestSchema = z.object({
   rf: RFScenarioSchema.optional(),
   min_communication_fraction: NullableNumber.optional(),
+  min_sunlight_fraction: NullableNumber.optional(),
   landing_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   mission_duration_days: z.number().int(),
   max_continuous_darkness_hours: NullableNumber,

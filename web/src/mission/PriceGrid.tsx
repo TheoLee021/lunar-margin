@@ -4,6 +4,11 @@ import { formatPrice, isTransitPossible, type Delivery } from '../api/pricing'
 import type { departureAvailability } from '../api/launchSchedule'
 import type { ProviderCalendarInput } from '../api/providerPricing'
 import { dayOf, iso, short } from './missionDates'
+import {
+  DEFAULT_REQUIREMENTS,
+  requirementLimits,
+  type Requirements,
+} from './requirements'
 import type { Schedule } from './types'
 import { useProviderCalendar } from './useProviderCalendar'
 
@@ -43,6 +48,7 @@ export type DepartureStatus = {
 }
 
 export function PriceGrid({
+  requirements = DEFAULT_REQUIREMENTS,
   departures,
   landings,
   draft,
@@ -52,6 +58,8 @@ export function PriceGrid({
   onSelect,
   onDepartureStatus,
 }: {
+  /** The limits of the search screen; the ones edited here start from them. */
+  requirements?: Requirements
   departures: number[]
   landings: number[]
   draft: Schedule
@@ -63,9 +71,16 @@ export function PriceGrid({
 }) {
   const [mass, setMass] = useState('24')
   const [delivery, setDelivery] = useState<Delivery>('surface')
-  const [mission, setMission] = useState(DEFAULT_MISSION)
-  const [darkness, setDarkness] = useState('24')
-  const [blackout, setBlackout] = useState('6')
+  const [mission, setMission] = useState<MissionRequest>(() => ({
+    ...DEFAULT_MISSION,
+    ...requirementLimits(requirements),
+  }))
+  const [darkness, setDarkness] = useState(
+    requirements.maxDarknessHours?.toString() ?? '',
+  )
+  const [blackout, setBlackout] = useState(
+    requirements.maxBlackoutHours?.toString() ?? '',
+  )
   const [source, setSource] = useState(
     () => new URLSearchParams(window.location.search).get('pricing_run') ?? '',
   )
@@ -100,6 +115,19 @@ export function PriceGrid({
       })
     return () => controller.abort()
   }, [source, onSlopeChange])
+  // Limits of the search that this table has no field for. They still decide which grids qualify.
+  const percent = (fraction: number) => `${+(fraction * 100).toFixed(2)}%`
+  const searchLimits = [
+    ...(mission.min_sunlight_fraction == null
+      ? []
+      : [`sunlight ≥ ${percent(mission.min_sunlight_fraction)}`]),
+    ...(mission.min_communication_fraction == null
+      ? []
+      : [`communication ≥ ${percent(mission.min_communication_fraction)}`]),
+    ...(mission.max_terrain_roughness_m == null
+      ? []
+      : [`regional roughness ≤ ${mission.max_terrain_roughness_m} m`]),
+  ]
   const optional = (value: string) =>
     value.trim() === '' ? null : Number(value)
   const massNumber = Number(mass),
@@ -266,6 +294,11 @@ export function PriceGrid({
           )}
         </div>
       </div>
+      {searchLimits.length > 0 ? (
+        <p className="hint">
+          Also applied from the search: {searchLimits.join(' · ')}
+        </p>
+      ) : null}
       {source && !sourceReady && !sourceState.error ? (
         <p role="status">탐색 조건을 불러오는 중…</p>
       ) : null}

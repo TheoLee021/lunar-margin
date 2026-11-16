@@ -1,10 +1,11 @@
 import { PlannerTouchdown } from './PlannerTouchdown'
 import { useFlightPlan } from '../flight/flightPlan'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayOf, iso, short } from './missionDates'
 import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
+import type { Requirements } from './requirements'
 import { DateSchema, ScheduleSchema } from './scheduleSchema'
 import { PriceGrid, type DepartureStatus } from './PriceGrid'
 import { LaunchDeparture } from './LaunchDeparture'
@@ -17,6 +18,9 @@ import { isTransitPossible } from '../api/pricing'
 import './date-planner.css'
 
 type Props = {
+  /** The stage links: the dialog covers the ones on the page. */
+  nav?: ReactNode
+  requirements?: Requirements
   site?: { latitude: number; longitude: number }
   selectedSiteId: string | null
   schedule: Schedule
@@ -25,6 +29,8 @@ type Props = {
   onClose: () => void
 }
 export function DatePlanner({
+  nav,
+  requirements,
   schedule,
   site,
   selectedSiteId,
@@ -136,14 +142,16 @@ export function DatePlanner({
             하강 궤도로 계산합니다.
           </p>
         </div>
+        {/* After the close button in the document, so opening the dialog still focuses that. */}
         <button
           type="button"
-          className="close-planner"
+          className="close-planner order-last"
           onClick={onClose}
           aria-label="날짜 패널 닫기"
         >
           ✕
         </button>
+        {nav ? <div className="mr-3 ml-auto shrink-0">{nav}</div> : null}
       </header>
       <div className="planner-layout">
         <div className="planner-primary">
@@ -234,6 +242,7 @@ export function DatePlanner({
               </label>
             </div>
             <PriceGrid
+              requirements={requirements}
               departures={departures}
               landings={landings}
               draft={draft}
