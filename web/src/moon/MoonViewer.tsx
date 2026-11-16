@@ -27,7 +27,6 @@ export interface MoonViewerHandle {
 }
 
 interface MoonViewerProps {
-  showSightlines?: boolean
   viewshed?: Viewshed | null
   flightPoints?: readonly FlightPoint[]
   flightFrame?: number
@@ -55,7 +54,6 @@ const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
 export default function MoonViewer({
   ref,
   viewshed = null,
-  showSightlines = true,
   flightPoints = NO_FLIGHT,
   flightFrame = 0,
   markers = NO_MARKERS,
@@ -86,10 +84,6 @@ export default function MoonViewer({
   useEffect(() => {
     if (ready) sceneRef.current?.setSelectedMarker(selectedMarkerId)
   }, [ready, selectedMarkerId])
-
-  useEffect(() => {
-    if (ready) sceneRef.current?.setSightlinesVisible(showSightlines)
-  }, [ready, showSightlines])
 
   useEffect(() => {
     if (ready) sceneRef.current?.setViewshed(viewshed)
