@@ -1,4 +1,5 @@
 import type { Viewshed } from '../api/viewshed'
+import type { FlightPoint } from '../flight/flightData'
 import {
   useEffect,
   useImperativeHandle,
@@ -22,6 +23,8 @@ export interface MoonViewerHandle {
 
 interface MoonViewerProps {
   viewshed?: Viewshed | null
+  flightPoints?: readonly FlightPoint[]
+  flightFrame?: number
   ref?: Ref<MoonViewerHandle>
   /** Labelled points such as candidate landing sites. */
   markers?: readonly MoonMarker[]
@@ -40,11 +43,14 @@ type LoadState =
 // download overlaps React's first render instead of waiting for the effect.
 const sceneModule = import('./scene')
 
+const NO_FLIGHT: readonly FlightPoint[] = []
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
 
 export default function MoonViewer({
   ref,
   viewshed = null,
+  flightPoints = NO_FLIGHT,
+  flightFrame = 0,
   markers = NO_MARKERS,
   selectedMarkerId = null,
   onMarkerSelect,
@@ -77,6 +83,14 @@ export default function MoonViewer({
   useEffect(() => {
     if (ready) sceneRef.current?.setViewshed(viewshed)
   }, [ready, viewshed])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setFlightPath(flightPoints)
+  }, [ready, flightPoints])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setFlightFrame(flightFrame)
+  }, [ready, flightFrame, flightPoints])
 
   useImperativeHandle(
     ref,

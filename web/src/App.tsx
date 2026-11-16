@@ -22,12 +22,14 @@ const INITIAL_SELECTION: MissionSelection = {
   duration: 14,
   siteId: null,
 }
-type View = 'mission' | 'analysis' | 'orbit' | 'search'
+type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
+  if (window.location.pathname.replace(/\/+$/, '') === '/flight')
+    return 'flight'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
@@ -56,7 +58,8 @@ function locationFor(
   planner: boolean,
 ): string {
   const url = new URL(window.location.href)
-  url.pathname = view === 'orbit' ? '/orbit' : '/'
+  url.pathname =
+    view === 'orbit' ? '/orbit' : view === 'flight' ? '/flight' : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
@@ -135,8 +138,10 @@ export default function App() {
               navigate('mission')
             }}
           />
-        ) : view === 'orbit' ? (
+        ) : view === 'orbit' || view === 'flight' ? (
           <OrbitWorkspace
+            initialLanding={view === 'flight'}
+            siteId={selection.siteId}
             schedule={selection}
             onScheduleChange={(schedule) =>
               setSelection((current) => ({
