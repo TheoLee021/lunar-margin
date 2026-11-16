@@ -113,13 +113,31 @@ def body_azel(
     return topocentric_azel(body_vectors(body, et), lat_deg, lon_deg, observer_height_m)
 
 
+def ephemeris_time(epoch: datetime) -> float:
+    if epoch.tzinfo is None:
+        raise ValueError("epoch must include a timezone")
+    utc = epoch.astimezone(UTC)
+    with _SPICE_LOCK:
+        return float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+
+
+def elapsed_si_seconds(start_et: float, offsets: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Convert integration offsets in TDB to elapsed atomic seconds for the public timeline."""
+    with _SPICE_LOCK:
+        start_tai = spiceypy.unitim(start_et, "TDB", "TAI")
+        return np.array(
+            [
+                round(spiceypy.unitim(start_et + float(t), "TDB", "TAI") - start_tai, 6)
+                for t in offsets
+            ],
+            dtype=np.float64,
+        )
+
+
 def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.float64]:
     """Geometric Earth-centered J2000 Moon states, km and km/s (no light-time correction)."""
-    if start.tzinfo is None:
-        raise ValueError("start must include a timezone")
-    utc = start.astimezone(UTC).replace(tzinfo=None)
+    et = ephemeris_time(start)
     with _SPICE_LOCK:
-        et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
         states, _ = spiceypy.spkezr("MOON", (et + seconds).tolist(), "J2000", "NONE", "EARTH")
     return np.asarray(states, dtype=np.float64)
 
@@ -136,10 +154,7 @@ def inertial_moon_state_to_moon_me(
     state = np.asarray(state_j2000_m, dtype=np.float64)
     if state.shape != (6,) or not np.isfinite(state).all():
         raise ValueError("Moon-centered state must be six finite SI numbers")
-    if epoch.tzinfo is None:
-        raise ValueError("state epoch must be timezone aware")
-    moment = epoch.astimezone(UTC).replace(tzinfo=None)
+    et = ephemeris_time(epoch)
     with _SPICE_LOCK:
-        et = float(spiceypy.str2et(moment.strftime("%Y-%m-%dT%H:%M:%S.%f")))
         xform = np.asarray(spiceypy.sxform("J2000", "MOON_ME", et), dtype=np.float64)
     return xform @ state

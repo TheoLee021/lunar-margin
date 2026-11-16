@@ -18,6 +18,8 @@ from scipy.interpolate import CubicHermiteSpline
 from scipy.optimize import brentq, root
 
 from lunar_margin.engine.ephemeris import (
+    elapsed_si_seconds,
+    ephemeris_time,
     inertial_moon_state_to_moon_me,
     load_kernels,
     moon_states,
@@ -136,12 +138,14 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     """Fit a direct transfer to exact UTC endpoints or raise ValueError; no fixture fallback."""
     if departure.tzinfo is None or arrival.tzinfo is None:
         raise ValueError("Dates must include a timezone")
-    duration = (arrival - departure).total_seconds()
-    if not 86400 <= duration <= 10 * 86400:
+    calendar_seconds = (arrival - departure).total_seconds()
+    if not 86400 <= calendar_seconds <= 10 * 86400:
         raise ValueError("Direct-transfer preview supports flight times of 1 to 10 days")
     if not (1900 <= departure.year <= 2100 and 1900 <= arrival.year <= 2100):
         raise ValueError("Dates must fall between 1900 and 2100")
     load_kernels(data_dir / "spice")
+    departure_et = ephemeris_time(departure)
+    duration = ephemeris_time(arrival) - departure_et
     grid = np.linspace(0, duration + POST_SECONDS, math.ceil((duration + POST_SECONDS) / 1800) + 1)
     ephemeris = moon_states(departure, grid)
     moon = CubicHermiteSpline(grid, ephemeris[:, :3], ephemeris[:, 3:])
@@ -378,7 +382,9 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     def samples(times: Vec, positions: Vec, moons: Vec) -> list[OrbitSample]:
         return [
             OrbitSample(float(t), p.tolist(), m.tolist())
-            for t, p, m in zip(times, positions, moons, strict=True)
+            for t, p, m in zip(
+                elapsed_si_seconds(departure_et, times), positions, moons, strict=True
+            )
         ]
 
     return TransferResult(
@@ -392,7 +398,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         up.tolist(),
         direction.tolist(),
         TransferMetrics(
-            duration / 86400,
+            calendar_seconds / 86400,
             PARKING,
             float(np.linalg.norm(relative_r) - R_M),
             error,

@@ -374,6 +374,8 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 | `transfer`, `capture` | 출발→도착과 진입 후 좌표 표본 |
 | `moon_orbit_km` | 출발 후 29일간 달의 지구 중심 J2000 위치 표본 |
 
+전이는 SPICE 도착·출발 ET의 차이로 전파한다. 좌표 표본의 경과 초는 윤초를 포함하는 TAI 경과시간이고, `travel_time_days`는 요청한 UTC 달력 일정의 일수다.
+
 LOI 상태 경계(후속 DOI/PDI 연결을 위한 6차원 handoff):
 
 - `loi_handoff.epoch_utc`: 정확한 LOI UTC 시각(요청한 `arrival`과 동일).
