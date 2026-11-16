@@ -4,7 +4,15 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
   page,
 }) => {
   await page.goto('/orbit?departure=2027-01-06&arrival=2027-01-10&duration=14')
-  await page.getByRole('link', { name: '착륙까지 보기' }).click()
+  const url = page.url()
+  const landing = page.getByRole('button', { name: '착륙', exact: true })
+  const transfer = page.getByRole('button', {
+    name: '지구–달 비행 궤도',
+    exact: true,
+  })
+  await landing.click()
+  await expect(page).toHaveURL(url)
+  await expect(page.getByLabel('지구 출발일 · UTC')).toBeVisible()
   await expect(page.getByTestId('touchdown')).toHaveText(
     /2027-01-10 02:32:\d\d UTC/,
     { timeout: 30000 },
@@ -25,6 +33,14 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
   await slider.focus()
   await slider.press('End')
   await expect(page.getByText('동력하강 → 표면 착륙')).toBeVisible()
+  await expect(page.getByText(/지상고 0 m/)).toBeVisible()
+  await transfer.click()
+  await expect(
+    page.getByRole('region', { name: '지구–달 계산 궤도' }),
+  ).toBeVisible()
+  await expect(page.getByTestId('touchdown')).toBeHidden()
+  await landing.click()
+  await expect(page).toHaveURL(url)
   await expect(page.getByText(/지상고 0 m/)).toBeVisible()
   await page.getByText('착륙지와 착륙선 조건').click()
   await page.getByLabel('최대 추력 (N)').fill('1000')

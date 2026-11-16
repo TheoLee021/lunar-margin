@@ -1,5 +1,4 @@
 import { FlightPlots } from './FlightPlots'
-import { approachFromUrl, defaultApproach } from './approach'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import {
@@ -14,27 +13,6 @@ import {
   type FlightPreview,
 } from './flightData'
 
-const demo: FlightRequest = {
-  departure: '2027-01-06',
-  arrival: '2027-01-10',
-  ...defaultApproach,
-  alignmentToleranceM: 5000,
-  wetMassKg: 1200,
-  dryMassKg: 450,
-  maxThrustN: 15000,
-  ispS: 310,
-}
-
-function initialRequest(): FlightRequest {
-  const params = new URLSearchParams(window.location.search)
-  return {
-    ...demo,
-    departure: params.get('departure') ?? demo.departure,
-    arrival: params.get('arrival') ?? demo.arrival,
-    ...approachFromUrl(params),
-  }
-}
-
 const labels = {
   PARKING_COAST: '달 궤도 진입 → 하강 기동',
   DOI_COAST: '하강 기동 → 동력하강 시작점',
@@ -46,8 +24,17 @@ function utc(value: string) {
   return new Date(value).toISOString().slice(0, 19).replace('T', ' ') + ' UTC'
 }
 
-export default function FlightWorkspace() {
-  const [request, setRequest] = useState(initialRequest)
+export default function FlightWorkspace({
+  active,
+  request,
+  setRequest,
+  example: isExample,
+}: {
+  active: boolean
+  request: FlightRequest
+  setRequest: (request: FlightRequest) => void
+  example: boolean
+}) {
   const [draft, setDraft] = useState(request)
   const [data, setData] = useState<FlightPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -127,25 +114,14 @@ export default function FlightWorkspace() {
     return showExample ? sites.slice(0, 1) : sites
   }, [data, showExample])
   useEffect(() => {
-    if (!playing) return
+    if (!active || !playing) return
     const timeout = window.setTimeout(() => {
       if (frame + 1 >= points.length) setPlaying(false)
       else setFrame(frame + 1)
     }, 140)
     return () => window.clearTimeout(timeout)
-  }, [frame, playing, points.length])
+  }, [active, frame, playing, points.length])
   const current = points[frame]
-  const orbitQuery = new URLSearchParams(window.location.search)
-  const original = approachFromUrl(orbitQuery)
-  if (
-    original.latitude !== request.latitude ||
-    original.longitude !== request.longitude
-  ) {
-    orbitQuery.delete('site')
-    orbitQuery.set('lat', String(request.latitude))
-    orbitQuery.set('lon', String(request.longitude))
-  }
-  orbitQuery.set('descent_s', String(request.durationS))
   const fields = [
     ['latitude', '목표 위도 (°)', -90, -80],
     ['longitude', '목표 경도 (°E)', -360, 360],
@@ -157,12 +133,12 @@ export default function FlightWorkspace() {
     ['ispS', '비추력 (초)', 1, undefined],
   ] as const
   return (
-    <main className="grid min-h-svh bg-neutral-950 text-neutral-100 md:grid-cols-[22rem_1fr]">
-      <section className="space-y-4 p-5 md:max-h-svh md:overflow-auto">
-        <a className="hud-button" href={'/orbit?' + orbitQuery}>
-          ← 비행 궤도
-        </a>
-        <h1 className="text-xl font-semibold">달 궤도에서 착륙까지</h1>
+    <section
+      aria-label="착륙 분석"
+      className="grid rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-100 md:grid-cols-[minmax(15rem,20rem)_1fr]"
+    >
+      <section className="space-y-4 p-5">
+        <h2 className="text-xl font-semibold">달 궤도에서 착륙까지</h2>
         <dl className="space-y-2 text-sm">
           <div>
             <dt>달 궤도 진입</dt>
@@ -210,12 +186,7 @@ export default function FlightWorkspace() {
         )}
         <p className="text-xs text-neutral-400">
           출발 {request.departure} UTC · 목표 {request.latitude}°,{' '}
-          {request.longitude}°{' '}
-          {new URLSearchParams(window.location.search).has('lat') ||
-          request.latitude !== demo.latitude ||
-          request.longitude !== demo.longitude
-            ? ''
-            : '(예시 좌표)'}
+          {request.longitude}° {isExample ? '(예시 좌표)' : ''}
         </p>
         {data && data.status !== 'DESCENT_REFERENCE_PASSED' && (
           <div>
@@ -288,7 +259,7 @@ export default function FlightWorkspace() {
         )}
       </section>
       <section
-        className="flex min-h-[60svh] flex-col md:h-svh md:overflow-auto"
+        className="flex min-h-[60svh] min-w-0 flex-col"
         aria-label="달 궤도 재생"
       >
         <div className="flex gap-2 p-3" role="group" aria-label="표시 방식">
@@ -307,7 +278,7 @@ export default function FlightWorkspace() {
             3D 지형
           </button>
         </div>
-        {is3D ? (
+        {is3D && active ? (
           <div className="relative min-h-[45svh] flex-1">
             <MoonViewer
               ref={moon}
@@ -372,6 +343,6 @@ export default function FlightWorkspace() {
           </div>
         )}
       </section>
-    </main>
+    </section>
   )
 }

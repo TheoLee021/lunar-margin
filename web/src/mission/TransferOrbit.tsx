@@ -18,11 +18,13 @@ type LoadState =
   | { kind: 'ready'; data: TransferData }
 
 export function TransferOrbit({
+  active,
   schedule,
   latitude,
   longitude,
   durationS,
 }: {
+  active: boolean
   schedule: Schedule
   latitude: number
   longitude: number
@@ -99,7 +101,7 @@ export function TransferOrbit({
           </button>
         </div>
       ) : (
-        <OrbitPlayback key={key} data={state.data} />
+        <OrbitPlayback key={key} data={state.data} active={active} />
       )}
       <p className="orbit-note">
         선택한 날짜의 00:00 UTC 기준 · DE440 달 위치와 지구·달 중력으로
@@ -111,7 +113,13 @@ export function TransferOrbit({
   )
 }
 
-function OrbitPlayback({ data }: { data: TransferData }) {
+function OrbitPlayback({
+  data,
+  active,
+}: {
+  data: TransferData
+  active: boolean
+}) {
   const [index, setIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const gradient = useId()
@@ -119,13 +127,13 @@ function OrbitPlayback({ data }: { data: TransferData }) {
   const last = samples.length - 1
   const finished = index >= last
   useEffect(() => {
-    if (!playing || finished) return
+    if (!active || !playing || finished) return
     const timer = window.setInterval(
       () => setIndex((i) => Math.min(i + 6, last)),
       50,
     )
     return () => window.clearInterval(timer)
-  }, [playing, last, finished])
+  }, [active, playing, last, finished])
   const running = playing && index < last
   const current = samples[index]!
   const captured = current.seconds >= data.capture[0]!.seconds

@@ -70,6 +70,24 @@
     padding: 24px 0 0;
     border-top: 1px solid var(--line);
   }
+  .orbit-view-switch {
+    display: inline-flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .orbit-view-switch button {
+    padding: 8px 18px;
+    border-radius: 5px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .orbit-view-switch button[aria-pressed='true'] {
+    background: var(--raise);
+    color: var(--sun);
+  }
   .orbit-date-error {
     border: 1px solid var(--line);
     padding: 24px;

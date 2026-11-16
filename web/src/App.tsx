@@ -15,7 +15,6 @@ const DatePlanner = lazy(() =>
 )
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
-const FlightWorkspace = lazy(() => import('./flight/FlightWorkspace'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
 const INITIAL_SELECTION: MissionSelection = {
   departure: '2027-01-06',
@@ -123,9 +122,7 @@ export default function App() {
           </p>
         }
       >
-        {view === 'flight' ? (
-          <FlightWorkspace />
-        ) : view === 'analysis' ? (
+        {view === 'analysis' ? (
           <AnalysisWorkspace
             dashboardHref={locationFor('mission', selection, false)}
             onDashboardClick={(event) => {
@@ -141,8 +138,9 @@ export default function App() {
               navigate('mission')
             }}
           />
-        ) : view === 'orbit' ? (
+        ) : view === 'orbit' || view === 'flight' ? (
           <OrbitWorkspace
+            initialLanding={view === 'flight'}
             siteId={selection.siteId}
             schedule={selection}
             onScheduleChange={(schedule) =>
