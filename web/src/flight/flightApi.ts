@@ -18,10 +18,12 @@ export async function requestFlightPreview(
   input: FlightRequest,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(`${DEFAULT_BASE_URL}/trajectory/flight-preview`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const response = await fetch(
+    `${DEFAULT_BASE_URL}/trajectory/flight-preview`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
       departure: `${input.departure}T00:00:00Z`,
       arrival: `${input.arrival}T00:00:00Z`,
       latitude: input.latitude,
@@ -31,10 +33,11 @@ export async function requestFlightPreview(
       wet_mass_kg: input.wetMassKg,
       dry_mass_kg: input.dryMassKg,
       max_thrust_n: input.maxThrustN,
-      isp_s: input.ispS,
-    }),
-    signal,
-  })
+        isp_s: input.ispS,
+      }),
+      signal,
+    },
+  )
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null)
     let detail = 'Reference flight calculation failed'
