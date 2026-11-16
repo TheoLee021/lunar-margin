@@ -3,9 +3,9 @@ import type { Vector3 } from '../moon/sun'
 
 /** How fast the review time runs while it plays: mission days per second of watching. */
 export const PLAYBACK_SPEEDS = [
-  { label: '6시간/초', daysPerSecond: 0.25 },
-  { label: '1일/초', daysPerSecond: 1 },
-  { label: '3일/초', daysPerSecond: 3 },
+  { label: '6 h/s', daysPerSecond: 0.25 },
+  { label: '1 day/s', daysPerSecond: 1 },
+  { label: '3 days/s', daysPerSecond: 3 },
 ] as const
 
 /**

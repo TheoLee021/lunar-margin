@@ -24,7 +24,7 @@ function bodyLines(
 ): string[] {
   if (direction === undefined) return []
   if (direction === null)
-    return [`${name} 가시성 ${measured ? '계산 실패' : '계산 전'}`]
+    return [`${name} visibility ${measured ? 'failed' : 'pending'}`]
   const margin = sightMarginDeg(direction)
   const amount =
     Math.abs(margin) > 0 && Math.abs(margin) < 0.005
@@ -32,9 +32,9 @@ function bodyLines(
       : degrees(Math.abs(margin))
   return [
     direction.visible
-      ? `${name} 보임 · 여유 ${amount}`
-      : `${name} 차폐 · ${amount} 모자람`,
-    `  고도 ${degrees(direction.elevationDeg)} / 지평선 ${degrees(direction.horizonDeg)}`,
+      ? `${name} visible · margin ${amount}`
+      : `${name} blocked · short by ${amount}`,
+    `  elevation ${degrees(direction.elevationDeg)} / horizon ${degrees(direction.horizonDeg)}`,
   ]
 }
 
@@ -56,9 +56,9 @@ export function assetCardText({
 }: AssetCardInput): string {
   return [
     label,
-    ...(waypointSample ? ['최근 경유점 기준'] : []),
-    ...bodyLines('지구', earth, measured),
-    ...bodyLines('태양', sun, measured),
-    `관측 높이 ${metres(observerHeightM)}`,
+    ...(waypointSample ? ['At the latest waypoint'] : []),
+    ...bodyLines('Earth', earth, measured),
+    ...bodyLines('Sun', sun, measured),
+    `Observer height ${metres(observerHeightM)}`,
   ].join('\n')
 }

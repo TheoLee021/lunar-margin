@@ -10,7 +10,7 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
   await mockScheduledDepartures(page)
   await mockDashboardRuns(page, request)
   await page.goto('/explore')
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
   const mask = (lat: number) =>
     page
       .waitForResponse(
@@ -18,24 +18,35 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
       )
       .then((r) => r.json())
   const first = mask(-89.71)
-  await rail.getByRole('button', { name: /후보 1/ }).click()
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
   const a = await first
-  await expect(page.getByText('● 보임')).toBeVisible()
-  const lines = page.getByRole('checkbox', { name: '가시선 표시' })
+  // The panel stays closed until asked for; the toolbar button carries the selected point's count.
+  const panel = page.getByRole('region', { name: 'Viewshed' })
+  await expect(panel).toHaveCount(0)
+  await page.getByRole('button', { name: /^Viewshed \d+\/120 · 0 m/ }).click()
+  await expect(panel.getByText('● Visible')).toBeVisible()
+  const lines = panel.getByRole('checkbox', { name: 'Show sightlines' })
   await expect(lines).toBeChecked()
   await lines.uncheck()
-  await rail.getByLabel('가시권 비교 높이').selectOption('40')
-  const count = rail.getByText(/40 m에서 보이는 점/).first()
-  await expect(count).toBeVisible({ timeout: 45_000 })
-  const visible = (await count.innerText()).split('보이는 점 ')[1]
-  await expect(page.getByText(`보이는 격자점 ${visible}`)).toBeVisible()
-  await expect(page.getByLabel('관측 높이', { exact: true })).toHaveValue('40')
+  await panel.getByLabel('Observer height', { exact: true }).selectOption('40')
+  await expect(
+    panel.getByText('TOP 5 candidates · grid points visible from 40 m'),
+  ).toBeVisible()
+  const count = panel.getByRole('button', { name: /Candidate 1/ })
+  await expect(count).toContainText(/\d+ \/ 120/, { timeout: 45_000 })
+  const visible = (await count.innerText()).match(/\d+ \/ 120/)![0]
+  await expect(panel.getByText(`Visible grid points ${visible}`)).toBeVisible()
+  await expect(
+    page.getByRole('button', {
+      name: `Viewshed ${visible.replace(' / ', '/')} · 40 m`,
+    }),
+  ).toBeVisible()
   const second = mask(-89.02)
-  await rail.getByRole('button', { name: /후보 2/ }).click()
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
   expect((await second).cells).not.toBe(a.cells)
-  await expect(page.getByText('● 보임')).toBeVisible()
+  await expect(panel.getByText('● Visible')).toBeVisible()
   await expect(lines).not.toBeChecked()
   await lines.check()
-  await page.getByRole('button', { name: '위에서 보기' }).click()
-  await expect(page.getByText('● 보임')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Top view' }).click()
+  await expect(page.getByText('● Visible')).toHaveCount(0)
 })

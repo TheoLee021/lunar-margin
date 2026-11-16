@@ -50,10 +50,10 @@ export function useMissionAnalysis(
           if (controller.signal.aborted) return
           const message =
             error instanceof ApiError && error.status === 503
-              ? '분석 데이터를 불러올 수 없습니다 (503). 백엔드의 NASA 데이터 준비 상태를 확인하세요.'
+              ? 'Analysis data is unavailable (503). Check that the backend’s NASA data is ready.'
               : error instanceof ApiError && error.status === 422
-                ? '이 지점 또는 기간을 분석할 수 없습니다 (422). 선택한 날짜를 확인하세요.'
-                : '분석에 실패했습니다. API 연결과 응답을 확인한 뒤 다시 시도하세요.'
+                ? 'This site or period cannot be analyzed (422). Check the selected dates.'
+                : 'Analysis failed. Check the API connection and response, then try again.'
           setStored({ key, state: { kind: 'error', message } })
         })
     }, 200)

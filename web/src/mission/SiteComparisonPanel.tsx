@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Candidate, SearchConfig } from '../api/candidates'
 import {
+  bestValues,
   comparisonAxes,
   comparisonValues,
   COMPARISON_COLORS,
@@ -21,23 +22,40 @@ const xy = (index: number, radius: number) =>
   point(index, radius)
     .map((n) => n.toFixed(2))
     .join(',')
+const digits = (unit: string) => (unit === 'm' ? 2 : 1)
 const amount = (value: number | null, unit: string) =>
   value === null
     ? '—'
-    : `${value.toFixed(unit === 'm' ? 2 : 1)}${unit === '시간' || unit === 'dB' ? ' ' + unit : unit}`
+    : `${value.toFixed(digits(unit))}${unit === 'h' || unit === 'dB' || unit === 'pp' ? ' ' + unit : unit}`
 const marginText = (row: RequirementMargin) =>
   row.margin === null
     ? '—'
-    : `${row.margin >= 0 ? '+' : ''}${amount(row.margin, row.unit === '%' ? '%p' : row.unit)}`
+    : `${row.margin >= 0 ? '+' : ''}${amount(row.margin, row.unit === '%' ? 'pp' : row.unit)}`
 
+/**
+ * Compares the TOP 5 candidates' saved metrics. Which of them are compared is chosen here, apart
+ * from the candidate selected on the map, which only changes through `onSelect`.
+ */
 export function SiteComparisonPanel({
   candidates,
+  checkedIds,
+  selectedId,
   config,
+  onToggle,
+  onSelect,
   onClose,
   onClear,
 }: {
+  /** Every candidate that can be compared, in rank order. */
   candidates: readonly Candidate[]
+  /** The ones being compared. */
+  checkedIds: readonly string[]
+  /** The candidate selected on the map, if any. */
+  selectedId: string | null
   config: SearchConfig
+  onToggle: (id: string) => void
+  /** Selects a candidate on the map and leaves the comparison. */
+  onSelect: (id: string) => void
   onClose: () => void
   onClear: () => void
 }) {
@@ -48,21 +66,25 @@ export function SiteComparisonPanel({
     return () => element?.close()
   }, [])
   const axes = comparisonAxes(config)
-  const entries = candidates.map((candidate) => ({
-    candidate,
-    color: COMPARISON_COLORS[(candidate.rank - 1) % COMPARISON_COLORS.length],
-    values: comparisonValues(candidate, axes),
-    margins: requirementMargins(
-      {
-        ...candidate,
-        terrain:
-          (candidate.terrain?.coverage_fraction ?? 0) >= 0.9999
-            ? candidate.terrain
-            : null,
-      },
-      config,
-    ),
-  }))
+  const color = (candidate: Candidate) =>
+    COMPARISON_COLORS[(candidate.rank - 1) % COMPARISON_COLORS.length]
+  const entries = candidates
+    .filter((candidate) => checkedIds.includes(candidate.id))
+    .map((candidate) => ({
+      candidate,
+      color: color(candidate),
+      values: comparisonValues(candidate, axes),
+      margins: requirementMargins(
+        {
+          ...candidate,
+          terrain:
+            (candidate.terrain?.coverage_fraction ?? 0) >= 0.9999
+              ? candidate.terrain
+              : null,
+        },
+        config,
+      ),
+    }))
   const conditions = entries[0]?.margins ?? []
   return (
     <dialog
@@ -73,12 +95,12 @@ export function SiteComparisonPanel({
     >
       <header className="flex items-center justify-between gap-3">
         <h2 id="siteComparisonTitle" className="text-lg font-semibold">
-          TOP 5 후보 비교
+          TOP 5 candidate comparison
         </h2>
         <button
           type="button"
           className="hud-button"
-          aria-label="비교 닫기"
+          aria-label="Close comparison"
           onClick={onClose}
         >
           ✕
@@ -86,26 +108,45 @@ export function SiteComparisonPanel({
       </header>
       <p className="mt-2 text-xs text-neutral-400">
         {config.window.start.slice(0, 10)} → {config.window.end.slice(0, 10)}{' '}
-        UTC · 관측 높이 {config.observer_height_m} m · 동일한 저장 탐색 결과
+        UTC · observer height {config.observer_height_m} m · same saved search
+        result
       </p>
+      <fieldset className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        <legend className="sr-only">Candidates to compare</legend>
+        {candidates.map((candidate) => (
+          <label
+            key={candidate.id}
+            className="flex min-h-9 cursor-pointer items-center gap-2"
+            style={{ color: color(candidate) }}
+          >
+            <input
+              type="checkbox"
+              aria-label={`Compare candidate ${candidate.rank}`}
+              checked={checkedIds.includes(candidate.id)}
+              onChange={() => onToggle(candidate.id)}
+            />
+            Candidate {candidate.rank}
+          </label>
+        ))}
+      </fieldset>
       {entries.length === 0 ? (
         <p role="status" className="py-10 text-center text-sm text-neutral-300">
-          후보를 체크하면 실제 지표를 비교할 수 있습니다.
+          Check candidates to compare their actual metrics.
         </p>
       ) : (
         <>
           <p className="mt-3 text-xs text-neutral-300">
-            바깥쪽일수록 해당 지표가 유리합니다. 도형 면적은 종합
-            점수·안전성·성공 확률이 아닙니다.
+            Further out is better for that metric. The area of a shape is not an
+            overall score, safety rating or probability of success.
           </p>
           <ul
-            aria-label="비교 후보 범례"
+            aria-label="Compared candidates legend"
             className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
           >
             {entries.map(({ candidate, color }, index) => (
               <li key={candidate.id} style={{ color }}>
-                <span aria-hidden="true">{index % 2 ? '┄' : '━'} </span>후보{' '}
-                {candidate.rank}
+                <span aria-hidden="true">{index % 2 ? '┄' : '━'} </span>
+                Candidate {candidate.rank}
                 <span className="ml-1 text-neutral-400">
                   ({candidate.eligibility.status})
                 </span>
@@ -114,13 +155,13 @@ export function SiteComparisonPanel({
           </ul>
           <svg
             role="img"
-            aria-label="후보별 여섯 지표 레이더"
+            aria-label="Radar of six metrics per candidate"
             viewBox="0 0 400 350"
             className="mx-auto w-full max-w-[480px]"
           >
             <title>
-              선택한 후보의 여섯 지표 비교. 실제 값과 척도는 아래 표에
-              표시합니다.
+              Six metrics of the checked candidates compared. Actual values and
+              scales are in the tables below.
             </title>
             {[0.25, 0.5, 0.75, 1].map((radius) => (
               <polygon
@@ -200,7 +241,7 @@ export function SiteComparisonPanel({
                         r="3"
                       >
                         <title>
-                          후보 {candidate.rank} · {axes[i]!.label}:{' '}
+                          Candidate {candidate.rank} · {axes[i]!.label}:{' '}
                           {amount(value.value, axes[i]!.unit)}
                         </title>
                       </circle>
@@ -211,25 +252,26 @@ export function SiteComparisonPanel({
             })}
           </svg>
           <p className="text-xs text-neutral-400">
-            2~3개를 비교하면 읽기 쉽습니다. 결측은 —, 지형 자료가 불완전하면
-            도형을 연결하지 않습니다. RF 링크 마진은 임무 기간에 계산한 명목
-            링크 마진의 최솟값입니다. 최장 지구 차폐는 지형이 지구 중심을 가린
-            연속 시간입니다.
+            Two or three candidates read best. Missing values show —, and a
+            shape is not closed when terrain data is incomplete. RF link margin
+            is the minimum nominal link margin computed over the mission.
+            Longest Earth blackout is the longest continuous time terrain hides
+            the Earth’s centre.
           </p>
           <div
             role="region"
-            aria-label="실제 지표 표 가로 스크롤"
+            aria-label="Actual metrics table, scrolls horizontally"
             tabIndex={0}
             className="mt-4 overflow-x-auto rounded border border-white/10"
           >
             <table
-              aria-label="후보 실제 지표"
+              aria-label="Candidate actual metrics"
               className="w-full text-left text-xs"
             >
               <thead>
                 <tr className="bg-white/5">
                   <th scope="col" className="min-w-36 p-3">
-                    지표 · 유리한 방향
+                    Metric · better direction
                   </th>
                   {entries.map(({ candidate, color }) => (
                     <th
@@ -238,61 +280,99 @@ export function SiteComparisonPanel({
                       className="min-w-28 whitespace-nowrap p-3"
                       style={{ color }}
                     >
-                      후보 {candidate.rank}
+                      Candidate {candidate.rank}
                     </th>
                   ))}
                   <th scope="col" className="min-w-44 p-3">
-                    레이더 표시 범위
+                    Radar display range
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {axes.map((axis, i) => (
-                  <tr key={axis.key} className="border-t border-white/10">
-                    <th scope="row" className="p-3 font-normal">
-                      {axis.label} {axis.higherIsBetter ? '↑' : '↓'}
-                    </th>
-                    {entries.map(({ candidate, values }) => (
-                      <td
-                        key={candidate.id}
-                        className="whitespace-nowrap p-3 font-mono"
-                      >
-                        {amount(values[i]!.value, axis.unit)}
+                {axes.map((axis, i) => {
+                  // Compared as shown, so values that read the same are marked together.
+                  const best = bestValues(
+                    entries.map(({ values }) => {
+                      const value = values[i]!.value
+                      return value === null
+                        ? null
+                        : Number(value.toFixed(digits(axis.unit)))
+                    }),
+                    axis.higherIsBetter,
+                  )
+                  return (
+                    <tr key={axis.key} className="border-t border-white/10">
+                      <th scope="row" className="p-3 font-normal">
+                        {axis.label} {axis.higherIsBetter ? '↑' : '↓'}
+                      </th>
+                      {entries.map(({ candidate, values }, entryIndex) => (
+                        <td
+                          key={candidate.id}
+                          data-best={best[entryIndex] || undefined}
+                          className="whitespace-nowrap p-3 font-mono data-best:font-semibold data-best:text-teal-300"
+                        >
+                          {amount(values[i]!.value, axis.unit)}
+                        </td>
+                      ))}
+                      <td className="p-3 text-neutral-400">
+                        {axis.referenceLabel}
                       </td>
-                    ))}
-                    <td className="p-3 text-neutral-400">
-                      {axis.referenceLabel}
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
               </tbody>
+              <tfoot>
+                <tr className="border-t border-white/10">
+                  <th scope="row" className="p-3 font-normal">
+                    Select on map
+                  </th>
+                  {entries.map(({ candidate }) => (
+                    <td key={candidate.id} className="p-3">
+                      <button
+                        type="button"
+                        className="hud-button"
+                        aria-current={selectedId === candidate.id}
+                        onClick={() => onSelect(candidate.id)}
+                      >
+                        Select candidate {candidate.rank}
+                      </button>
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </div>
           <p className="mt-2 text-[11px] text-neutral-400">
-            표시 범위를 넘는 값은 도형 끝에서 잘리지만 실제 수치는 표에 그대로
-            표시합니다. 척도는 체크 선택과 무관하게 고정됩니다.
+            <span className="font-semibold text-teal-300">
+              Highlighted values
+            </span>{' '}
+            are the most favourable for that metric among the compared
+            candidates. Values beyond the display range are clipped on the radar
+            but shown as they are in the table. Scales stay fixed whatever is
+            checked.
           </p>
           {conditions.length ? (
             <div
               role="region"
-              aria-label="조건별 여유 표 가로 스크롤"
+              aria-label="Margin table, scrolls horizontally"
               tabIndex={0}
               className="mt-4 overflow-x-auto rounded border border-white/10"
             >
               <table
-                aria-label="후보 조건별 여유"
+                aria-label="Candidate margins per condition"
                 className="w-full text-left text-xs"
               >
                 <caption className="p-3 text-left font-semibold text-neutral-200">
-                  탐색 조건별 여유 · 실제 값과 한도의 차이
+                  Margin per search condition · actual value against its limit
                 </caption>
                 <thead>
                   <tr className="bg-white/5">
                     <th scope="col" className="min-w-36 p-3">
-                      조건
+                      Condition
                     </th>
                     <th scope="col" className="min-w-28 p-3">
-                      한도
+                      Limit
                     </th>
                     {entries.map(({ candidate, color }) => (
                       <th
@@ -301,7 +381,7 @@ export function SiteComparisonPanel({
                         className="min-w-28 p-3"
                         style={{ color }}
                       >
-                        후보 {candidate.rank} 여유
+                        Candidate {candidate.rank} margin
                       </th>
                     ))}
                   </tr>
@@ -339,24 +419,26 @@ export function SiteComparisonPanel({
             </div>
           ) : (
             <p className="mt-4 text-xs text-neutral-400">
-              저장된 임무 한도가 없어 조건별 여유를 표시하지 않습니다.
+              No mission limits were saved, so margins per condition are not
+              shown.
             </p>
           )}
           <p className="mt-2 text-xs text-neutral-400">
-            양수 여유는 한도 안쪽, 음수는 초과입니다. 비율의 차이는 %p입니다.{' '}
+            Positive margins are inside the limit, negative ones exceed it.
+            Differences of ratios are in pp.{' '}
             {config.rf
-              ? 'RF 탐색의 통신 조건 여유는 명목 RF 링크 기준입니다. '
+              ? 'For RF searches the communication margins follow the nominal RF link. '
               : ''}
-            새로운 순위나 적격 판정을 계산하지 않습니다.
+            No new ranking or eligibility is computed.
           </p>
         </>
       )}
       <footer className="mt-5 flex justify-between gap-3">
         <button type="button" className="hud-button" onClick={onClear}>
-          비교 선택 모두 해제
+          Clear comparison selection
         </button>
         <button type="button" className="hud-button" onClick={onClose}>
-          닫기
+          Close
         </button>
       </footer>
     </dialog>

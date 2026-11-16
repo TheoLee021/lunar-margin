@@ -6,7 +6,7 @@ export interface RequirementMargin {
   label: string
   /** 'min'은 값이 한도 이상, 'max'는 한도 이하여야 하는 조건이다. */
   bound: 'min' | 'max'
-  unit: '%' | '시간' | '°' | 'm'
+  unit: '%' | 'h' | '°' | 'm'
   value: number | null
   limit: number
   /** 한도 안쪽으로 남은 여유. 음수면 한도를 벗어난 것이고, 값이 없으면 null이다. */
@@ -47,7 +47,7 @@ export function requirementMargins(
   return [
     row(
       'sun-fraction',
-      '일조율',
+      'Sunlight',
       'min',
       '%',
       percent(site.sun.fraction),
@@ -55,16 +55,16 @@ export function requirementMargins(
     ),
     row(
       'sun-dark',
-      '최장 연속 어둠',
+      'Longest darkness',
       'max',
-      '시간',
+      'h',
       site.sun.longest_dark_hours,
       t.max_sun_dark_hours,
     ),
     rf
       ? row(
           'communication-fraction',
-          'RF 통신 가능 비율',
+          'RF availability',
           'min',
           '%',
           percent(site.rf?.fraction),
@@ -72,7 +72,7 @@ export function requirementMargins(
         )
       : row(
           'communication-fraction',
-          '지구 가시율',
+          'Earth visibility',
           'min',
           '%',
           percent(site.earth.fraction),
@@ -81,23 +81,23 @@ export function requirementMargins(
     rf
       ? row(
           'communication-blackout',
-          'RF 최장 두절',
+          'Longest RF outage',
           'max',
-          '시간',
+          'h',
           site.rf?.longest_blackout_hours,
           t.max_rf_blackout_hours,
         )
       : row(
           'communication-blackout',
-          '최장 지구 차폐',
+          'Longest Earth blackout',
           'max',
-          '시간',
+          'h',
           site.earth.longest_blackout_hours,
           t.max_earth_blackout_hours,
         ),
     row(
       'slope',
-      '지역 경사 P95',
+      'Local slope P95',
       'max',
       '°',
       site.terrain?.slope_p95_deg,
@@ -105,11 +105,64 @@ export function requirementMargins(
     ),
     row(
       'roughness',
-      '지역 거칠기 P95',
+      'Local roughness P95',
       'max',
       'm',
       site.terrain?.roughness_p95_m,
       t.max_terrain_roughness_m,
     ),
   ].filter((entry) => entry !== null)
+}
+
+const DIGITS: Record<RequirementMargin['unit'], number> = {
+  '%': 1,
+  h: 1,
+  '°': 1,
+  m: 2,
+}
+const SUFFIX: Record<RequirementMargin['unit'], string> = {
+  '%': '%',
+  h: ' h',
+  '°': '°',
+  m: ' m',
+}
+
+/** 값을 단위에 맞는 자릿수와 표기로 쓴다. */
+export function formatAmount(
+  value: number,
+  unit: RequirementMargin['unit'],
+): string {
+  return `${value.toFixed(DIGITS[unit])}${SUFFIX[unit]}`
+}
+
+/** 값끼리의 차이를 쓴다. 비율끼리의 차이는 퍼센트가 아니라 퍼센트포인트다. */
+function formatDifference(
+  value: number,
+  unit: RequirementMargin['unit'],
+): string {
+  return `${value.toFixed(DIGITS[unit])}${unit === '%' ? ' pp' : SUFFIX[unit]}`
+}
+
+/** 여유를 부호와 함께 쓴다. 양수면 한도 안쪽이다. */
+export function formatMargin(
+  margin: number,
+  unit: RequirementMargin['unit'],
+): string {
+  const text = formatDifference(margin, unit)
+  return margin < 0 ? text : `+${text}`
+}
+
+/** 한도를 벗어난 조건마다 값과 한도, 벗어난 양을 한 문장으로 낸다. */
+export function limitAlerts(rows: readonly RequirementMargin[]): string[] {
+  return rows.flatMap((row) =>
+    row.value === null || row.margin === null || row.margin >= 0
+      ? []
+      : [
+          `${row.label} ${formatAmount(row.value, row.unit)} · limit ${
+            row.bound === 'max' ? '≤' : '≥'
+          } ${formatAmount(row.limit, row.unit)} · ${
+            row.bound === 'max' ? 'over' : 'short'
+          } by ${formatDifference(-row.margin, row.unit)}`,
+        ],
+  )
 }

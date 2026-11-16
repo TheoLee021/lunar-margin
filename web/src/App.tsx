@@ -204,7 +204,7 @@ export default function App() {
       <Suspense
         fallback={
           <p role="status" className="p-4 text-sm text-neutral-300">
-            화면을 불러오는 중입니다.
+            Loading the view…
           </p>
         }
       >
@@ -357,7 +357,7 @@ function MissionApp({
             .slice(0, 5)
             .map((candidate) => ({
               id: candidate.id,
-              name: `후보 ${candidate.rank}`,
+              name: `Candidate ${candidate.rank}`,
               latitude: candidate.lat_deg,
               longitude: candidate.lon_deg,
               grid: {
@@ -395,7 +395,6 @@ function MissionApp({
   return (
     <>
       <MissionWorkspace
-        onOverview={onOverview}
         selection={selection}
         analysis={live}
         candidates={candidates}
@@ -476,7 +475,7 @@ function MissionApp({
             onAnalysis()
           }}
         >
-          상세 분석
+          Detailed analysis
         </a>
         <button
           type="button"
@@ -484,7 +483,7 @@ function MissionApp({
           disabled={candidates.result.kind === 'loading'}
           onClick={() => (run ? onOverview(run.id) : onSearch())}
         >
-          후보지 탐색
+          Site search
         </button>
       </div>
     </>

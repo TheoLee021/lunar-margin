@@ -199,11 +199,11 @@ export const COMPANIES: readonly Company[] = [
     id: 'terra-nova-works',
     placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 500 },
     name: 'Terra Nova Works',
-    tagline: '레골리스를 녹여 착륙장을 짓는다',
+    tagline: 'Melts regolith to build landing pads',
     statics: [
       {
         id: 'array',
-        label: '태양광 어레이',
+        label: 'Solar array',
         offset: { eastM: -250, northM: 180 },
         observerHeightM: 10,
         shape: solarArray(8, 8),
@@ -211,7 +211,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'thermal',
-        label: '열제어 유닛',
+        label: 'Thermal control unit',
         offset: { eastM: -60, northM: 60 },
         observerHeightM: 4,
         shape: box(3, 1.8, 1.4),
@@ -219,7 +219,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'printer',
-        label: '소결 프린터',
+        label: 'Sintering printer',
         offset: { eastM: 140, northM: -100 },
         observerHeightM: 1.5,
         shape: {
@@ -252,7 +252,7 @@ export const COMPANIES: readonly Company[] = [
     mobile: {
       spec: {
         id: 'trencher',
-        label: '트렌처',
+        label: 'Trencher',
         offset: { eastM: -70, northM: 360 },
         observerHeightM: 2,
         shape: TRENCHER_SHAPE,
@@ -275,11 +275,11 @@ export const COMPANIES: readonly Company[] = [
     id: 'meridian-relay',
     placement: { kind: 'cable', powerUnitId: 'power-unit', cableLengthM: 400 },
     name: 'Meridian Relay',
-    tagline: '지구 직통 통신 시간을 판다',
+    tagline: 'Sells direct-to-Earth link time',
     statics: [
       {
         id: 'antenna-a',
-        label: 'DTE 안테나 A',
+        label: 'DTE antenna A',
         offset: { eastM: -180, northM: 140 },
         observerHeightM: 3,
         shape: dishMast(3),
@@ -287,7 +287,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'antenna-b',
-        label: 'DTE 안테나 B',
+        label: 'DTE antenna B',
         offset: { eastM: 210, northM: 90 },
         observerHeightM: 3,
         shape: dishMast(3),
@@ -295,7 +295,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'power-unit',
-        label: '전력 조절 유닛',
+        label: 'Power conditioning unit',
         offset: { eastM: 20, northM: -60 },
         observerHeightM: 1.5,
         shape: box(1, 1.4, 1),
@@ -307,11 +307,11 @@ export const COMPANIES: readonly Company[] = [
     id: 'helios-grid',
     placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 1000 },
     name: 'Helios Grid',
-    tagline: '수직 태양광을 세우고 전력을 판다',
+    tagline: 'Raises vertical solar arrays and sells power',
     statics: [
       {
         id: 'array',
-        label: '수직 태양광 어레이',
+        label: 'Vertical solar array',
         offset: { eastM: -140, northM: 160 },
         observerHeightM: 10,
         shape: solarArray(10, 10),
@@ -319,7 +319,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'pdu',
-        label: '배전 유닛',
+        label: 'Power distribution unit',
         offset: { eastM: 40, northM: -70 },
         observerHeightM: 2,
         shape: drum(1.4, 1.2),
@@ -331,11 +331,11 @@ export const COMPANIES: readonly Company[] = [
     id: 'vestige-resources',
     placement: { kind: 'cable', powerUnitId: 'base', cableLengthM: 200 },
     name: 'Vestige Resources',
-    tagline: '영구 음영 분화구 안으로 들어간다',
+    tagline: 'Goes into permanently shadowed craters',
     statics: [
       {
         id: 'base',
-        label: '충전 기지',
+        label: 'Charging base',
         offset: { eastM: -90, northM: 140 },
         observerHeightM: 1.5,
         shape: {
@@ -378,7 +378,7 @@ export const COMPANIES: readonly Company[] = [
     mobile: {
       spec: {
         id: 'rover',
-        label: '시추 로버',
+        label: 'Drill rover',
         offset: { eastM: -62, northM: 125 },
         observerHeightM: 1.5,
         shape: box(1.5, 2.6, 2.2),
@@ -409,11 +409,11 @@ export const COMPANIES: readonly Company[] = [
     id: 'umbra-compute',
     placement: { kind: 'cable', powerUnitId: 'array', cableLengthM: 600 },
     name: 'Umbra Compute',
-    tagline: '달 위의 데이터센터',
+    tagline: 'A data centre on the Moon',
     statics: [
       {
         id: 'array',
-        label: '태양광 어레이',
+        label: 'Solar array',
         offset: { eastM: -230, northM: 170 },
         observerHeightM: 10,
         shape: solarArray(10, 10),
@@ -421,7 +421,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'compute',
-        label: '연산 모듈',
+        label: 'Compute module',
         offset: { eastM: 0, northM: 0 },
         observerHeightM: 1,
         shape: box(1.8, 2.4, 2),
@@ -429,7 +429,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'radiator',
-        label: '방열판',
+        label: 'Radiator',
         offset: { eastM: 190, northM: -150 },
         observerHeightM: 0.5,
         shape: {
@@ -455,7 +455,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'antenna',
-        label: 'DTE 안테나',
+        label: 'DTE antenna',
         offset: { eastM: -50, northM: -210 },
         observerHeightM: 4,
         shape: dishMast(4),
@@ -471,11 +471,11 @@ export const COMPANIES: readonly Company[] = [
       minSeparationM: 800,
     },
     name: 'Cairn Geophysics',
-    tagline: '지하에 무엇이 있는지 측정해 판다',
+    tagline: 'Measures what lies underground and sells the data',
     statics: [
       {
         id: 'hub',
-        label: '전력·데이터 허브',
+        label: 'Power and data hub',
         offset: { eastM: 0, northM: 0 },
         observerHeightM: 1.5,
         shape: box(3.5, 1.8, 4),
@@ -483,7 +483,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'seis-a',
-        label: '지진계 A',
+        label: 'Seismometer A',
         offset: { eastM: -420, northM: 260 },
         observerHeightM: 0.4,
         shape: box(1.2, 1.2, 0.4),
@@ -491,7 +491,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'seis-b',
-        label: '지진계 B',
+        label: 'Seismometer B',
         offset: { eastM: 400, northM: 300 },
         observerHeightM: 0.4,
         shape: box(1.2, 1.2, 0.4),
@@ -499,7 +499,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'seis-c',
-        label: '지진계 C',
+        label: 'Seismometer C',
         offset: { eastM: -70, northM: -470 },
         observerHeightM: 0.4,
         shape: box(1.2, 1.2, 0.4),
@@ -507,7 +507,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'drill',
-        label: '열류 시추기',
+        label: 'Heat-flow drill',
         offset: { eastM: 140, northM: -100 },
         observerHeightM: 0.6,
         shape: drum(1.6, 2.2),
@@ -515,7 +515,7 @@ export const COMPANIES: readonly Company[] = [
       },
       {
         id: 'magnetometer',
-        label: '자력계 마스트',
+        label: 'Magnetometer mast',
         offset: { eastM: -190, northM: 70 },
         observerHeightM: 3,
         shape: drum(0.6, 3),

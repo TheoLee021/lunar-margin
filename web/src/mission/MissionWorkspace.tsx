@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  fetchViewshed,
-  GRID_TARGET_COUNT,
-  visibleGridCount,
-} from '../api/viewshed'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { AnalysisStatus } from './AnalysisStatus'
+import { AppliedConditions } from './AppliedConditions'
 import { landingStart } from './liveAnalysis'
-import { MissionMetrics } from './MissionMetrics'
 import { ReviewTimeline } from './ReviewTimeline'
-import { RequirementMarginPanel } from './RequirementMarginPanel'
+import { limitAlerts, requirementMargins } from './requirementMargins'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -20,10 +16,11 @@ import { sunAt } from './sunPlayback'
 import { useSunPath } from './useSunPath'
 import type { Vector3 } from '../moon/sun'
 import { SiteComparisonPanel } from './SiteComparisonPanel'
-import { toggleComparison, COMPARISON_COLORS } from './siteCompare'
+import { toggleComparison } from './siteCompare'
+import { SiteMetricCards } from './SiteMetricCards'
+import { useVisibleCounts } from './useVisibleCounts'
 
 export function MissionWorkspace({
-  onOverview,
   selection,
   analysis,
   candidates,
@@ -34,7 +31,6 @@ export function MissionWorkspace({
   apiStatus,
   children,
 }: {
-  onOverview: (runId: string) => void
   analysis: MissionAnalysisResult
   candidates: ReturnType<typeof useDashboardRun>
   sites: readonly CandidateSite[]
@@ -56,17 +52,21 @@ export function MissionWorkspace({
     selection.duration,
     sites.map((site) => site.id),
   ])
-  const [checked, setChecked] = useState({
-    key: comparisonKey,
-    ids: [] as string[],
-    open: false,
-  })
+  // Which candidates the comparison dialog shows: all of them (`null`) until it is narrowed down.
+  // The choice belongs to one saved result and starts over with the next.
+  const [checked, setChecked] = useState<{
+    key: string
+    ids: string[] | null
+    open: boolean
+  }>({ key: comparisonKey, ids: null, open: false })
   if (result.kind !== 'loading' && checked.key !== comparisonKey)
-    setChecked({ key: comparisonKey, ids: [], open: false })
-  const checkedIds = checked.key === comparisonKey ? checked.ids : []
+    setChecked({ key: comparisonKey, ids: null, open: false })
+  const siteIds = sites.map((site) => site.id)
+  const checkedIds =
+    checked.key === comparisonKey && checked.ids ? checked.ids : siteIds
   const comparisonCandidates =
     run?.candidates
-      .filter((candidate) => checkedIds.includes(candidate.id))
+      .filter((candidate) => siteIds.includes(candidate.id))
       .sort((a, b) => a.rank - b.rank) ?? []
   const [override, setOverride] = useState<{
     runId?: string
@@ -79,72 +79,24 @@ export function MissionWorkspace({
   const setHeight = (value: number) => setOverride({ runId: run?.id, value })
   const heights = [...new Set([searchHeight, 2, 10, 40])]
 
-  const [sortByVisibility, setSortByVisibility] = useState(false)
-  const [comparison, setComparison] = useState<{
-    sites: readonly CandidateSite[]
-    height: number
-    counts: (number | null | 'error')[]
-  } | null>(null)
-  useEffect(() => {
-    if (!sites.length || height === searchHeight) return
-    const controller = new AbortController()
-    const signal = AbortSignal.any([
-      controller.signal,
-      AbortSignal.timeout(30000),
-    ])
-    void Promise.all(
-      sites.map(async (site) => {
-        try {
-          const map = await fetchViewshed(
-            site.latitude,
-            site.longitude,
-            height,
-            signal,
-            site.grid,
-            demName,
-          )
-          return visibleGridCount(map)
-        } catch {
-          return 'error' as const
-        }
-      }),
-    ).then((counts) => {
-      if (!controller.signal.aborted) setComparison({ sites, height, counts })
-    })
-    return () => controller.abort()
-  }, [sites, height, demName, searchHeight])
-  const counts =
-    comparison?.sites === sites && comparison.height === height
-      ? comparison.counts
-      : undefined
-  const rows = sites.map((site, index) => ({
-    site,
-    index,
-    count:
-      height === searchHeight
-        ? (run?.candidates.find((candidate) => candidate.id === site.id)?.score
-            .visible_grid_points ?? null)
-        : counts?.[index],
-  }))
-  if (sortByVisibility)
-    rows.sort(
-      (a, b) =>
-        (typeof b.count === 'number' ? b.count : -1) -
-        (typeof a.count === 'number' ? a.count : -1),
-    )
+  const visibleCounts = useVisibleCounts(
+    sites,
+    height,
+    searchHeight,
+    (siteId) =>
+      run?.candidates.find((candidate) => candidate.id === siteId)?.score
+        .visible_grid_points ?? null,
+    demName,
+  )
   const moon = useRef<MissionMoonViewerHandle>(null)
   const selected = sites.find((site) => site.id === selection.siteId)
   const selectedCandidate = run?.candidates.find(
     (candidate) => candidate.id === selected?.id,
   )
-  const searchUrl = new URL(window.location.href)
-  // The search view lives at the root; this page is at /explore.
-  searchUrl.pathname = '/'
-  searchUrl.searchParams.set('view', 'search')
-  searchUrl.searchParams.delete('planner')
-  searchUrl.searchParams.delete('compare')
-  if (run) searchUrl.searchParams.set('run', run.id)
-  else searchUrl.searchParams.delete('run')
+  const alerts =
+    run && selectedCandidate
+      ? limitAlerts(requirementMargins(selectedCandidate, run.config))
+      : []
   const sun = useSunPath(selection.landing, selection.duration)
   const sunPath = sun.kind === 'ready' ? sun.path : null
   const [photo, setPhoto] = useState(false)
@@ -202,6 +154,7 @@ export function MissionWorkspace({
         heights={heights}
         height={height}
         setHeight={setHeight}
+        visibleCounts={visibleCounts}
         sun={sun}
         sunDirection={sunDirection}
         sunMoving={sunMoving}
@@ -213,7 +166,7 @@ export function MissionWorkspace({
           Lunar Margin
         </h1>
         <span className="border border-amber-400/60 bg-black/50 px-2 py-0.5 font-mono text-[10px] text-amber-300">
-          선택 일정의 저장된 정밀 탐색 결과
+          Saved precise search result for the selected schedule
         </span>
       </header>
       <button
@@ -222,81 +175,41 @@ export function MissionWorkspace({
         aria-pressed={collapsed}
         onClick={() => setCollapsed((value) => !value)}
       >
-        {collapsed ? '패널 보이기' : '패널 숨기기'}
+        {collapsed ? 'Show panels' : 'Hide panels'}
       </button>
       {!collapsed ? (
         <>
           <aside
-            aria-label="미션 조건"
-            className="hud-panel absolute bottom-20 left-4 top-24 w-72 overflow-y-auto max-sm:bottom-32 max-sm:w-60"
+            aria-label="Mission conditions"
+            className="hud-panel absolute bottom-20 left-4 top-24 w-72 overflow-y-auto max-xl:bottom-32 max-sm:w-60"
           >
             <section className="hud-section">
-              <h2>미션 · UTC</h2>
+              <h2>Mission · UTC</h2>
               {summary}
+              {run ? <AppliedConditions config={run.config} /> : null}
             </section>
-            {run ? (
-              <section className="hud-section">
-                <h2>적용된 탐색 조건</h2>
-                <div className="grid gap-2 text-xs text-neutral-300">
-                  <div>
-                    최장 연속 어둠 ≤{' '}
-                    {run.config.thresholds.max_sun_dark_hours ?? '제한 없음'}
-                    {run.config.thresholds.max_sun_dark_hours === null
-                      ? ''
-                      : '시간'}
-                  </div>
-                  <div>
-                    {run.config.rf ? 'RF 최장 두절' : '최장 지구 차폐'} ≤{' '}
-                    {(run.config.rf
-                      ? run.config.thresholds.max_rf_blackout_hours
-                      : run.config.thresholds.max_earth_blackout_hours) ??
-                      '제한 없음'}
-                    {(run.config.rf
-                      ? run.config.thresholds.max_rf_blackout_hours
-                      : run.config.thresholds.max_earth_blackout_hours) == null
-                      ? ''
-                      : '시간'}
-                  </div>
-                  <div>
-                    지형 경사 한도{' '}
-                    {run.config.thresholds.max_terrain_slope_degrees == null
-                      ? '제한 없음'
-                      : `${run.config.thresholds.max_terrain_slope_degrees}°`}
-                  </div>
-                  {run.config.rf ? (
-                    <div>
-                      최소 RF 통신 가능 비율{' '}
-                      {run.config.thresholds.min_rf_fraction == null
-                        ? '제한 없음'
-                        : `${run.config.thresholds.min_rf_fraction * 100}%`}
-                    </div>
-                  ) : null}
-                  <div>관측 높이 {run.config.observer_height_m} m</div>
-                  <div>
-                    일조·{run.config.rf ? 'RF 통신' : '지구 가시성'} 가중치{' '}
-                    {run.config.weights.sun} : {run.config.weights.earth}
-                    {run.config.weights.visibility
-                      ? ` · 주변 가시권 가중치 ${run.config.weights.visibility}`
-                      : null}
-                  </div>
-                </div>
-              </section>
-            ) : null}
             <section className="hud-section">
-              <h2>TOP 5 후보</h2>
-              <p className="text-xs text-neutral-400">
-                멀리서는 가까운 후보를 묶어 표시합니다. 묶음을 누르면 확대되고,
-                가까이서는 500m × 500m 격자가 보입니다.
-              </p>
-              <p className="text-xs text-neutral-400">
-                {selection.landing} · {selection.duration}일
-                {run
-                  ? ` · 선정 ${run.candidates.length}개 중 상위 ${sites.length}개`
-                  : ''}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <h2>TOP 5 candidates</h2>
+                <button
+                  type="button"
+                  className="hud-button px-2 py-0.5"
+                  aria-label="Refresh results"
+                  title="Refresh results"
+                  onClick={candidates.reload}
+                >
+                  ↻
+                </button>
+              </div>
+              {run ? (
+                <p className="text-xs text-neutral-400">
+                  Top {sites.length} of {run.candidates.length} selected · by
+                  search score
+                </p>
+              ) : null}
               {result.kind === 'loading' ? (
                 <p role="status" className="text-xs text-neutral-400">
-                  저장된 탐색 결과를 불러오는 중…
+                  Loading the saved search result…
                 </p>
               ) : null}
               {result.kind === 'error' ? (
@@ -306,80 +219,18 @@ export function MissionWorkspace({
               ) : null}
               {result.kind === 'empty' ? (
                 <p className="text-xs text-neutral-400">
-                  이 날짜와 임무 기간의 저장된 탐색 결과가 없습니다.
+                  No saved search result for this date and mission duration.
                 </p>
               ) : null}
               {run && sites.length === 0 ? (
                 <p className="text-xs text-neutral-400">
-                  이 탐색에서 선정된 후보가 없습니다. 탐색 화면에서 제외 이유를
-                  확인하세요.
+                  This search selected no candidates. Check the exclusion
+                  reasons in the search view.
                 </p>
               ) : null}
-              {sites.length > 0 && (
-                <div className="grid gap-1 text-xs">
-                  {run && (
-                    <p className="text-neutral-300">
-                      {run.config.weights.visibility
-                        ? `탐색 점수 · 가시권 가중치 ${Math.round(run.config.weights.visibility * 100)}% (탐색 높이 ${run.config.observer_height_m} m)`
-                        : '탐색 점수 · 가시권 미반영 (0%)'}
-                    </p>
-                  )}
-                  <label>
-                    후보 정렬{' '}
-                    <select
-                      className="bg-neutral-800"
-                      value={sortByVisibility ? 'visible' : 'score'}
-                      onChange={(event) =>
-                        setSortByVisibility(event.target.value === 'visible')
-                      }
-                    >
-                      <option value="score">탐색 점수순</option>
-                      <option value="visible">보이는 격자점 많은 순</option>
-                    </select>
-                  </label>
-                  <label>
-                    가시권 비교 높이{' '}
-                    <select
-                      className="bg-neutral-800"
-                      value={height}
-                      onChange={(event) =>
-                        setHeight(Number(event.target.value))
-                      }
-                    >
-                      {heights.map((h) => (
-                        <option key={h} value={h}>
-                          {h} m{h === searchHeight ? ' (탐색 높이)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
               <ol className="space-y-1">
-                {rows.map(({ site, index, count }) => (
+                {sites.map((site, index) => (
                   <li key={site.id}>
-                    <label
-                      className="flex min-h-9 cursor-pointer items-center gap-2 px-2 text-xs"
-                      style={{ color: COMPARISON_COLORS[index] }}
-                    >
-                      <input
-                        type="checkbox"
-                        aria-label={`${site.name} 비교`}
-                        checked={checkedIds.includes(site.id)}
-                        onChange={() =>
-                          setChecked((current) => ({
-                            key: comparisonKey,
-                            ids: toggleComparison(
-                              current.key === comparisonKey ? current.ids : [],
-                              site.id,
-                              sites.map((value) => value.id),
-                            ),
-                            open: false,
-                          }))
-                        }
-                      />
-                      {site.name} 비교
-                    </label>
                     <button
                       type="button"
                       aria-current={selection.siteId === site.id}
@@ -387,22 +238,13 @@ export function MissionWorkspace({
                         onSelect(site.id)
                         moon.current?.focusSite(site.id)
                       }}
-                      className="flex w-full items-center gap-2 rounded border border-transparent p-2 text-left text-xs hover:bg-white/5 aria-[current=true]:border-white/20 aria-[current=true]:bg-white/5"
+                      className="flex w-full items-center gap-2 rounded border border-transparent px-2 py-1.5 text-left text-xs hover:bg-white/5 aria-[current=true]:border-white/20 aria-[current=true]:bg-white/5"
                     >
                       <span className="grid size-5 shrink-0 place-items-center rounded-full bg-neutral-100 font-mono text-neutral-950">
                         {index + 1}
                       </span>
                       <span>
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
-                        <span className="block text-teal-300">
-                          {typeof count === 'number'
-                            ? `${height} m에서 보이는 점 ${count} / ${GRID_TARGET_COUNT}`
-                            : count === null
-                              ? '지형 자료 부족'
-                              : count === 'error'
-                                ? '가시권 계산 불가'
-                                : '가시권 계산 중…'}
-                        </span>
                       </span>
                       <span className="ml-auto font-mono">
                         {site.score == null ? '—' : site.score.toFixed(1)}
@@ -411,60 +253,30 @@ export function MissionWorkspace({
                   </li>
                 ))}
               </ol>
-              {sites.length ? (
-                <div className="my-3 space-y-2">
-                  <p className="text-xs text-neutral-400">
-                    비교할 후보를 체크하세요. 최대 5개 · 2~3개 권장. 지도 선택과
-                    별개입니다.
-                  </p>
-                  <button
-                    type="button"
-                    className="hud-button disabled:opacity-40"
-                    disabled={checkedIds.length === 0}
-                    onClick={() =>
-                      setChecked((current) => ({ ...current, open: true }))
-                    }
-                  >
-                    선택 후보 비교 ({checkedIds.length}/5)
-                  </button>
-                </div>
-              ) : null}
               <button
                 type="button"
-                className="hud-button justify-self-start"
-                onClick={candidates.reload}
+                className="hud-button justify-self-start disabled:cursor-default disabled:opacity-40"
+                aria-haspopup="dialog"
+                disabled={sites.length === 0}
+                onClick={() =>
+                  setChecked((current) => ({ ...current, open: true }))
+                }
               >
-                결과 새로고침
+                Compare candidates
               </button>
-              {run ? (
-                <button
-                  type="button"
-                  className="hud-button"
-                  onClick={() => onOverview(run.id)}
-                >
-                  후보지 선정
-                </button>
-              ) : (
-                <a
-                  className="hud-button"
-                  href={`${searchUrl.pathname}${searchUrl.search}`}
-                >
-                  후보지 탐색하기
-                </a>
-              )}
             </section>
           </aside>
           {selected ? (
             <aside
-              aria-label="선택한 지점"
-              className="hud-panel absolute right-4 top-24 z-20 max-h-[calc(100dvh-176px)] w-[420px] max-w-[calc(100vw-32px)] overflow-y-auto p-3 max-sm:top-80 max-sm:max-h-[calc(100dvh-400px)]"
+              aria-label="Selected site"
+              className="hud-panel absolute right-4 top-24 z-20 max-h-[calc(100dvh-176px)] w-[420px] max-w-[calc(100vw-32px)] overflow-y-auto p-3 max-xl:max-h-[calc(100dvh-224px)] max-sm:top-80 max-sm:max-h-[calc(100dvh-448px)]"
             >
               <div className="mb-1 flex items-center justify-between gap-3">
                 <h2 className="font-semibold">{selected.name}</h2>
                 <button
                   type="button"
                   className="hud-button"
-                  aria-label="후보 선택 해제"
+                  aria-label="Deselect candidate"
                   onClick={() => onSelect(null)}
                 >
                   ✕
@@ -481,55 +293,45 @@ export function MissionWorkspace({
                   role="alert"
                   className="mb-3 rounded border border-amber-400/60 bg-amber-950/40 p-3 text-xs text-amber-200"
                 >
-                  <strong>착륙 일조 경고</strong> · {selection.landing} 00:00
-                  UTC에 이 지점에서는 태양 중심이 지형에 가려집니다.
+                  <strong>Landing sunlight warning</strong> · At{' '}
+                  {selection.landing} 00:00 UTC the Sun’s centre is hidden by
+                  terrain at this site.
                 </p>
               )}
-              <MissionMetrics result={analysis} />
+              {alerts.map((alert) => (
+                <p
+                  key={alert}
+                  role="alert"
+                  className="mb-3 rounded border border-red-400/60 bg-red-950/40 p-3 text-xs text-red-200"
+                >
+                  <strong>Outside search limit</strong> · {alert}
+                </p>
+              ))}
               {run && selectedCandidate ? (
-                <RequirementMarginPanel
+                <SiteMetricCards
                   candidate={selectedCandidate}
                   config={run.config}
                 />
               ) : null}
-              {selectedCandidate?.rf ? (
-                <section
-                  aria-label="저장된 RF 통신 평가"
-                  className="mt-3 border-t border-white/10 pt-3 text-xs text-sky-300"
-                >
-                  <h3 className="font-semibold">
-                    명목 RF 통신 · 저장된 탐색 결과
+              <section
+                className="mission-timeline-panel mt-4 border-t border-white/10 pt-4"
+                aria-label="Mission timeline"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-neutral-300">
+                    Mission timeline
                   </h3>
-                  <p>
-                    통신 가능 비율{' '}
-                    {selectedCandidate.rf.fraction == null
-                      ? '—'
-                      : `${(selectedCandidate.rf.fraction * 100).toFixed(1)}%`}{' '}
-                    · 최장 두절{' '}
-                    {selectedCandidate.rf.longest_blackout_hours?.toFixed(1) ??
-                      '—'}
-                    시간
+                  <span className="text-[10px] text-neutral-400">
+                    For the selected candidate · computed live
+                  </span>
+                </div>
+                {analysis.kind !== 'ready' ? (
+                  <AnalysisStatus result={analysis} />
+                ) : analysis.data.timeline.t.length === 0 ? (
+                  <p role="status" className="text-xs text-neutral-400">
+                    No analysis samples in the selected period.
                   </p>
-                  <p className="mt-1 text-[10px] text-neutral-400">
-                    LOS 차폐 시 통신 불가. 가능 비율과 최장 두절을 순위 점수에
-                    함께 반영합니다. 실제 지상국·일정·대기·멀티패스는 반영하지
-                    않습니다.
-                  </p>
-                </section>
-              ) : null}
-              {analysis.kind === 'ready' ? (
-                <section
-                  className="mission-timeline-panel mt-4 border-t border-white/10 pt-4"
-                  aria-label="미션 기간 타임라인"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold text-neutral-300">
-                      미션 기간 타임라인
-                    </h3>
-                    <span className="text-[10px] text-neutral-400">
-                      선택한 후보 기준
-                    </span>
-                  </div>
+                ) : (
                   <ReviewTimeline
                     key={`${analysis.data.sun.start}/${analysis.data.sun.end}/${analysis.data.sun.lat}/${analysis.data.sun.lon}`}
                     timeline={analysis.data.timeline}
@@ -542,22 +344,35 @@ export function MissionWorkspace({
                     onPreview={onPreview}
                     onLight={onLight}
                   />
-                </section>
-              ) : null}
+                )}
+              </section>
             </aside>
           ) : null}
         </>
       ) : null}
-      <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
+      <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400 max-xl:bottom-32">
         {apiStatus}
       </div>
-      {/* Under the title: the top right belongs to the 3D toolbar. */}
-      {nav ? <div className="absolute top-14 left-4 z-20">{nav}</div> : null}
+      {/* The 3D controls sit in the bottom toolbar, so the top right is free for the stage links. */}
+      {nav ? <div className="absolute top-4 right-4 z-20">{nav}</div> : null}
       {children}
       {run && checked.key === comparisonKey && checked.open ? (
         <SiteComparisonPanel
           candidates={comparisonCandidates}
+          checkedIds={checkedIds}
+          selectedId={selection.siteId}
           config={run.config}
+          onToggle={(id) =>
+            setChecked((current) => ({
+              ...current,
+              ids: toggleComparison(checkedIds, id, siteIds),
+            }))
+          }
+          onSelect={(id) => {
+            setChecked((current) => ({ ...current, open: false }))
+            onSelect(id)
+            moon.current?.focusSite(id)
+          }}
           onClose={() => setChecked((current) => ({ ...current, open: false }))}
           onClear={() => setChecked((current) => ({ ...current, ids: [] }))}
         />

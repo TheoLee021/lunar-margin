@@ -11,7 +11,7 @@ export const COMPARISON_COLORS = [
 export interface ComparisonAxis {
   key: string
   label: string
-  unit: '%' | '시간' | '°' | 'm' | 'dB'
+  unit: '%' | 'h' | '°' | 'm' | 'dB'
   higherIsBetter: boolean
   reference: number
   minimum?: number
@@ -32,7 +32,7 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
     (Date.parse(config.window.end) - Date.parse(config.window.start)) /
     3_600_000
   if (!Number.isFinite(hours) || hours <= 0)
-    throw new Error('비교 기간이 유효하지 않습니다.')
+    throw new Error('The comparison period is invalid.')
   const slope = config.thresholds.max_terrain_slope_degrees
   const roughness = config.thresholds.max_terrain_roughness_m
   const axis = (
@@ -51,46 +51,53 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
     referenceLabel,
   })
   return [
-    axis('sun', '일조율', '%', true, 100, '0–100%'),
+    axis('sun', 'Sunlight', '%', true, 100, '0–100%'),
     axis(
       'dark',
-      '최장 연속 어둠',
-      '시간',
+      'Longest darkness',
+      'h',
       false,
       hours,
-      `0–${hours}시간 · 전체 임무 기간`,
+      `0–${hours} h · full mission`,
     ),
     {
-      ...axis('rf', 'RF 링크 마진', 'dB', true, 30, '−30~+30 dB · 표시 범위'),
+      ...axis(
+        'rf',
+        'RF link margin',
+        'dB',
+        true,
+        30,
+        '−30 to +30 dB · display range',
+      ),
       minimum: -30,
     },
     axis(
       'blackout',
-      '최장 지구 차폐',
-      '시간',
+      'Longest Earth blackout',
+      'h',
       false,
       hours,
-      `0–${hours}시간 · 전체 임무 기간`,
+      `0–${hours} h · full mission`,
     ),
     axis(
       'slope',
-      '지역 경사 P95',
+      'Local slope P95',
       '°',
       false,
       slope != null && slope > 0 ? slope : 15,
       slope != null && slope > 0
-        ? `0–${slope}° · 임무 한도`
-        : '0–15° · 표시 기준, 안전 한도 아님',
+        ? `0–${slope}° · mission limit`
+        : '0–15° · display scale, not a safety limit',
     ),
     axis(
       'roughness',
-      '지역 거칠기 P95',
+      'Local roughness P95',
       'm',
       false,
       roughness != null && roughness > 0 ? roughness : 20,
       roughness != null && roughness > 0
-        ? `0–${roughness}m · 임무 한도`
-        : '0–20m · 표시 기준, 안전 한도 아님',
+        ? `0–${roughness} m · mission limit`
+        : '0–20 m · display scale, not a safety limit',
     ),
   ]
 }
@@ -151,4 +158,18 @@ export function toggleComparison(
   const valid = [...new Set(current)].filter((value) => top.includes(value))
   if (valid.includes(id)) return valid.filter((value) => value !== id)
   return top.includes(id) && valid.length < 5 ? [...valid, id] : valid
+}
+
+/**
+ * Which of the values compared in one row are the best. Ties are all marked, a missing
+ * value never is, and nothing is marked unless at least two values can be compared.
+ */
+export function bestValues(
+  values: readonly (number | null)[],
+  higherIsBetter: boolean,
+): boolean[] {
+  const known = values.filter((value) => value !== null)
+  if (known.length < 2) return values.map(() => false)
+  const best = higherIsBetter ? Math.max(...known) : Math.min(...known)
+  return values.map((value) => value === best)
 }

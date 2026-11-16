@@ -48,7 +48,7 @@ export function useDashboardRun(schedule: Schedule) {
             Date.parse(run.config.window.end) !== end
           )
             throw new Error(
-              '선택한 기간의 500m 정밀 탐색 결과와 일치하지 않습니다.',
+              'The result does not match the 500 m precise search for the selected period.',
             )
           result = { kind: 'ready', run }
         }

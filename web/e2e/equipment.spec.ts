@@ -58,16 +58,16 @@ test('operator equipment follows the review time and recovers a partial visibili
     'ready',
     { timeout: 45_000 },
   )
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  await rail.getByRole('button', { name: /후보 1/ }).click()
-  const drive = page.getByRole('button', { name: '트렌처 주행' })
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
+  const drive = page.getByRole('button', { name: 'Drive Trencher' })
   await expect(drive).toBeEnabled({ timeout: 60_000 })
   await expect(page.getByLabel('가까이 볼 장비')).toHaveCount(0)
   await expect(
     page.getByRole('button', { name: '장비 가까이 보기' }),
   ).toHaveCount(0)
   await drive.click()
-  await expect(page.getByText(/이동 거리 [1-9]\d* m/)).toBeVisible()
+  await expect(page.getByText(/Distance [1-9]\d* m/)).toBeVisible()
   const positions: number[] = []
   await expect
     .poll(
@@ -84,33 +84,35 @@ test('operator equipment follows the review time and recovers a partial visibili
   await expect
     .poll(() => observed.has('2027-01-10T00:00:00Z'), { timeout: 60_000 })
     .toBe(true)
-  await page.getByRole('button', { name: '지구 방향 끄기' }).click()
+  await page.getByRole('button', { name: 'Hide Earth direction' }).click()
   await expect(
-    page.getByRole('button', { name: '지구 방향 켜기' }),
+    page.getByRole('button', { name: 'Show Earth direction' }),
   ).toHaveAttribute('aria-pressed', 'false')
-  const picker = page.getByLabel('장비를 배치할 운영사')
+  const picker = page.getByLabel('Operator whose equipment is placed')
   const model = page.waitForResponse(
     (r) => r.url().endsWith('/models/rover.glb') && r.ok(),
   )
   await picker.selectOption('vestige-resources')
-  const rover = page.getByRole('button', { name: '시추 로버 주행' })
+  const rover = page.getByRole('button', { name: 'Drive Drill rover' })
   await expect(rover).toBeEnabled({ timeout: 60_000 })
   await rover.click()
-  await expect(page.getByText(/이동 거리 [1-9]\d* m/)).toBeVisible()
+  await expect(page.getByText(/Distance [1-9]\d* m/)).toBeVisible()
   await model
   await page.screenshot({ path: info.outputPath('rover-drive.png') })
-  await page.getByRole('button', { name: '위에서 보기' }).click()
+  await page.getByRole('button', { name: 'Top view' }).click()
   await picker.selectOption('helios-grid')
   failSun = true
-  await page.getByLabel('타임라인 검토 시점').fill('2')
+  await page.getByLabel('Timeline review time').fill('2')
   await expect
     .poll(() => observed.has('2027-01-10T01:00:00Z'), { timeout: 30_000 })
     .toBe(true)
-  const retry = page.getByRole('button', { name: '장비 분석 다시 시도' })
+  const retry = page.getByRole('button', { name: 'Retry equipment analysis' })
   await expect(retry).toBeVisible({ timeout: 60_000 })
   failSun = false
   await retry.click()
-  await expect(page.getByText(/수직 태양광을 세우고 전력을 판다/)).toBeVisible({
+  await expect(
+    page.getByText(/Raises vertical solar arrays and sells power/),
+  ).toBeVisible({
     timeout: 60_000,
   })
   await expect(retry).toHaveCount(0)
