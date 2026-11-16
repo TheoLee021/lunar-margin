@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 test('site-targeted capture connects the default orbit to surface touchdown', async ({
   page,
 }) => {
+  test.setTimeout(90000)
   await page.goto('/orbit?departure=2027-01-06&arrival=2027-01-10&duration=14')
   const url = page.url()
   const landing = page.getByRole('button', { name: '착륙', exact: true })
@@ -17,6 +18,16 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
     /2027-01-10 02:32:\d\d UTC/,
     { timeout: 30000 },
   )
+  const touchdown = await page.getByTestId('touchdown').innerText()
+  await page.getByRole('button', { name: '← 날짜 계획으로 돌아가기' }).click()
+  await expect(page.getByTestId('planner-touchdown')).toHaveText(touchdown, {
+    timeout: 30000,
+  })
+  await page.getByRole('button', { name: '이 일정의 궤도 보기 ↗' }).click()
+  await landing.click()
+  await expect(page.getByTestId('touchdown')).toHaveText(touchdown, {
+    timeout: 30000,
+  })
   await expect(
     page.getByRole('img', {
       name: '동력하강 시작부터 표면 착륙까지 경과 시간과 지상고',
@@ -49,4 +60,9 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
     timeout: 30000,
   })
   await expect(page.getByTestId('touchdown')).toHaveText('산출되지 않음')
+  await page.getByRole('button', { name: '← 날짜 계획으로 돌아가기' }).click()
+  await expect(page.getByTestId('planner-touchdown')).toHaveText(
+    '산출되지 않음',
+    { timeout: 30000 },
+  )
 })

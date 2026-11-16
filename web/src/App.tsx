@@ -1,3 +1,4 @@
+import { FlightConditions, type FlightOverride } from './flight/flightPlan'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
@@ -77,6 +78,7 @@ function locationFor(
 
 export default function App() {
   const [view, setView] = useState<View>(currentView)
+  const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
   const [planner, setPlanner] = useState(
     () => new URLSearchParams(window.location.search).get('planner') === '1',
@@ -114,7 +116,7 @@ export default function App() {
     setPlanner(openPlanner)
   }
   return (
-    <>
+    <FlightConditions.Provider value={{ override, apply }}>
       <Suspense
         fallback={
           <p role="status" className="p-4 text-sm text-neutral-300">
@@ -220,7 +222,7 @@ export default function App() {
           </button>
         </div>
       ) : null}
-    </>
+    </FlightConditions.Provider>
   )
 }
 
@@ -340,6 +342,8 @@ function MissionApp({
           }
         >
           <DatePlanner
+            site={site}
+            selectedSiteId={selection.siteId}
             schedule={selection}
             onApply={onApply}
             onViewOrbit={onViewOrbit}
