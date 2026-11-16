@@ -1,159 +1,161 @@
 # Lunar Margin
 
-A mission decision tool for comparing and evaluating landing sites and landing times near the lunar south pole.
+A mission decision tool for comparing landing sites and landing dates near the lunar south pole. It does not stop at showing environment data: it checks each site against the mission's requirements and says which requirement fails and by how much.
 
-## NASA data
+## What it does
 
-The analysis is computed from NASA data that `cd api && uv run python -m lunar_margin.pipeline.fetch` downloads (about 501 MB; never committed to git):
+The app walks through four stages. Each stage is linked from the stage bar at the top of the screen, and the current mission (dates, duration, limits, selected site) travels in the URL.
 
-- **Terrain**: LRO LOLA south-pole DEM `ldem_80s_80m_float` (80 m/px, 80°S–90°S) from PDS Geosciences. Used to compute the terrain horizon seen from a site.
-- **Terrain, supplementary**: LOLA DEM `ldem_75s_120m_float` (120 m/px, 75°S–90°S, 232 MB).
-  The 80 m DEM ends at about 80°S, so for sites near the edge of the search region (85°S) the horizon rays toward the far side would leave the data.
-  The two are combined as a _composite DEM_: the 80 m values are used wherever they exist, and the 120 m values only fill in outside them (or where a pixel is missing).
-  Both use the same polar stereographic projection, so they overlay directly. The 120 m grid is coarser, so features smaller than about 120 m are not resolved there;
-  that only affects distant terrain.
-- **Sun and Earth positions**: NAIF SPICE kernels (DE440s ephemeris, lunar orientation and frame kernels, leap seconds) from NASA JPL. Used to compute where the Sun and Earth are in the lunar sky over time.
+| #   | Stage           | URL                  | What you do there                                                                                                                                                         |
+| --- | --------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Search          | `/`                  | Enter a landing date, a mission duration and up to six limits: minimum sunlight and communication, maximum darkness, communication blackout, regional slope and roughness |
+| 2   | Schedule & Cost | `/explore?planner=1` | Compare departure and landing dates by estimated delivery cost, pick a launch from the schedule and view the Earth–Moon flight trajectory                                 |
+| 3   | Compare Sites   | `/explore?compare=1` | Review the shortlisted sites of the saved search over the Moon: metrics, why other sites were excluded, prices and reservation status                                     |
+| 4   | 3D Explore      | `/explore`           | Inspect the top five candidates on the 3D Moon                                                                                                                            |
 
-A body counts as visible when its elevation is above the terrain horizon in its direction.
+The 3D Explore stage has:
 
-Derived data (generated locally, not downloaded, not in git): `uv run python -m lunar_margin.pipeline.horizons` precomputes the terrain horizon of every search-grid site into `DATA_DIR/horizons/` (about 210 MB, roughly 20 minutes on 12 cores).
-Horizons depend only on the site and the DEM, not on dates or mission limits, so later searches read them instead of recomputing.
-To share a table instead of recomputing it on every machine, `pipeline.horizons --upload` puts it in a private Supabase Storage bucket (split into 32 MiB parts with a sha256 manifest) and `pipeline.horizons --download` fetches and verifies it. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_BUCKET` in `api/.env`; the service-role key stays on the backend or a local script, never in the frontend.
-When those variables are set and the table is missing, the API server downloads it in a background thread at startup (it does not wait; set `HORIZON_TABLE_DOWNLOAD_ON_START=false` to disable). In a deployment keep `DATA_DIR` on a persistent volume so it is not downloaded on every deploy.
+- **Left panel**: the mission schedule, the applied search conditions and the top five candidates by search score.
+- **Right panel** for the selected candidate: alerts (shadowed at landing, a metric outside a search limit), six saved metrics (sunlight, communication, longest darkness, longest communication outage, local slope, local roughness), margins against each limit, and a timeline of Sun and Earth elevation over the mission.
+- **Bottom toolbar**: sunlight or photo rendering, top view, 3D view of the selected point, Earth direction, and a viewshed panel that compares how much surrounding terrain each candidate sees from a chosen observer height.
+- **Candidate comparison**: a radar chart and tables of the checked candidates' metrics and margins.
 
-Sources, versions, and file list: [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
+Other views:
+
+| URL               | View                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `/?view=analysis` | Detailed analysis of any point picked on the Moon: illumination and Earth visibility over a period |
+| `/?view=search`   | Candidate search: run a new search and follow how the grid is narrowed down step by step           |
+| `/orbit`          | Earth–Moon transfer orbit for the selected departure and arrival dates                             |
+| `/flight`         | The same page opened on the descent and landing part of the flight                                 |
 
 ## Quick start
 
+Requirements: Docker, or Python 3.14 with [uv](https://docs.astral.sh/uv/) for the backend; Node 24 for the frontend.
+
 ```sh
-# Backend (Docker)
+# 1. NASA data, once (about 500 MB, saved to api/data, never committed)
+docker compose run --rm api python -m lunar_margin.pipeline.fetch
+
+# 2. Backend at http://localhost:8000 (restarts when api/src changes)
 docker compose up --build
 
-# Backend (local development, Python 3.14 + uv)
-cd api
-uv sync
-cp .env.example .env
-uv run fastapi dev src/lunar_margin/app/main.py
-
-# Frontend (Node 24)
+# 3. Frontend at http://localhost:5173 (/api is proxied to localhost:8000)
 cd web
 npm install
 cp .env.example .env
 npm run dev
 ```
 
-Open http://localhost:5173.
+To develop the backend without Docker:
 
-Backend details (NASA data ingestion, illumination and Earth-visibility analysis): see [api/README.md](api/README.md).
+```sh
+cd api
+uv sync
+cp .env.example .env
+uv run python -m lunar_margin.pipeline.fetch
+uv run fastapi dev src/lunar_margin/app/main.py
+```
 
-Analysis UI (illumination / Earth visibility detail view): with the backend running and data fetched (`cd api && uv run python -m lunar_margin.pipeline.fetch`), open `/?view=analysis` (or choose 상세 분석 from the HUD) and pick a site. Without NASA data, `cd web && npm run stub` serves synthetic responses on :8000. `npm run e2e` runs against the real backend with NASA data (start the API first).
+### Configuration
 
-See [AGENTS.md](AGENTS.md) for conventions, commands, and ownership.
+| Variable                | Where      | Purpose                                                                                                          |
+| ----------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `VITE_CESIUM_ION_TOKEN` | `web/.env` | Cesium ion token for the 3D Moon. Add Cesium Moon (ion asset 2684829) to the token's account, or the viewer 404s |
+| `VITE_API_URL`          | `web/.env` | Backend address. `/api` locally, the deployed API URL in production                                              |
+| `API_PROXY_TARGET`      | shell      | Backend that Vite proxies `/api` to, when it is not `http://localhost:8000`                                      |
+| `DATA_DIR`              | `api/.env` | Where NASA data and derived tables are stored. Keep it on a persistent volume when deployed                      |
+| `SUPABASE_*`            | `api/.env` | Optional: sharing the horizon table and storing reservations                                                     |
+
+Every `VITE_` value is public in the browser bundle. The Supabase service-role key belongs to the backend only. The full list of keys is in `web/.env.example` and `api/.env.example`.
+
+Without NASA data, `cd web && npm run stub` serves synthetic responses on port 8000.
+
+## Checks and tests
+
+```sh
+# Backend, from api/
+uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
+
+# Frontend, from web/
+npm run check   # lint, format check, typecheck, unit tests, build
+npm run e2e     # Playwright
+```
+
+End-to-end tests are not run in CI. They need the backend with NASA data on port 8000 and the synthetic fixture API on port 8765 (`PORT=8765 npm run stub`); the first run also needs `npx playwright install chromium`. If those ports are taken, set `E2E_BASE_URL` and `API_PROXY_TARGET`:
+
+```sh
+E2E_BASE_URL=http://localhost:5174 API_PROXY_TARGET=http://localhost:8001 npm run e2e
+```
+
+## Data
+
+Everything is computed from NASA data downloaded by `lunar_margin.pipeline.fetch`:
+
+- **Terrain**: LRO LOLA south-pole DEM `ldem_80s_80m_float` (80 m/px, 80°S–90°S), from PDS Geosciences. It gives the terrain horizon seen from a site.
+- **Supplementary terrain**: LOLA DEM `ldem_75s_120m_float` (120 m/px, 75°S–90°S). The 80 m DEM ends near 80°S, so horizon rays from sites at the edge of the search region would leave it. The two are combined into a composite DEM: 80 m values wherever they exist, 120 m values only outside them.
+- **Sun and Earth positions**: NAIF SPICE kernels from NASA JPL (DE440s ephemeris, lunar orientation and frame kernels, leap seconds).
+
+A candidate search also needs the terrain horizon of every search-grid site. `uv run python -m lunar_margin.pipeline.horizons` precomputes it into `DATA_DIR/horizons/` (about 210 MB, roughly 20 minutes on 12 cores). Horizons depend only on the site and the DEM, so later searches reuse them. `--upload` and `--download` share the table through a private Supabase Storage bucket, and the API downloads a missing table at startup when Supabase is configured.
+
+Sources, versions and file lists are in [docs/data.md](docs/data.md) and [api/README.md](api/README.md).
+
+## What the numbers mean
+
+These are screening results for planning, not flight or safety certification.
+
+- **Sunlight and Earth visibility**: a body counts as visible when its centre is above the terrain horizon in its direction. The Sun's angular radius is not included, and terrain smaller than the 80 m DEM resolves is not seen.
+- **Communication**: Earth visibility is terrain clearance, not link quality. In a search with an RF scenario, the communication metrics follow a nominal RF link instead; ground stations, schedules, atmosphere and multipath are not modelled.
+- **Terrain**: slope and roughness are the 95th percentile within 250 m of a site. They screen sites out; they do not certify that a site is safe to land on. A candidate's 500 m × 500 m footprint is a search-grid cell, not a claim that every point in it is landable.
+- **Prices**: estimates from a planning model that uses public company rates where they exist. They are not bookable quotes.
+- **Launch schedule**: public launch dates used as demo input, not a statement that a launch can carry the mission.
+- **Trajectory**: a Lambert estimate refined by numerical Earth and Moon gravity shooting to a 100 km lunar perilune. It is not an ascent model or a Δv optimization, and it leaves out solar gravity, nonspherical gravity and finite burns.
+- **Reservations**: a public demo without login. Without a configured database, reservations are disabled and everything else keeps working.
+
+## Project layout
+
+```
+web/                   Vite app (React, TypeScript, Tailwind, CesiumJS)
+  src/api/             API client and zod schemas, matching docs/api.md
+  src/landing/         Stage 1: search form
+  src/mission/         Date planner and the 3D Explore panels
+  src/search/          Site selection panel and candidate search
+  src/analysis/        Detailed point analysis
+  src/moon/            Shared Cesium Moon viewer, markers, sunlight, equipment
+  e2e/                 Playwright scenarios
+api/                   uv project (FastAPI, Python 3.14)
+  src/lunar_margin/
+    app/               FastAPI app, routes, settings
+    engine/            Pure calculations: SPICE, horizons, illumination, communication
+    pipeline/          NASA data download and conversion, candidate search
+  tests/
+docs/                  API contract, datasets and feature notes
+supabase/              Database migrations for reservations
+```
+
+A few choices that are easy to miss in the code:
+
+- The Cesium viewer and camera live outside React state. React renders the panels only, and every screen mounts the one shared Moon viewer.
+- Candidate footprints are classified onto the Moon tiles through explicit lunar height volumes (−20 km to +20 km). Cesium's ground primitives assume Earth's height range and clip high lunar ridges.
+- Overlapping candidate markers are clustered into one badge. Clicking it zooms to its members without selecting a candidate or starting an analysis.
+- Missing or failed results show empty and error states. Nothing falls back to example data.
+- No DEM, SPICE kernel or terrain grid is bundled in the frontend or committed to git.
+
+The frontend deploys to Vercel and the API to Railway (Dockerfile plus a volume for `DATA_DIR`). GitHub Actions runs the lint, format, type and test checks of both projects and the frontend build.
+
+## Documentation
+
+- [AGENTS.md](AGENTS.md): conventions, commands and workflow
+- [docs/api.md](docs/api.md): API contract between frontend and backend
+- [docs/data.md](docs/data.md): datasets and their sources
+- [api/README.md](api/README.md): backend details, calculation method, assumptions and deployment
+- [docs/candidates.md](docs/candidates.md): candidate search
+- [docs/site-comparison.md](docs/site-comparison.md): candidate comparison
+- [docs/provider-pricing.md](docs/provider-pricing.md): provider price model, sources and measured timings
+- [docs/launch-schedule.md](docs/launch-schedule.md): launch schedule integration and assumptions
+- [docs/reservations.md](docs/reservations.md): landing grid reservations, policy and setup
+- [docs/descent-reference.md](docs/descent-reference.md) and [docs/doi-pdi-handoff.md](docs/doi-pdi-handoff.md): descent and landing flight model
 
 ## License
 
 [MIT](LICENSE)
-
-## Lunar viewer preview
-
-The React HUD keeps explicitly labeled example candidate locations and rankings. Selected-site metrics and the mission timeline use the real analysis API; candidate ranks are not computed recommendations. `MissionSelection` is the shared map/panel selection; the Cesium viewer and camera stay outside React state and are destroyed on unmount.
-
-Set `VITE_CESIUM_ION_TOKEN` in `web/.env.local` and add Cesium Moon (ion asset 2684829) to the token's account. The HUD adapts the shared `web/src/moon/MoonViewer.tsx` from #9 through marker props and its camera handle. Without a token, the shared viewer reports a configuration error. Workers and assets are served by the existing `vite-plugin-static-copy` configuration; no second viewer or install-time copying is used. No DEM, SPICE kernels, or terrain grids are bundled.
-
-For local checks while another project occupies port 5173, use `E2E_BASE_URL=http://localhost:5174 API_PROXY_TARGET=http://localhost:8001 npm run e2e` from `web/`, with the API running on port 8001.
-
-The default `/` screen is the mission HUD. `/?view=analysis` preserves the existing detailed analysis workspace, including Moon surface picking, presets, thresholds and comparison. The navigation links switch between these screens; each mounts one shared Moon viewer.
-
-## Mission date planner and flight orbit page
-
-Click the mission dates to open the HUD-style planner. Its 5×5 price grid covers each reference departure/landing date ±2 days. Choosing a cell updates the draft dates; applying commits departure, landing and duration to the shared selection. Closing or pressing Escape discards the draft, including duration. Dates and the applied schedule are validated with zod.
-
-The date planner contains date selection, mission conditions, the average-price grid and an illustrative landing-date score chart, with no surface-analysis or trajectory request. The mission timeline sits below the selected candidate’s metrics on the main dashboard and shares their analysis result. “이 일정의 궤도 보기” keeps the selected draft as the shared schedule and navigates in the same app to `/orbit`. The dedicated page provides the two large plots, date inputs and playback. Editing valid dates there updates the shared schedule; “날짜 계획으로 돌아가기” reopens the planner with those dates and the same site/duration. Browser Back/Forward and reload retain the selection through validated `departure`, `arrival`, `duration`, and `site` URL parameters. Closing a planner draft without applying or opening the orbit page still discards that draft. The old `?view=orbit` link remains compatible and is normalized to `/orbit`. Vercel serves `/orbit` through the SPA entry point using `web/vercel.json`. No routing library or storage service is added.
-
-Prices use the eligible-grid model described below. The dashboard reads the completed 500m search for the selected landing date and duration and shows its first five ranked candidates. A matching run in `run` or `pricing_run` is preferred; otherwise the newest matching saved result is used. Applied search conditions replace the former example filters. No candidate is selected by default, and no point analysis is requested until a candidate is selected. Missing results show an empty state and search link, never example candidates. The orbit preview calls `GET /trajectory/transfer` when the selected departure or arrival date changes (both dates mean 00:00 UTC). It uses DE440 geometric Moon states, a Lambert initial estimate and numerical Earth/Moon gravity shooting to reach a lunar perilune at 100 km altitude at the requested arrival time. The parking orbit is 200 km with a freely chosen plane/orientation; this is not a Cape Canaveral ascent model or a minimum-Δv optimization. The solver adjusts departure velocity and the arrival-point angle together, requiring zero lunar radial speed and positive radial acceleration at arrival. LOI reduces tangential speed to local circular speed without turning the trajectory, then the model propagates another 14 hours. Solar gravity, nonspherical gravity, finite burns and landing are excluded.
-
-Supported inputs: years 1900–2100 and flight times 1–10 days. The solver rejects non-convergence, Earth approaches below 100 km, lunar collisions and arrival position residuals above 50 m or lunar radial speed above 0.01 m/s. The residual measures internal numerical targeting, not independent flight-navigation accuracy. SPICE states are interpolated with a 30-minute cubic Hermite grid for propagation. The last and first 10 minutes around LOI include 5-second samples to resolve the tangent connection. The response supplies 3D J2000 positions in km and elapsed seconds from departure. The left plot projects to J2000 XY; the right plot projects to the incoming lunar orbital plane so the lunar body and capture orbit can be compared. Both plots keep equal axis scales, show units and legends, and stack on mobile.
-
-Requests are debounced and cancelled when dates change; the old path disappears immediately while the new one is computing. Responses must match the requested dates and pass zod validation. Missing data, unsupported dates, busy solvers and failed calculations show errors and a retry action, with no static-trajectory fallback. The API allows two simultaneous solves with a 20-second budget each. The original [jaehyeon research experiment](https://github.com/TheoLee021/lunar-margin/tree/jaehyeon/research/earth_moon_transfer) remains a separate reference; the live preview does not load precomputed trajectory assets.
-
-Run the backend from this checkout with SciPy installed by `cd api && uv sync`, NASA kernels prepared by `uv run python -m lunar_margin.pipeline.fetch`, and `DATA_DIR` pointing to the downloaded data when using another location. Set `API_PROXY_TARGET` to that backend when starting Vite. The new trajectory endpoint only needs SPICE files, not a DEM. See `docs/api.md` for the request/response contract.
-
-Dashboard candidates use their saved polar-grid coordinates and spacing to draw 500m × 500m footprints on the Moon tiles. Selecting a footprint highlights it and opens the same candidate metrics and timeline as the list. “선택 지점 3D로 보기” zooms to the terrain surface so the actual cell boundary is visible. The footprint represents the search grid, not certification that every point in it is landable.
-
-The fill and border classify the actual Moon tiles through explicit lunar height volumes (−20km to +20km). They avoid Cesium ground primitives’ Earth-specific approximate height table, which can clip high lunar ridges. These are invisible render volumes, not altitude measurements or raised boxes. Marker updates and viewer teardown release their primitives.
-
-Overlapping candidate labels are grouped by Cesium screen-space clustering into a “후보 N개” badge. Clicking the badge zooms to its members without changing the selected candidate or starting an analysis. Zooming in separates individual labels and grid footprints; zooming out groups them again. Clicking a TOP 5 list row, individual map number or footprint selects that candidate, updates its timeline, and zooms to its grid using the same view as “선택 지점 3D로 보기”. Clicking the same list row again also refocuses the camera. The badge counts only the displayed TOP 5, not every eligible grid in the saved run.
-
-The selected-site panel and unified timeline request `/analysis/illumination` and `/analysis/earth-visibility` from the backend added in #5. Both responses must match the selected coordinates and the surface interval: landing midnight UTC through landing + 7/14/28 days (end exclusive), with 30-minute samples and the saved search’s observer height. Departure changes do not change surface analysis. The HUD metrics and timeline show the selected candidate and applied schedule. Draft date edits update the timeline only after Apply. Loading, errors and empty results do not fall back to fixtures.
-
-The timeline uses server elevations/visibility and exact server windows, with the terrain horizon interpolated at each body's azimuth. There is no extra 2° communication margin. Earth visibility describes terrain clearance, not a radio link budget. All samples remain available to the cursor and plot (at most 1,344 for 28 days).
-
-Run a backend containing #5 and the SPICE concurrency fix before exercising this frontend. Download NASA data once from `api/` with `uv run python -m lunar_margin.pipeline.fetch`; DEM and kernels stay outside the frontend and Git. `API_PROXY_TARGET` selects the local API; `VITE_API_URL` selects the deployed API. The API client, response schema and shared analysis helpers are reused from #6 without replacing its analysis page.
-
-Candidate search UI: choose **후보지 탐색**, enter a mission, and optionally enable the development search (20 km → 10 km). Requires the candidate search backend. See [docs/candidates.md](docs/candidates.md).
-
-
-## Candidate-search terrain slope
-
-Candidate search now enforces the optional maximum terrain slope in both standard
-and development searches. It uses the 250 m regional DEM slope P95
-(160 m slope baseline, 400 m roughness window). Incomplete
-regional terrain cannot pass. The table and candidate detail show measured slopes;
-the filter step explains slope and terrain-coverage exclusions. Historical runs
-remain readable and are labeled as not applying slope. Start a new search to apply
-the limit; old results are not reused by the new mission cache version.
-This is terrain screening, not certified landing safety.
-
-## Provider prices from the 500m candidate search
-
-The date planner compares six companies using a planning model. Public company
-rates take priority; missing rates use the existing delivery-mode reference tariff,
-with the modeled $500,000 fixed fee when no fee is published. The UI distinguishes
-public-rate estimates from the common model and lists the assumptions. These are
-not bookable company quotes. Each date combination averages each original eligible
-500m grid's lowest estimated cost, before Top-K selection. Partial grid coverage
-never becomes a full-grid mean.
-
-Choose a tentative departure from Spaceflight Now and Space Launch
-Schedule (including general launches in demo mode), then choose the landing date independently. Month-only or conflicting
-dates cannot be auto-selected. Selecting a launch applies its operator’s model rate to the
-same eligible-grid average; an unavailable operator/delivery rate uses the labeled common
-reference model. Clearing the selection restores the six-company minimum comparison.
-Only published exact departure days have prices and links; selecting a flight enables
-only its scheduled day, and unscheduled departure dates cannot be applied.
-The selected launch ID persists through applying dates and opening candidate searches.
-A compact selector retains date precision and source links without a separate
-launch catalog, company filter, or search panel. Clicking a completed date opens its saved candidate search and carries
-departure, landing, duration, mass and delivery mode. Details display all six companies.
-The strict public-quote API remains available separately and never fills unknown
-quotes with model estimates. See [schedule integration and assumptions](docs/launch-schedule.md).
-
-There is no Top-100 shortcut or company-specific terrain recomputation. The
-calendar assesses mission terms first, reads each landing date’s terrain once only
-when a comparable estimate exists, and compares provider costs with vector
-operations. Saved runs selected as the mission template are reused across search
-hash versions only while their mission conditions match. Missing dates still start
-one batch through `POST /pricing/calculate`; completed dates are excluded.
-
-See [provider sources, rules and measured timings](docs/provider-pricing.md) and
-[API contracts](docs/api.md). Local synthetic price comparison of six qualified
-providers × 142,642 unchanged grids × five dates took 0.004–0.006 seconds. This
-measures pricing after terrain analysis, not a new NASA search. The batch search
-continues to require its matching precomputed horizon table.
-
-## 착륙 격자 예약
-
-500m 격자 예약·충돌 판정·후보지 예약 가능 순위를 지원합니다. [정책과 로컬/Supabase 설정](docs/reservations.md)을 참고하세요. DB가 설정되지 않으면 예약만 비활성화되며 기존 분석은 계속 사용할 수 있습니다.
-
-출발일은 날짜 계획의 **발사 일정에서 출발일 선택**에서 Spaceflight Now와
-Space Launch Schedule의 전체 발사 예정일을 데모 입력으로 고를 수 있습니다. 착륙일은 별도로 직접
-선택합니다. 가격은 공개 단가 우선, 미공개 시 기존 공통 모델을 사용하는 **예상 비용**이며
-실제 견적·운항 가능성을 뜻하지 않습니다. [연결 범위와 계산 가정](docs/launch-schedule.md).
-
-Candidate search also accepts an optional **maximum regional roughness (m)**.
-It uses the 250 m regional P95 of 400 m plane-detrended RMS roughness, separate
-from slope in degrees. Leave it blank to disable; enabled terrain constraints
-require complete regional coverage. Run a new search to apply it. Candidate
-tables and details show measured roughness, and excessive roughness appears in
-exclusion reasons. This filters eligibility before ranking, without changing the
-Sun/Earth weighting or certifying landing safety.
