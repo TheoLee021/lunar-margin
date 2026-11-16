@@ -1002,7 +1002,12 @@ export async function createMoonScene(
 
   // How long the camera leaves a viewer's own framing alone before resuming the chase.
   const HANDS_OFF_MS = 3000
-  let following = false
+  let previousView:
+    | {
+        destination: Cartesian3
+        orientation: { direction: Cartesian3; up: Cartesian3 }
+      }
+    | undefined
   let followCenter: Cartesian3 | undefined
   let followHeading = 0
   let lastFollowTime = 0
@@ -1215,10 +1220,16 @@ export async function createMoonScene(
       assets.setSightsVisible(visible)
     },
     follow(assetId, rangeM, pitchDeg, headingDeg) {
-      if (!following) {
+      if (!previousView) {
         flight++
         camera.cancelFlight()
-        following = true
+        previousView = {
+          destination: Cartesian3.clone(camera.positionWC),
+          orientation: {
+            direction: Cartesian3.clone(camera.directionWC),
+            up: Cartesian3.clone(camera.upWC),
+          },
+        }
       }
       const location = assets.surfaceOf(assetId)
       if (!location) return
@@ -1276,10 +1287,11 @@ export async function createMoonScene(
     },
     releaseFollow() {
       if (viewer.trackedEntity) viewer.trackedEntity = undefined
-      if (!following) return
-      following = false
+      if (!previousView) return
       followCenter = undefined
       camera.lookAtTransform(Matrix4.IDENTITY)
+      camera.setView(previousView)
+      previousView = undefined
     },
     setSelectedMarker(id) {
       markers.setSelected(id)
