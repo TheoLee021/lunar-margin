@@ -2,6 +2,7 @@
 
 No synthetic launch-provider payload or flight-certified landing performance.
 """
+
 from threading import BoundedSemaphore
 from typing import Annotated
 
@@ -32,10 +33,7 @@ class LandingReferenceRequest(BaseModel):
         seconds = (self.arrival - self.departure).total_seconds()
         if not 86400 <= seconds <= 864000:
             raise ValueError("transfer time must be 1 to 10 days")
-        if not (
-            1900 <= self.departure.year <= 2100
-            and 1900 <= self.arrival.year <= 2100
-        ):
+        if not (1900 <= self.departure.year <= 2100 and 1900 <= self.arrival.year <= 2100):
             raise ValueError("dates outside supported ephemeris range")
         return self
 
