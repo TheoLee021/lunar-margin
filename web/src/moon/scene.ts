@@ -658,7 +658,7 @@ export interface MoonScene {
    * Call `releaseFollow` to hand control back entirely.
    */
   follow(
-    location: LunarLocation,
+    assetId: string,
     rangeM: number,
     pitchDeg: number,
     headingDeg: number,
@@ -1003,6 +1003,10 @@ export async function createMoonScene(
   // How long the camera leaves a viewer's own framing alone before resuming the chase.
   const HANDS_OFF_MS = 3000
   let following = false
+  let followCenter: Cartesian3 | undefined
+  let followHeading = 0
+  let lastFollowTime = 0
+  let followStarted = 0
   let lastInputAt = 0
   const noteInput = () => {
     lastInputAt = performance.now()
@@ -1210,44 +1214,71 @@ export async function createMoonScene(
     setSightsVisible(visible) {
       assets.setSightsVisible(visible)
     },
-    follow(location, rangeM, pitchDeg, headingDeg) {
+    follow(assetId, rangeM, pitchDeg, headingDeg) {
       if (!following) {
         flight++
         camera.cancelFlight()
         following = true
       }
-      // Aim at the terrain, not the reference sphere: the two are kilometres apart
-      // at the pole, and the equipment stands on the terrain.
-      const surface = tileset.getHeight(
-        Cartographic.fromDegrees(location.lon, location.lat),
-        scene,
-      )
+      const location = assets.surfaceOf(assetId)
+      if (!location) return
       const target = Cartesian3.fromDegrees(
         location.lon,
         location.lat,
-        surface ?? 0,
+        location.surfaceHeightM,
         Ellipsoid.MOON,
       )
       if (performance.now() - lastInputAt < HANDS_OFF_MS) {
         // Hands on the controls: carry the frame along with the target and leave
         // the distance and angle exactly as the viewer set them.
+        followCenter = undefined
         camera.lookAtTransform(
           Transforms.eastNorthUpToFixedFrame(target, Ellipsoid.MOON),
         )
         return
       }
+      const now = performance.now()
+      const bearing = CesiumMath.toRadians(headingDeg)
+      if (!followCenter) followStarted = now
+      // Frame the road ahead at launch, easing into a side view as the unit passes.
+      const lead = rangeM * 0.13 * Math.exp(-(now - followStarted) / 2200)
+      const aim = Matrix4.multiplyByPoint(
+        Transforms.eastNorthUpToFixedFrame(target, Ellipsoid.MOON),
+        new Cartesian3(Math.sin(bearing) * lead, Math.cos(bearing) * lead, 0),
+        new Cartesian3(),
+      )
+      if (!followCenter) {
+        followCenter = Cartesian3.clone(aim)
+        followHeading = bearing
+      } else {
+        // Time-based damping keeps the camera moving between waypoints and
+        // turns by the short arc when the route crosses north.
+        const elapsed = Math.max(0, now - lastFollowTime)
+        Cartesian3.lerp(
+          followCenter,
+          aim,
+          -Math.expm1(-elapsed / 175),
+          followCenter,
+        )
+        followHeading +=
+          CesiumMath.negativePiToPi(bearing - followHeading) *
+          -Math.expm1(-elapsed / 550)
+      }
+      lastFollowTime = now
       camera.lookAt(
-        target,
+        followCenter,
         new HeadingPitchRange(
-          CesiumMath.toRadians(headingDeg),
+          followHeading + CesiumMath.PI_OVER_TWO,
           CesiumMath.toRadians(pitchDeg),
           rangeM,
         ),
       )
     },
     releaseFollow() {
+      if (viewer.trackedEntity) viewer.trackedEntity = undefined
       if (!following) return
       following = false
+      followCenter = undefined
       camera.lookAtTransform(Matrix4.IDENTITY)
     },
     setSelectedMarker(id) {

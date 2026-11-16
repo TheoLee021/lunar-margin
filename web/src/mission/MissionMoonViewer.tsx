@@ -24,6 +24,7 @@ import {
   companyById,
   driveDurationMs,
   pathLength,
+  traverseAt,
   type Company,
   type EquipmentSky,
 } from './demoEquipment'
@@ -32,13 +33,9 @@ import type { CandidateSite, MissionSelection } from './types'
 import type { SunPathResult } from './useSunPath'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
 
-/**
- * The camera rides behind the moving unit while it drives. A 2.4 m machine is three
- * pixels wide from the far side of the site, so the only way to watch it work is to
- * go with it; the badges carry the other units while it is away.
- */
-const FOLLOW_RANGE_M = 45
-const FOLLOW_PITCH_DEG = -15
+// A side view leaves enough space to see the unit cross the terrain.
+const FOLLOW_RANGE_M = 50
+const FOLLOW_PITCH_DEG = -32
 
 export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
@@ -155,8 +152,13 @@ export function MissionMoonViewer({
     return () => controller.abort()
   }, [key, lat, lon, height, center, demName])
   const current = result?.key === key ? result : null
+  const [equipmentView, setEquipmentView] = useState(false)
+  const [travelM, setTravelM] = useState<number | null>(null)
+  const [waypoint, setWaypoint] = useState(0)
   const frame = useRef(0)
   const stopDrive = () => {
+    setEquipmentView(false)
+    setTravelM(null)
     cancelAnimationFrame(frame.current)
     viewer.current?.releaseFollow()
   }
@@ -192,6 +194,14 @@ export function MissionMoonViewer({
       : DEFAULT_COMPANY_ID,
   )
   const operatorId = givenOperatorId ?? pickedOperatorId
+  const routeKey = JSON.stringify([selected?.id, operatorId])
+  const [shownRoute, setShownRoute] = useState(routeKey)
+  if (shownRoute !== routeKey) {
+    setShownRoute(routeKey)
+    setTravelM(null)
+    setWaypoint(0)
+    setEquipmentView(false)
+  }
   const operator = companyById(operatorId)
   /** The map carries no operator controls of its own; `?operator=` brings them back. */
   const showControls = givenOperatorId === undefined && asked !== null
@@ -236,12 +246,17 @@ export function MissionMoonViewer({
     drive.current = {
       site: selected,
       operator,
-      sky: measured,
+      sky: EMPTY_SKY,
       progress: 0,
     }
     if (!selected) viewer.current?.setAssets([])
     draw()
-  }, [selected, operator, measured, draw])
+  }, [selected, operator, draw])
+
+  useEffect(() => {
+    drive.current.sky = measured
+    draw()
+  }, [measured, selected, operator, draw])
 
   useEffect(
     () => () => {
@@ -254,25 +269,42 @@ export function MissionMoonViewer({
   const runDrive = () => {
     if (!selected || !mobile) return
     cancelAnimationFrame(frame.current)
+    viewer.current?.releaseFollow()
+    setEquipmentView(true)
     drive.current.progress = 0
     const duration = driveDurationMs(mobile)
+    const length = pathLength(mobile.path)
+    let lastReport = 0
+    setTravelM(0)
     const started = performance.now()
     const step = (now: number) => {
       const progress = Math.min(1, (now - started) / duration)
+      if (now - lastReport > 200 || progress === 1) {
+        setTravelM(length * progress)
+        setWaypoint(traverseAt(mobile.path, progress).waypoint)
+        lastReport = now
+      }
       drive.current.progress = progress
       const unit = draw()
       if (unit)
         viewer.current?.follow(
-          unit.location,
+          unit.id,
           FOLLOW_RANGE_M,
           FOLLOW_PITCH_DEG,
           unit.headingDeg ?? 0,
         )
       if (progress < 1) frame.current = requestAnimationFrame(step)
-      else viewer.current?.releaseFollow()
+      // Keep the final vehicle pose and camera framing until the next user action.
     }
     frame.current = requestAnimationFrame(step)
   }
+
+  const totalM = mobile ? pathLength(mobile.path) : 0
+  const shownUnit = mobile?.spec ?? operator.statics[0]
+  const earth =
+    shownUnit?.id === mobile?.spec.id
+      ? measured.waypoints[waypoint]?.earth
+      : shownUnit && measured.statics[shownUnit.id]?.earth
 
   const unitCount = operator.statics.length + (mobile ? 1 : 0)
   // Loading and failure always have to show. The summary is only useful next to the
@@ -316,8 +348,10 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
-          viewshed={detail && showViewshed ? current?.map : null}
-          markers={markers}
+          viewshed={
+            !equipmentView && detail && showViewshed ? current?.map : null
+          }
+          markers={equipmentView ? undefined : markers}
           selectedMarkerId={selection.siteId}
           onPick={(location) => {
             stopDrive()
@@ -343,7 +377,10 @@ export function MissionMoonViewer({
                 aria-label="장비를 배치할 운영사"
                 className="bg-transparent outline-none"
                 value={operatorId}
-                onChange={(event) => setPickedOperatorId(event.target.value)}
+                onChange={(event) => {
+                  stopDrive()
+                  setPickedOperatorId(event.target.value)
+                }}
               >
                 {COMPANIES.map((option) => (
                   <option
@@ -419,11 +456,11 @@ export function MissionMoonViewer({
           >
             {sights ? '지구 방향 끄기' : '지구 방향 켜기'}
           </button>
-          {showControls ? (
+          {showControls || (selected && mobile) ? (
             <button
               type="button"
               className="hud-button"
-              disabled={!selected || !mobile || sky.kind !== 'ready'}
+              disabled={!selected || !mobile}
               title={
                 mobile
                   ? undefined
@@ -435,6 +472,40 @@ export function MissionMoonViewer({
             </button>
           ) : null}
         </div>
+        {selected && mobile && travelM !== null && (
+          <span className="hud-panel px-2 text-xs">
+            이동 거리 {Math.round(travelM)} m / {Math.round(totalM)} m
+            {travelM === totalM && ' · 도착'}
+          </span>
+        )}
+        {sights && selected && shownUnit && (
+          <div
+            className="hud-panel pointer-events-none fixed bottom-14 left-1/2 z-10 w-max max-w-[94vw] -translate-x-1/2 px-3 py-2 text-xs"
+            aria-label="장비 지구 방향"
+          >
+            {shownUnit.label} · 지구 방향{' '}
+            {earth ? (
+              <span
+                className={earth.visible ? 'text-green-300' : 'text-red-300'}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block"
+                  style={{ transform: `rotate(${earth.azimuthDeg}deg)` }}
+                >
+                  ↑
+                </span>{' '}
+                북 기준 {earth.azimuthDeg.toFixed(1)}° · 고도{' '}
+                {earth.elevationDeg.toFixed(1)}° ·{' '}
+                {earth.visible ? '지구 보임' : '지형에 가림'}
+              </span>
+            ) : sky.kind === 'loading' ? (
+              '계산 중'
+            ) : (
+              '관측값 없음'
+            )}
+          </div>
+        )}
         {status ? (
           <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
             {status}
@@ -450,7 +521,7 @@ export function MissionMoonViewer({
           </p>
         ) : null}
       </div>
-      {detail && lat !== undefined && lon !== undefined && (
+      {!equipmentView && detail && lat !== undefined && lon !== undefined && (
         <div
           role="status"
           className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"

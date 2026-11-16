@@ -38,7 +38,7 @@ export interface MoonViewerHandle {
   setSightsVisible(visible: boolean): void
   /** Hold the camera on a moving point. `releaseFollow` hands control back. */
   follow(
-    location: LunarLocation,
+    assetId: string,
     rangeM: number,
     pitchDeg: number,
     headingDeg: number,
@@ -148,8 +148,8 @@ export default function MoonViewer({
         if (sceneRef.current) sceneRef.current.setSightsVisible(visible)
         else pending.current.sights = visible
       },
-      follow(location, rangeM, pitchDeg, headingDeg) {
-        sceneRef.current?.follow(location, rangeM, pitchDeg, headingDeg)
+      follow(assetId, rangeM, pitchDeg, headingDeg) {
+        sceneRef.current?.follow(assetId, rangeM, pitchDeg, headingDeg)
       },
       releaseFollow() {
         sceneRef.current?.releaseFollow()

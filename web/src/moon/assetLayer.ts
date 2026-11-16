@@ -106,7 +106,7 @@ const NEAR_BODY = new DistanceDisplayCondition(0, BODY_VISIBLE_WITHIN_M)
  * would only clutter the whole-pole view. A dark square with the unit's glyph,
  * deliberately unlike the orange dot that marks a candidate site.
  */
-const BADGE_RANGE = new DistanceDisplayCondition(0, 50_000)
+const BADGE_RANGE = new DistanceDisplayCondition(65, 50_000)
 
 /**
  * The mast that carries the Earth link, drawn so its height is visible rather than
@@ -154,6 +154,7 @@ export interface AssetLayer {
    * Replaces the drawn set. Assets keep their entities across calls with the same id,
    * so calling this on every animation frame moves them instead of rebuilding them.
    */
+  surfaceOf(id: string): LunarLocation | undefined
   setAssets(assets: readonly MoonAsset[]): void
   /** Show or hide the arrows pointing at the Earth. */
   destroy(): void
@@ -180,6 +181,7 @@ interface Live {
    * tile that has not arrived yet cannot throw the unit to the sphere.
    */
   ground: number
+  sampleTime: number
 }
 
 interface Drawn {
@@ -206,7 +208,6 @@ export function createAssetLayer(
   const sights = new PolylineCollection()
   viewer.scene.primitives.add(sights)
   let sightsVisible = true
-  let terrainChanged = true
 
   const sightMaterial = (color: Color) =>
     Material.fromType('PolylineArrow', {
@@ -216,19 +217,33 @@ export function createAssetLayer(
   const positionAt = (location: LunarLocation, heightM: number): Cartesian3 =>
     Cartesian3.fromDegrees(location.lon, location.lat, heightM, Ellipsoid.MOON)
 
-  /**
-   * Terrain height under a location, metres above the reference sphere.
-   *
-   * Cesium's own height references latch onto the first tile they see, so as the
-   * viewer zooms and the tileset refines, the terrain moves and anything placed that
-   * way is left buried or hovering. Reading the Moon tiles directly means the
-   * unit follows the terrain down to the finest tile that has loaded.
-   */
+  // Depth sampling selects the frontmost rendered surface even when coarse
+  // and refined Moon tiles overlap. Ignore all overlays and equipment geometry.
   const groundAt = (location: LunarLocation, live: Live): number => {
-    const height = tileset.getHeight(
-      Cartographic.fromDegrees(location.lon, location.lat),
-      viewer.scene,
-    )
+    const point = Cartographic.fromDegrees(location.lon, location.lat)
+    const now = performance.now()
+    if (now - live.sampleTime < 80) return live.ground
+    live.sampleTime = now
+    let height: number | undefined
+    if (viewer.scene.sampleHeightSupported) {
+      // Excluding an entity from a pick can still leave its depth in the
+      // framebuffer. Render only the Moon for this synchronous depth query.
+      const hidden: { show: boolean }[] = []
+      const primitives = viewer.scene.primitives
+      try {
+        for (let i = 0; i < primitives.length; i++) {
+          const primitive = primitives.get(i)
+          if (primitive !== tileset && primitive.show) {
+            hidden.push(primitive)
+            primitive.show = false
+          }
+        }
+        height = viewer.scene.sampleHeight(point)
+      } finally {
+        for (const primitive of hidden) primitive.show = true
+      }
+    }
+    height ??= tileset.getHeight(point, viewer.scene)
     if (height !== undefined && Number.isFinite(height)) live.ground = height
     return live.ground
   }
@@ -340,6 +355,7 @@ export function createAssetLayer(
       color: MAST_COLOR,
       card: assetCardText(asset),
       ground: 0,
+      sampleTime: -Infinity,
     }
 
     const anchor = viewer.entities.add({
@@ -354,7 +370,7 @@ export function createAssetLayer(
         backgroundPadding: new Cartesian2(8, 6),
         fillColor: new CallbackProperty(() => live.color, false),
         horizontalOrigin: HorizontalOrigin.LEFT,
-        pixelOffset: new Cartesian2(16, 0),
+        pixelOffset: new Cartesian2(48, -32),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         distanceDisplayCondition: NEAR_BODY,
       },
@@ -416,11 +432,14 @@ export function createAssetLayer(
     return { asset, anchor, pieces, mast, sight, live }
   }
 
-  const paint = (asset: MoonAsset, entities: Drawn): void => {
+  const paint = (
+    asset: MoonAsset,
+    entities: Drawn,
+    ground = groundAt(asset.location, entities.live),
+  ): void => {
     const { live } = entities
     entities.asset = asset
     live.card = assetCardText(asset)
-    const ground = groundAt(asset.location, live)
     live.anchor = positionAt(asset.location, ground + asset.shape.heightM / 2)
     live.orientation = Transforms.headingPitchRollQuaternion(
       live.anchor,
@@ -453,16 +472,15 @@ export function createAssetLayer(
     }
   }
 
-  const dirty = () => {
-    terrainChanged = true
-  }
-  const removeTileListener = tileset.allTilesLoaded.addEventListener(dirty)
-  const removeCameraListener = viewer.camera.moveEnd.addEventListener(dirty)
-  const removeRefresh = viewer.scene.preRender.addEventListener(() => {
-    if (!terrainChanged) return
-    terrainChanged = false
-    for (const entry of drawn.values()) paint(entry.asset, entry)
-  })
+  // Refinement can replace the tile beneath one unit while the rest of
+  // the scene is still streaming. Refresh fixed units independently of camera events.
+  const refresh = window.setInterval(() => {
+    for (const entry of drawn.values()) {
+      const before = entry.live.ground
+      const after = groundAt(entry.asset.location, entry.live)
+      if (Math.abs(before - after) > 0.01) paint(entry.asset, entry, after)
+    }
+  }, 400)
   const remove = (entry: Drawn) => {
     viewer.entities.remove(entry.anchor)
     viewer.entities.remove(entry.mast)
@@ -471,12 +489,15 @@ export function createAssetLayer(
   }
   return {
     destroy() {
-      removeTileListener()
-      removeCameraListener()
-      removeRefresh()
+      window.clearInterval(refresh)
       for (const entry of drawn.values()) remove(entry)
       drawn.clear()
       viewer.scene.primitives.remove(sights)
+    },
+    surfaceOf(id) {
+      const entry = drawn.get(id)
+      if (entry)
+        return { ...entry.asset.location, surfaceHeightM: entry.live.ground }
     },
     setAssets(assets) {
       const keep = new Set(assets.map((asset) => asset.id))
@@ -511,9 +532,8 @@ export function createAssetLayer(
     },
     setSightsVisible(visible) {
       sightsVisible = visible
-      terrainChanged = true
-      for (const entities of drawn.values())
-        entities.sight.show = visible && entities.sight.positions.length > 0
+      for (const entry of drawn.values())
+        paint(entry.asset, entry, entry.live.ground)
     },
   }
 }
