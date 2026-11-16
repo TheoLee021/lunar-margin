@@ -7,11 +7,10 @@ Physical validation is in the engine tests, not this API routing test.
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from numpy.typing import NDArray
-
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from numpy.typing import NDArray
 
 from lunar_margin.app import doi_pdi_reference as endpoint
 from lunar_margin.app.main import create_app
