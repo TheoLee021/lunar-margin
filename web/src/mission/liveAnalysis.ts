@@ -14,9 +14,19 @@ export type LiveMissionAnalysis = {
   timeline: Timeline
 }
 
+/** Minutes between the samples of a mission: the timeline and the Sun that follows it share them. */
+export const MISSION_STEP_MINUTES = 30
+
 /** The landing time: midnight UTC of the landing date. */
 export function landingStart(landing: string): string {
   return `${landing}T00:00:00Z`
+}
+
+/** The end of the surface mission: `duration` days after the landing time. */
+export function missionEnd(landing: string, duration: number): string {
+  return new Date(Date.parse(landingStart(landing)) + duration * DAY)
+    .toISOString()
+    .replace('.000Z', 'Z')
 }
 
 /** Surface analysis starts at landing midnight UTC, not Earth departure. */
@@ -24,15 +34,12 @@ export function missionParams(
   site: CandidateSite,
   schedule: Schedule,
 ): AnalysisParams {
-  const start = landingStart(schedule.landing)
   return {
     lat: site.latitude,
     lon: site.longitude,
-    start,
-    end: new Date(Date.parse(start) + schedule.duration * DAY)
-      .toISOString()
-      .replace('.000Z', 'Z'),
-    step_minutes: 30,
+    start: landingStart(schedule.landing),
+    end: missionEnd(schedule.landing, schedule.duration),
+    step_minutes: MISSION_STEP_MINUTES,
     observer_height_m: 0,
   }
 }

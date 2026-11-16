@@ -15,11 +15,14 @@ import {
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import { gridCellCorners, type LunarLocation } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
+import type { Vector3 } from '../moon/sun'
 import type { CandidateSite, MissionSelection } from './types'
-import type { SunDirectionResult } from './useSunDirection'
+import type { SunPathResult } from './useSunPath'
 
 export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
+  /** Lights the Moon from a Sun that is still moving (`sunMoving`), one call per frame. */
+  previewSun(direction: Vector3): void
 }
 
 /** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
@@ -33,6 +36,10 @@ export function MissionMoonViewer({
   height,
   setHeight,
   sun,
+  sunDirection,
+  sunMoving,
+  photo,
+  onPhotoChange,
 }: {
   demName?: string
   heights: readonly number[]
@@ -42,16 +49,25 @@ export function MissionMoonViewer({
   selection: MissionSelection
   sites: readonly CandidateSite[]
   onSelect: (siteId: string | null) => void
+  /** The Sun over the mission, for the state of the sunlight button. */
+  sun: SunPathResult
   /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
-  sun: SunDirectionResult
+  sunDirection: Vector3 | null
+  /**
+   * The shown time is being dragged or played: the Sun of each frame comes through `previewSun`,
+   * and `sunDirection` is taken again, with its precise shadows, once this is over.
+   */
+  sunMoving: boolean
+  /** Show the photo instead of the sunlight. */
+  photo: boolean
+  onPhotoChange: (photo: boolean) => void
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
-  const [photo, setPhoto] = useState(false)
-  const sunDirection = sun.kind === 'ready' ? sun.direction : null
   const lit = sunDirection !== null && !photo
   useEffect(() => {
+    if (lit && sunMoving) return
     viewer.current?.setSunDirection(lit ? sunDirection : null)
-  }, [lit, sunDirection])
+  }, [lit, sunMoving, sunDirection])
   const [picked, setPicked] = useState<LunarLocation | null>(null)
   const observer = selection.siteId === null ? picked : null
   const markers = useMemo<readonly MoonMarker[]>(
@@ -112,6 +128,9 @@ export function MissionMoonViewer({
       const site = sites.find((candidate) => candidate.id === siteId)
       if (site) focusSite(site)
     },
+    previewSun(direction) {
+      viewer.current?.previewSunDirection(direction)
+    },
   }))
   return (
     <>
@@ -143,21 +162,21 @@ export function MissionMoonViewer({
           aria-pressed={lit}
           title={
             sun.kind === 'loading'
-              ? '착륙 시각의 태양 방향을 불러오는 중입니다'
+              ? '미션 기간의 태양 방향을 불러오는 중입니다'
               : sun.kind === 'error'
-                ? '착륙 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
-                : '착륙 시각의 태양으로 조명과 지형 그림자를 그립니다'
+                ? '미션 기간의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
+                : '검토 시점(선택 전에는 착륙 시각)의 태양으로 조명과 지형 그림자를 그립니다'
           }
           onClick={() => {
             if (sun.kind === 'error') sun.retry()
-            else setPhoto((value) => !value)
+            else onPhotoChange(!photo)
           }}
         >
           {sun.kind === 'error'
             ? '햇빛 다시 시도'
             : lit
               ? '사진으로 보기'
-              : '착륙 시각 햇빛'}
+              : '햇빛 보기'}
         </button>
         <button
           type="button"

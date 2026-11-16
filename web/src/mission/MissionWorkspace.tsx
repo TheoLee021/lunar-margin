@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchViewshed,
   GRID_TARGET_COUNT,
   visibleGridCount,
 } from '../api/viewshed'
 import { MissionMetrics } from './MissionMetrics'
-import { MissionTimeline } from './MissionTimeline'
+import { ReviewTimeline } from './ReviewTimeline'
 import { RequirementMarginPanel } from './RequirementMarginPanel'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
@@ -15,7 +15,9 @@ import {
 } from './MissionMoonViewer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { useDashboardRun } from './useDashboardRun'
-import { useSunDirection } from './useSunDirection'
+import { sunAt } from './sunPlayback'
+import { useSunPath } from './useSunPath'
+import type { Vector3 } from '../moon/sun'
 
 export function MissionWorkspace({
   selection,
@@ -113,8 +115,42 @@ export function MissionWorkspace({
   searchUrl.searchParams.delete('planner')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
-  // The Sun at landing (00:00 UTC) lights the Moon whether or not a candidate is selected.
-  const sun = useSunDirection(selection.landing)
+  const sun = useSunPath(selection.landing, selection.duration)
+  const sunPath = sun.kind === 'ready' ? sun.path : null
+  const [photo, setPhoto] = useState(false)
+  // The review time the Moon is lit from, in days after landing. It belongs to one schedule and to
+  // the selected candidates: it survives going from one candidate to the next, so two can be
+  // compared at the same moment, and is back at landing once none is selected, when there is no
+  // timeline to show where it is.
+  const schedule = `${selection.landing}/${selection.duration}`
+  const [review, setReview] = useState({ schedule, days: 0 })
+  if (
+    review.schedule !== schedule ||
+    (selection.siteId === null && review.days !== 0)
+  )
+    setReview({ schedule, days: 0 })
+  // The review time is being dragged or played: each frame's Sun goes straight to the Moon, which
+  // takes the Sun below again, with its precise shadows, once the time has come to rest.
+  const [sunMoving, setSunMoving] = useState(false)
+  const onPreview = useCallback((direction: Vector3) => {
+    setSunMoving(true)
+    moon.current?.previewSun(direction)
+  }, [])
+  const onReview = useCallback(
+    (days: number) => {
+      setSunMoving(false)
+      setReview({ schedule, days })
+    },
+    [schedule],
+  )
+  const onLight = useCallback(() => setPhoto(false), [])
+  // The Sun lights the Moon whether or not a candidate is selected: at landing (00:00 UTC) until a
+  // review time is chosen.
+  const reviewDays = review.schedule === schedule ? review.days : 0
+  const sunDirection = useMemo(
+    () => (sunPath ? sunAt(sunPath, reviewDays) : null),
+    [sunPath, reviewDays],
+  )
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -127,6 +163,10 @@ export function MissionWorkspace({
         height={height}
         setHeight={setHeight}
         sun={sun}
+        sunDirection={sunDirection}
+        sunMoving={sunMoving}
+        photo={photo}
+        onPhotoChange={setPhoto}
       />
       <header className="pointer-events-none absolute left-4 top-4 flex max-w-[60%] flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold uppercase tracking-wide">
@@ -391,12 +431,17 @@ export function MissionWorkspace({
                       선택한 후보 기준
                     </span>
                   </div>
-                  <MissionTimeline
+                  <ReviewTimeline
                     key={`${analysis.data.sun.start}/${analysis.data.sun.end}/${analysis.data.sun.lat}/${analysis.data.sun.lon}`}
                     timeline={analysis.data.timeline}
                     duration={selection.duration}
-                    hour={0}
                     observerHeightM={analysis.data.sun.observer_height_m}
+                    sun={sun}
+                    photo={photo}
+                    reviewDays={reviewDays}
+                    onReview={onReview}
+                    onPreview={onPreview}
+                    onLight={onLight}
                   />
                 </section>
               ) : null}

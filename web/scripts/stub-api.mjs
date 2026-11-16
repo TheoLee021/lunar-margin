@@ -159,11 +159,44 @@ function analyze(kind, v, alwaysDark) {
   }
 }
 
+// 남극에서 본 태양: 지평선 근처를 한 삭망월에 한 바퀴 돈다. 남극의 위쪽은 -Z, 경도 0° 쪽은 +X (MOON_ME)
+function sunDirections(q) {
+  const step = Number(q.get('step_minutes') ?? 30)
+  const start = parseUtc(q.get('start'))
+  const end = parseUtc(q.get('end'))
+  if (!Number.isInteger(step) || step < 5 || step > 360)
+    return 'step_minutes must be in [5, 360]'
+  if (start === null || end === null)
+    return 'start and end must be UTC ISO 8601 with timezone'
+  if (end <= start) return 'end must be after start'
+  if ((end - start) / DAY_MS > 3 * 366) return 'range must be at most 3 years'
+  const directions = []
+  for (let t = start; t < end; t += step * 60_000) {
+    const days = t / DAY_MS
+    const az = (days * 2 * Math.PI) / 29.53
+    const el = ((1.5 * Math.PI) / 180) * Math.sin(az + 0.4)
+    directions.push(
+      [
+        Math.cos(el) * Math.cos(az),
+        Math.cos(el) * Math.sin(az),
+        -Math.sin(el),
+      ].map((v) => Number(v.toFixed(6))),
+    )
+  }
+  return { start: iso(start), end: iso(end), step_minutes: step, directions }
+}
+
 createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
   if (req.method === 'OPTIONS') return json(res, 204, {})
   if (url.pathname === '/health') return json(res, 200, { status: 'ok' })
   if (handleCandidates(url.pathname, res)) return
+  if (url.pathname === '/sunlight/sun-directions') {
+    const path = sunDirections(url.searchParams)
+    return typeof path === 'string'
+      ? json(res, 422, { detail: path })
+      : json(res, 200, path)
+  }
   const match = /^\/analysis\/(illumination|earth-visibility)$/.exec(
     url.pathname,
   )

@@ -633,6 +633,12 @@ export interface MoonScene {
   setSelectedMarker(id: string | null): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
+  /**
+   * The same light for a Sun that is still moving (a time being played or dragged): nothing is
+   * asked of the backend, so the shadows are the coarser ones the tiles give. `setSunDirection`
+   * with the Sun it comes to rest at brings the precise shadows back.
+   */
+  previewSunDirection(direction: unknown): void
   resetNorth(): void
   destroy(): void
 }
@@ -674,6 +680,8 @@ export async function createMoonScene(
   let sunlightLevel: TileLevel | undefined
   // The grid of the wide sunlight map, once the backend has said that it holds the wide zone.
   let wideSunlight: NormalWideMeta['sunlight'] | undefined
+  // The Sun the precise shadows (sunlight maps and windows) are for: null without sunlight, and
+  // while the Sun is moving, when the backend could not keep up with it (a map takes seconds).
   let sun: Vector3 | null = null
   // One of the two whole sunlight maps: asks the backend for the map of the current Sun and hands
   // it to the shader when it arrives. Without it the shader's coarser shadows keep showing.
@@ -1156,6 +1164,18 @@ export async function createMoonScene(
         // Windows computed for the previous Sun come down at once, not at the next focus check.
         followFocus()
       }
+    },
+    previewSunDirection(direction) {
+      moonShader.setUniform(
+        'u_sunDirectionWC',
+        new Cartesian3(...parseSunDirection(direction)),
+      )
+      moonShader.setUniform('u_sunLit', 1)
+      if (sun === null) return
+      // The maps and windows of the Sun it left come down, and none is asked for on the way.
+      sun = null
+      refreshSunlightMaps()
+      followFocus()
     },
     resetNorth() {
       const canvas = scene.canvas

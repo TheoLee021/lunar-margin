@@ -18,6 +18,11 @@ export interface MoonViewerHandle {
   flyToOverview(): void
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
   setSunDirection(direction: unknown): void
+  /**
+   * The light of a Sun that is still moving, such as a time being played. Nothing is asked of the
+   * backend until `setSunDirection` gives the Sun it comes to rest at. Throws on invalid input.
+   */
+  previewSunDirection(direction: unknown): void
 }
 
 interface MoonViewerProps {
@@ -93,6 +98,10 @@ export default function MoonViewer({
         else
           pending.current.sun =
             direction === null ? null : parseSunDirection(direction)
+      },
+      previewSunDirection(direction) {
+        if (sceneRef.current) sceneRef.current.previewSunDirection(direction)
+        else pending.current.sun = parseSunDirection(direction)
       },
     }),
     [],
