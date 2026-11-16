@@ -81,7 +81,7 @@ export function MissionMoonViewer({
     [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
-  const [showSightlines, setShowSightlines] = useState(true)
+  const [showViewshed, setShowViewshed] = useState(true)
   const [detail, setDetail] = useState(false)
   const [attempt, retry] = useState(0)
   const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
@@ -136,8 +136,7 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
-          showSightlines={showSightlines}
-          viewshed={detail ? current?.map : null}
+          viewshed={detail && showViewshed ? current?.map : null}
           markers={markers}
           selectedMarkerId={selection.siteId}
           onPick={(location) => {
@@ -228,8 +227,8 @@ export function MissionMoonViewer({
           <label className="ml-3 inline-flex items-center gap-1">
             <input
               type="checkbox"
-              checked={showSightlines}
-              onChange={(event) => setShowSightlines(event.target.checked)}
+              checked={showViewshed}
+              onChange={(event) => setShowViewshed(event.target.checked)}
             />
             가시선 표시
           </label>
