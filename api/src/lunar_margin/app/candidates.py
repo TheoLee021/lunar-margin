@@ -4,6 +4,7 @@
 여기서는 그 결과를 읽어 돌려준다 (계약: docs/api.md).
 """
 
+import math
 import os
 import shutil
 import subprocess
@@ -22,6 +23,8 @@ from lunar_margin.app.analysis import get_settings
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.mission import MissionRequest
+from lunar_margin.engine.dem import PolarDem
+from lunar_margin.engine.viewshed import visible_grid_fraction
 from lunar_margin.pipeline.candidate_schema import (
     CandidateRecord,
     CandidatesDocument,
@@ -33,6 +36,7 @@ from lunar_margin.pipeline.candidate_schema import (
     WindowSource,
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, read_status, write_status
+from lunar_margin.pipeline.sources import DEM_SOURCES
 
 RUN_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 LAYER_NAME_PATTERN = r"^[a-z_]{1,32}$"
@@ -279,6 +283,25 @@ def list_runs(settings: SettingsDep) -> RunList:
     return RunList(runs=items)
 
 
+def _fill_visible_points(document: CandidatesDocument, data_dir: Path) -> None:
+    missing = [c for c in document.candidates if c.score.visible_grid_points is None]
+    source = DEM_SOURCES.get(document.source.dem.name)
+    height = document.config.get("observer_height_m", 0)
+    if not missing or source is None or not isinstance(height, (int, float)):
+        return
+    img, label = source
+    try:
+        dem = PolarDem.from_files(
+            data_dir / "dem" / img.filename, data_dir / "dem" / label.filename
+        )
+    except OSError, ValueError:
+        return
+    for candidate in missing:
+        fraction = visible_grid_fraction(dem, candidate.x_m, candidate.y_m, height)
+        if math.isfinite(fraction):
+            candidate.score.visible_grid_points = round(fraction * 120)
+
+
 @router.get("/runs/{run_id}")
 def get_run(run_id: RunId, settings: SettingsDep) -> RunDetail:
     run_dir = _runs_dir(settings) / run_id
@@ -307,6 +330,7 @@ def get_run(run_id: RunId, settings: SettingsDep) -> RunDetail:
                 "completed_at": status.completed_at,
             }
         )
+    _fill_visible_points(document, settings.data_dir)
     return RunDetail(
         id=run_id,
         mission=mission,

@@ -55,6 +55,16 @@ export async function mockDashboardRuns(
       rank: rank + 1,
       lat_deg: lat_deg!,
       lon_deg: lon_deg!,
+      x_m:
+        2 *
+        1737400 *
+        Math.tan(((90 + lat_deg!) * Math.PI) / 360) *
+        Math.sin((lon_deg! * Math.PI) / 180),
+      y_m:
+        2 *
+        1737400 *
+        Math.tan(((90 + lat_deg!) * Math.PI) / 360) *
+        Math.cos((lon_deg! * Math.PI) / 180),
     })),
   }))
   await page.route('**/api/candidates/runs', (route) =>

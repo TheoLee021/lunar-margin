@@ -220,14 +220,24 @@ export function MissionForm({
                 if (
                   value === 'balanced' ||
                   value === 'solar' ||
-                  value === 'earth'
+                  value === 'earth' ||
+                  value === 'visibility'
                 )
                   update('priority', value)
               }}
             >
-              <option value="balanced">균형</option>
-              <option value="solar">일조 우선</option>
-              <option value="earth">RF 통신 우선</option>
+              <option value="visibility">
+                주변 가시권 우선 (가시권 50% · 일조 25% · 통신 25%)
+              </option>
+              <option value="balanced">
+                균형 (일조 40% · 통신 40% · 가시권 20%)
+              </option>
+              <option value="solar">
+                일조 우선 (일조 60% · 통신 20% · 가시권 20%)
+              </option>
+              <option value="earth">
+                RF 통신 우선 (일조 20% · 통신 60% · 가시권 20%)
+              </option>
             </select>
           </label>
           <div className="flex flex-col gap-2 text-xs text-neutral-300">

@@ -47,3 +47,13 @@ def test_zero_weight_component_is_ignored_even_if_present() -> None:
     field = make_field(sun=[0.9], earth=[0.1])
 
     assert score_sites(field, Weights(sun=1.0, earth=0.0)).total[0] == pytest.approx(0.9)
+
+
+def test_local_visibility_can_promote_a_site_with_less_sunlight() -> None:
+    field = make_field(sun=[1.0, 0.8], earth=[1.0, 0.8])
+    scores = score_sites(
+        field,
+        Weights(sun=0.25, earth=0.25, visibility=0.5),
+        visibility=np.array([0.0, 1.0]),
+    )
+    assert scores.total == pytest.approx([0.5, 0.9])

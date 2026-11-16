@@ -92,17 +92,25 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
         const corners = marker.footprint?.map((point) =>
           Cartesian3.fromDegrees(point.lon, point.lat),
         )
+        const groundHeight = marker.location.surfaceHeightM
+        const heightReference =
+          groundHeight === undefined
+            ? HeightReference.CLAMP_TO_3D_TILE
+            : HeightReference.NONE
         const entity = source.entities.add({
           position: Cartesian3.fromDegrees(
             marker.location.lon,
             marker.location.lat,
+            groundHeight ?? 0,
           ),
           point: corners
             ? undefined
             : {
-                pixelSize: 7,
+                pixelSize: groundHeight === undefined ? 7 : 11,
+                outlineColor: Color.WHITE,
+                outlineWidth: groundHeight === undefined ? 0 : 2,
                 color: POINT_COLOR,
-                heightReference: HeightReference.CLAMP_TO_3D_TILE,
+                heightReference,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
           label: {
@@ -112,8 +120,11 @@ export function createMarkerLayer(viewer: Viewer): MarkerLayer {
             showBackground: true,
             backgroundColor: LABEL_BACKGROUND,
             fillColor: Color.WHITE,
-            heightReference: HeightReference.CLAMP_TO_3D_TILE,
-            pixelOffset: new Cartesian2(0, -14),
+            heightReference,
+            pixelOffset: new Cartesian2(
+              0,
+              groundHeight === undefined ? -14 : -25,
+            ),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         })

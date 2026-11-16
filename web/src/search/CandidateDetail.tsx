@@ -129,7 +129,10 @@ export function CandidateDetail({
       </header>
 
       {selection.kind === 'candidate' ? (
-        <CandidateFacts candidate={selection.candidate} />
+        <CandidateFacts
+          candidate={selection.candidate}
+          weights={config.weights}
+        />
       ) : (
         <p className="text-sm text-neutral-400">
           탐색 결과에 없는 지점입니다. 아래 버튼으로 이 지점의 일조와 지구
@@ -232,7 +235,18 @@ export function CandidateDetail({
   )
 }
 
-function CandidateFacts({ candidate }: { candidate: Candidate }) {
+function CandidateFacts({
+  candidate,
+  weights,
+}: {
+  candidate: Candidate
+  weights: RunDetail['config']['weights']
+}) {
+  const weightedComponents = [
+    weights.sun,
+    weights.earth,
+    weights.visibility ?? 0,
+  ].filter((weight) => weight > 0).length
   const { eligibility, data_quality: quality, score, selection } = candidate
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -368,6 +382,16 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
           <h4 className="mb-1 font-semibold text-neutral-200">점수</h4>
           <dl>
             <Row label="종합 점수" value={scoreText(score.total)} />
+            {weights.visibility || score.visible_grid_points != null ? (
+              <Row
+                label="반경 5 km 내 가시 격자점"
+                value={
+                  score.visible_grid_points == null
+                    ? '지형 자료 부족'
+                    : `${score.visible_grid_points} / 120`
+                }
+              />
+            ) : null}
             <Row label="일조 성분" value={scoreText(score.sun_component)} />
             <Row
               label="지구 LOS 성분"
@@ -385,7 +409,7 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
               </>
             ) : null}
           </dl>
-          {score.components_used < 2 ? (
+          {score.components_used < weightedComponents ? (
             <p className="mt-1 text-neutral-500">
               값이 없는 성분은 0으로 치지 않고 빼서 나머지 가중치로 다시
               계산했습니다.
