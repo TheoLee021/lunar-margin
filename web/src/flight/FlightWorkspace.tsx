@@ -122,9 +122,7 @@ export default function FlightWorkspace() {
   return (
     <main className="relative h-svh overflow-hidden bg-black text-neutral-100">
       <MoonViewer ref={moon} flightPoints={points} flightFrame={frame} />
-      <section
-        className="hud-panel absolute left-4 top-4 z-20 max-h-[calc(100dvh-2rem)] w-[340px] max-w-[calc(100vw-2rem)] overflow-y-auto p-4"
-      >
+      <section className="hud-panel absolute left-4 top-4 z-20 max-h-[calc(100dvh-2rem)] w-[340px] max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-base font-semibold">
             Lunar Flight · 3D Reference
@@ -207,13 +205,15 @@ export default function FlightWorkspace() {
             </p>
             <p>DOI Δv: {data.orbit.doi_delta_v_mps.toFixed(2)} m/s</p>
             <p>
-              PDI site offset: {(data.orbit.approach_error_m / 1000).toFixed(2)} km
+              PDI site offset: {(data.orbit.approach_error_m / 1000).toFixed(2)}{' '}
+              km
             </p>
             <p>
               Plane offset: {(data.orbit.plane_offset_m / 1000).toFixed(2)} km
             </p>
             <p>
-              Descent: {data.descent?.status ?? 'Not evaluated — no aligned PDI'}
+              Descent:{' '}
+              {data.descent?.status ?? 'Not evaluated — no aligned PDI'}
             </p>
             {data.descent && (
               <p>
@@ -228,9 +228,7 @@ export default function FlightWorkspace() {
         )}
       </section>
       {points.length > 0 && (
-        <section
-          className="hud-panel absolute bottom-5 left-1/2 z-20 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 p-3 text-xs"
-        >
+        <section className="hud-panel absolute bottom-5 left-1/2 z-20 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 p-3 text-xs">
           <div className="flex items-center justify-between gap-2">
             <strong>Mission Playback</strong>
             <span className="text-neutral-400">
@@ -270,12 +268,8 @@ export default function FlightWorkspace() {
               </p>
             </div>
             <div className="ml-auto text-right font-mono text-[10px]">
-              <p>
-                Height {current?.altitudeM?.toFixed(0) ?? '—'} m
-              </p>
-              <p>
-                Thrust {current?.thrustN?.toFixed(0) ?? '—'} N
-              </p>
+              <p>Height {current?.altitudeM?.toFixed(0) ?? '—'} m</p>
+              <p>Thrust {current?.thrustN?.toFixed(0) ?? '—'} N</p>
             </div>
           </div>
         </section>
