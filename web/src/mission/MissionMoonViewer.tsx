@@ -1,4 +1,4 @@
-import { fetchViewshed, type Viewshed } from '../api/viewshed'
+import { fetchViewshed, visibleGridCount, type Viewshed } from '../api/viewshed'
 import {
   useEffect,
   useImperativeHandle,
@@ -23,8 +23,14 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
+  heights,
+  height,
+  setHeight,
   sun,
 }: {
+  heights: readonly number[]
+  height: number
+  setHeight: (height: number) => void
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
@@ -56,7 +62,8 @@ export function MissionMoonViewer({
   const [attempt, retry] = useState(0)
   const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
   const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
-  const key = JSON.stringify([lat, lon, attempt])
+  const center = selected?.grid
+  const key = JSON.stringify([lat, lon, height, center, attempt])
   const [result, setResult] = useState<{
     key: string
     distanceKm?: number
@@ -65,11 +72,16 @@ export function MissionMoonViewer({
   useEffect(() => {
     if (lat === undefined || lon === undefined) return
     viewer.current?.flyTo(observer ?? { lat, lon }, 18000)
+  }, [lat, lon, observer])
+  useEffect(() => {
+    if (lat === undefined || lon === undefined) return
     const controller = new AbortController()
     void fetchViewshed(
       lat,
       lon,
+      height,
       AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+      center,
     )
       .then((map) => {
         if (!controller.signal.aborted)
@@ -79,7 +91,7 @@ export function MissionMoonViewer({
         if (!controller.signal.aborted) setResult({ key, map: null })
       })
     return () => controller.abort()
-  }, [key, lat, lon, observer])
+  }, [key, lat, lon, height, center])
   const current = result?.key === key ? result : null
   const focusSite = (site: CandidateSite) =>
     viewer.current?.flyTo(
@@ -168,7 +180,20 @@ export function MissionMoonViewer({
           className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"
         >
           {observer ? '지도 관측점' : selected?.name} · 주변 가시권 · 5 km ·
-          높이 2 m
+          <label>
+            관측 높이{' '}
+            <select
+              className="rounded bg-neutral-800 px-1"
+              value={height}
+              onChange={(event) => setHeight(Number(event.target.value))}
+            >
+              {heights.map((h) => (
+                <option key={h} value={h}>
+                  {h} m
+                </option>
+              ))}
+            </select>
+          </label>
           <div>
             {!current ? (
               '지형 가시권 계산 중…'
@@ -180,7 +205,10 @@ export function MissionMoonViewer({
                 <strong>
                   반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
                 </strong>
-                <br />
+                <div>
+                  보이는 격자점 {visibleGridCount(current.map)} /{' '}
+                  {current.map.targets.length}
+                </div>
                 <span className="text-amber-400">⊙ 관측점</span>　
                 <span className="text-green-400">● 보임</span>　
                 <span className="text-red-400">● 가려짐</span>

@@ -1,4 +1,4 @@
-"""Local terrain visibility from 2 m above the selected point on the 80 m LOLA DEM."""
+"""Local terrain visibility from an observer above the selected point on the 80 m LOLA DEM."""
 
 import math
 
@@ -73,9 +73,25 @@ def _trace_cells(
     return known, hit, target
 
 
-def local_viewshed(dem: PolarDem, lat: float, lon: float) -> NDArray[np.uint8]:
-    cx, cy = dem.lonlat_to_xy(lat, lon)
-    eye = dem.height_at(lat, lon) + 2
+def _observer(
+    dem: PolarDem, lat: float, lon: float, height: float, center: tuple[float, float] | None
+) -> tuple[float, float, float]:
+    x, y = center or dem.lonlat_to_xy(lat, lon)
+    ground = float(dem.sample_height_m(np.array([x]), np.array([y]))[0])
+    if not math.isfinite(ground):
+        raise ValueError("observer outside DEM coverage")
+    return x, y, ground + height
+
+
+def local_viewshed(
+    dem: PolarDem,
+    lat: float,
+    lon: float,
+    observer_height_m: float = 2,
+    *,
+    center: tuple[float, float] | None = None,
+) -> NDArray[np.uint8]:
+    cx, cy, eye = _observer(dem, lat, lon, observer_height_m, center)
     axis = np.arange(-HALF_CELLS, HALF_CELLS + 1, dtype=np.float64) * CELL_M
     x, y = np.meshgrid(axis, axis)
     distance = np.hypot(x, y)
@@ -92,10 +108,15 @@ def local_viewshed(dem: PolarDem, lat: float, lon: float) -> NDArray[np.uint8]:
 
 
 def horizontal_rays(
-    dem: PolarDem, lat: float, lon: float
+    dem: PolarDem,
+    lat: float,
+    lon: float,
+    observer_height_m: float = 2,
+    *,
+    center: tuple[float, float] | None = None,
 ) -> tuple[float, list[tuple[float, bool]]]:
     """Tangent rays, starting at north and turning clockwise in 15 degree steps."""
-    eye = dem.height_at(lat, lon) + 2
+    _, _, eye = _observer(dem, lat, lon, observer_height_m, center)
     phi, lam = np.radians([lat, lon])
     up = np.array([np.cos(phi) * np.cos(lam), np.cos(phi) * np.sin(lam), np.sin(phi)])
     east = np.array([-np.sin(lam), np.cos(lam), 0.0])
@@ -126,19 +147,36 @@ def horizontal_rays(
     return eye, rays
 
 
-def grid_sightlines(
-    dem: PolarDem, lat: float, lon: float
-) -> list[tuple[tuple[float, float, float], tuple[float, float, float] | None]]:
-    """Target and optional first obstruction (lon, lat, height) for the display grid."""
-    cx, cy = dem.lonlat_to_xy(lat, lon)
-    eye = dem.height_at(lat, lon) + 2
+def _grid_offsets() -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     step = CELL_M * 10
     axis = np.arange(-6, 7, dtype=np.float64) * step
     xx, yy = np.meshgrid(axis, axis)
     distance = np.hypot(xx, yy)
     inside = (distance > 0) & (distance <= RADIUS_M)
-    dx, dy = xx[inside], yy[inside]
-    curvature = distance[inside] ** 2 / (2 * dem.radius_m)
+    return xx[inside], yy[inside]
+
+
+def visible_grid_fraction(dem: PolarDem, x: float, y: float, height: float) -> float:
+    ground = dem.sample_height_m(np.array([x]), np.array([y]))[0]
+    if not np.isfinite(ground):
+        return math.nan
+    dx, dy = _grid_offsets()
+    known, hit, _ = _trace_cells(dem, x, y, float(ground) + height, dx, dy)
+    return float(np.count_nonzero(np.isnan(hit)) / len(dx)) if known.all() else math.nan
+
+
+def grid_sightlines(
+    dem: PolarDem,
+    lat: float,
+    lon: float,
+    observer_height_m: float = 2,
+    *,
+    center: tuple[float, float] | None = None,
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float] | None]]:
+    """Target and optional first obstruction (lon, lat, height) for the display grid."""
+    cx, cy, eye = _observer(dem, lat, lon, observer_height_m, center)
+    dx, dy = _grid_offsets()
+    curvature = (dx**2 + dy**2) / (2 * dem.radius_m)
     known, hits, heights = _trace_cells(dem, cx, cy, eye, dx, dy)
 
     def location(x: float, y: float, height: float) -> tuple[float, float, float]:

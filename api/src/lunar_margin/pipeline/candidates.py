@@ -38,7 +38,9 @@ from lunar_margin.engine.candidates.projection import polar_radius_m
 from lunar_margin.engine.candidates.ranking import RankScores, communication_component, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
+from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
+from lunar_margin.engine.viewshed import visible_grid_fraction
 from lunar_margin.pipeline.candidate_map import (
     MapCandidate,
     MapCoarse,
@@ -249,6 +251,23 @@ def run_search(
 
     load_kernels(data_dir / "spice")
     dem = open_dem(dem_pairs)
+    visibility_dem = PolarDem.from_files(*dem_pairs[0]) if config.weights.visibility else None
+
+    def visibility_for(
+        sites: SitePoints, considered: NDArray[np.bool_]
+    ) -> NDArray[np.float64] | None:
+        if visibility_dem is None:
+            return None
+        values = np.full(len(sites), np.nan)
+        for index in np.flatnonzero(considered):
+            values[index] = visible_grid_fraction(
+                visibility_dem,
+                float(sites.x_m[index]),
+                float(sites.y_m[index]),
+                config.observer_height_m,
+            )
+        return values
+
     workers = config.workers or os.cpu_count() or 1
 
     def reporter(stage: str) -> Callable[[int, int], None] | None:
@@ -311,9 +330,13 @@ def run_search(
             config.thresholds,
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
+        coarse_eligible = coarse_filter.status == Status.ELIGIBLE
         coarse_scores = score_sites(
             coarse_field,
             config.weights,
+            visibility=visibility_for(
+                coarse, coarse_eligible if coarse_eligible.any() else coarse_field.computed
+            ),
             rf=config.rf is not None,
             duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
         )
@@ -354,6 +377,7 @@ def run_search(
     fine_scores = score_sites(
         fine_field,
         config.weights,
+        visibility=visibility_for(fine, fine_filter.status == Status.ELIGIBLE),
         rf=config.rf is not None,
         duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
     )
@@ -399,6 +423,7 @@ def run_search(
                 total=coarse_scores.total[keep],
                 sun_component=coarse_scores.sun_component[keep],
                 earth_component=coarse_scores.earth_component[keep],
+                visibility_component=coarse_scores.visibility_component[keep],
                 components_used=coarse_scores.components_used[keep],
             )
         )
@@ -419,6 +444,7 @@ def run_search(
         total=np.concatenate([s.total for s in score_parts]),
         sun_component=np.concatenate([s.sun_component for s in score_parts]),
         earth_component=np.concatenate([s.earth_component for s in score_parts]),
+        visibility_component=np.concatenate([s.visibility_component for s in score_parts]),
         components_used=np.concatenate([s.components_used for s in score_parts]),
     )
     rank: NDArray[np.int32] = np.concatenate(rank_parts)
@@ -645,6 +671,9 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
                     / 3600,
                 )[k]
             ),
+            visible_grid_points=round(float(sc.visibility_component[k]) * 120)
+            if np.isfinite(sc.visibility_component[k])
+            else None,
             components_used=int(sc.components_used[k]),
         ),
         region_id=int(outcome.region_id[k]),

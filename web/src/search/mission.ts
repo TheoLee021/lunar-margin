@@ -243,6 +243,7 @@ export function windowPreviewText(
 // ---------- 표시 문구 ----------
 
 const PRIORITY_COPY: Readonly<Record<Priority, string>> = {
+  visibility: '주변 가시권 우선 (가시권 50% · 일조 25% · 통신 25%)',
   balanced: '균형 (일조 0.5 : 지구 0.5)',
   solar: '일조 우선 (일조 0.75 : 지구 0.25)',
   earth: '지구 가시성 우선 (일조 0.25 : 지구 0.75)',
@@ -261,6 +262,7 @@ export function missionSummaryItems(
   mission: MissionRequest,
   thresholds?: SearchThresholds,
   rfApplied = false,
+  weights?: { sun: number; earth: number; visibility?: number },
 ): { label: string; value: string }[] {
   const preview = windowPreview(
     mission.landing_date,
@@ -328,11 +330,18 @@ export function missionSummaryItems(
     },
     {
       label: '최적화 우선순위',
-      value: rfApplied
-        ? priorityLabel(mission.optimization_priority)
-            .replaceAll('지구 가시성', 'RF 통신')
-            .replaceAll('지구', 'RF 통신')
-        : priorityLabel(mission.optimization_priority),
+      value: weights
+        ? `${priorityLabel(mission.optimization_priority)
+            .split(' (')[0]
+            .replace(
+              '지구 가시성',
+              rfApplied ? 'RF 통신' : '지구 가시성',
+            )} (일조 ${Math.round(weights.sun * 100)}% · 통신 ${Math.round(weights.earth * 100)}% · 가시권 ${Math.round((weights.visibility ?? 0) * 100)}%)`
+        : rfApplied
+          ? priorityLabel(mission.optimization_priority)
+              .replaceAll('지구 가시성', 'RF 통신')
+              .replaceAll('지구', 'RF 통신')
+          : priorityLabel(mission.optimization_priority),
     },
     {
       label: '관측·장비 높이',

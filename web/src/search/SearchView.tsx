@@ -377,6 +377,7 @@ function RunBody({
               run.mission,
               run.config.thresholds,
               run.config.rf != null,
+              run.config.weights,
             ).map((item) => (
               <div key={item.label}>
                 <dt className="text-xs text-neutral-400">{item.label}</dt>
@@ -487,6 +488,7 @@ function RunBody({
           </p>
         ) : null}
         <CandidateTable
+          observerHeight={run.config.observer_height_m}
           candidates={run.candidates}
           reservations={reservations}
           prices={pricing.state}

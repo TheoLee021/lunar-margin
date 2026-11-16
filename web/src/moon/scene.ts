@@ -1006,7 +1006,7 @@ export async function createMoonScene(
             .then(([ground]) => {
               draw(
                 ground && Number.isFinite(ground.height)
-                  ? ground.height + 2 - map.eye_height_m
+                  ? ground.height + map.observer_height_m - map.eye_height_m
                   : 0,
               )
             })

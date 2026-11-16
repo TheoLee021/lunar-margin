@@ -368,6 +368,12 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
           <h4 className="mb-1 font-semibold text-neutral-200">점수</h4>
           <dl>
             <Row label="종합 점수" value={scoreText(score.total)} />
+            {score.visible_grid_points != null && (
+              <Row
+                label="반경 5 km 내 가시 격자점"
+                value={`${score.visible_grid_points} / 120`}
+              />
+            )}
             <Row label="일조 성분" value={scoreText(score.sun_component)} />
             <Row
               label="지구 LOS 성분"

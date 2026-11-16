@@ -7,6 +7,7 @@ const schema = z.object({
   lon: z.number(),
   center_x_m: z.number(),
   center_y_m: z.number(),
+  observer_height_m: z.number(),
   eye_height_m: z.number(),
   targets: z.array(z.tuple([position, position.nullable()])),
   rays: z.array(z.tuple([z.number().min(0).max(5000), z.boolean()])).length(24),
@@ -17,17 +18,30 @@ const schema = z.object({
 })
 export type Viewshed = z.infer<typeof schema>
 
+export function visibleGridCount(map: Viewshed) {
+  return map.targets.filter(([, hit]) => hit === null).length
+}
+
 export async function fetchViewshed(
   lat: number,
   lon: number,
+  height: number,
   signal: AbortSignal,
+  center?: { x_m: number; y_m: number },
 ) {
+  const grid = center
+    ? `&center_x_m=${center.x_m}&center_y_m=${center.y_m}`
+    : ''
   const result = await getJson(
-    `/analysis/viewshed?lat=${lat}&lon=${lon}`,
+    `/analysis/viewshed?lat=${lat}&lon=${lon}&observer_height_m=${height}${grid}`,
     schema,
     { signal },
   )
-  if (result.lat !== lat || result.lon !== lon)
+  if (
+    result.lat !== lat ||
+    result.lon !== lon ||
+    result.observer_height_m !== height
+  )
     throw new Error('가시권 좌표 불일치')
   return result
 }
