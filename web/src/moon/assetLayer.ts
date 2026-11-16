@@ -175,8 +175,8 @@ interface Live {
   /** The lines drawn beside the unit, rebuilt whenever its verdict changes. */
   card: string
   /**
-   * Terrain height under the unit, metres above the reference sphere, re-read every
-   * frame from whatever tiles have streamed in. The last clean reading is kept so a
+   * Terrain height under the unit, metres above the reference sphere, re-read each
+   * time the rendered tiles settle or the unit moves. Keep the last reading so a
    * tile that has not arrived yet cannot throw the unit to the sphere.
    */
   ground: number
@@ -221,7 +221,7 @@ export function createAssetLayer(
    *
    * Cesium's own height references latch onto the first tile they see, so as the
    * viewer zooms and the tileset refines, the terrain moves and anything placed that
-   * way is left buried or hovering. Reading the height every frame instead means the
+   * way is left buried or hovering. Reading the Moon tiles directly means the
    * unit follows the terrain down to the finest tile that has loaded.
    */
   const groundAt = (location: LunarLocation, live: Live): number => {

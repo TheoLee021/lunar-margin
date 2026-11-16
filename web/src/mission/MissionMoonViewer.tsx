@@ -232,6 +232,7 @@ export function MissionMoonViewer({
   useEffect(() => {
     cancelAnimationFrame(frame.current)
     viewer.current?.releaseFollow()
+    if (drive.current.site?.id !== selected?.id) viewer.current?.setAssets([])
     drive.current = {
       site: selected,
       operator,
