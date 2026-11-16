@@ -18,6 +18,7 @@ from lunar_margin.engine.doi_pdi_reference import (
     PhaseState,
     TrajectorySample,
 )
+from lunar_margin.engine.transfer import LandingApproach
 
 EPOCH = datetime(2027, 1, 10, tzinfo=UTC)
 Vec = NDArray[np.float64]
@@ -62,10 +63,13 @@ def orbit(aligned: bool, pdi_epoch: datetime) -> DoiPdiReference:
 
 
 def prepare(monkeypatch: pytest.MonkeyPatch, aligned: bool, pdi_epoch: datetime = EPOCH) -> None:
-    def transfer(start: datetime, end: datetime, directory: Path) -> SimpleNamespace:
+    def transfer(
+        start: datetime, end: datetime, directory: Path, *, landing_approach: LandingApproach
+    ) -> SimpleNamespace:
         del start, end, directory
         return SimpleNamespace(
-            loi_handoff=SimpleNamespace(epoch_utc=EPOCH, post_loi_j2000_km_kmps=[0.0] * 6)
+            metrics=SimpleNamespace(loi_delta_v_km_s=2.0),
+            loi_handoff=SimpleNamespace(epoch_utc=EPOCH, post_loi_j2000_km_kmps=[0.0] * 6),
         )
 
     def bridge(
@@ -76,6 +80,8 @@ def prepare(monkeypatch: pytest.MonkeyPatch, aligned: bool, pdi_epoch: datetime 
         transform: Callable[[Vec, datetime], Vec],
         *,
         tolerance_m: float,
+        downrange_m: float,
+        descent_duration_s: float,
     ) -> DoiPdiReference:
         del state, epoch, lat, lon, transform, tolerance_m
         return orbit(aligned, pdi_epoch)
@@ -136,3 +142,46 @@ def test_feasible_touchdown_uses_pdi_duration_across_midnight(
     monkeypatch.setattr(module, "evaluate_reference", passed)
     result = module.flight_preview(query(), Settings(), object())  # type: ignore[arg-type]
     assert result.estimated_touchdown_utc == datetime(2027, 1, 11, 0, 7, tzinfo=UTC)
+
+
+def test_connects_dated_transfer_to_south_pole_terrain(data_dir: Path) -> None:
+    from lunar_margin.app.analysis import load_analysis_dem
+
+    result = module.flight_preview(
+        query(), Settings(data_dir=data_dir), load_analysis_dem(data_dir)
+    )
+    assert result.status == "DESCENT_REFERENCE_PASSED"
+    path = result.descent
+    assert path is not None and path.feasible
+    assert result.estimated_touchdown_utc is not None
+    assert result.orbit.approach_error_m < result.orbit.tolerance_m
+    assert (
+        np.linalg.norm(np.array(path.samples[0].moon_me_xyz_m) - result.orbit.pdi.moon_me_m_mps[:3])
+        < 0.02
+    )
+    assert path.samples[-1].lat_deg == pytest.approx(-89)
+    assert path.samples[-1].lon_deg == pytest.approx(30)
+    assert path.samples[-1].altitude_agl_m == pytest.approx(0, abs=0.02)
+
+
+def test_site_capture_accounts_for_full_impulse(data_dir: Path) -> None:
+    from lunar_margin.engine.transfer import calculate_transfer
+
+    mission = query()
+    transfer = calculate_transfer(
+        mission.departure,
+        mission.arrival,
+        data_dir,
+        landing_approach=LandingApproach(mission.latitude, mission.longitude, mission.duration_s),
+    )
+    before = np.asarray(transfer.loi_handoff.pre_loi_j2000_km_kmps)
+    after = np.asarray(transfer.loi_handoff.post_loi_j2000_km_kmps)
+    assert np.array_equal(before[:3], after[:3])
+    assert np.linalg.norm(after[3:] - before[3:]) == pytest.approx(
+        transfer.metrics.loi_delta_v_km_s
+    )
+    assert abs(np.dot(after[:3], after[3:])) < 1e-6
+    assert (
+        transfer.metrics.loi_delta_v_km_s
+        > abs(np.linalg.norm(before[3:]) - np.linalg.norm(after[3:])) + 0.1
+    )

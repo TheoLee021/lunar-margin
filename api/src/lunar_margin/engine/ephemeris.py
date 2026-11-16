@@ -163,3 +163,13 @@ def inertial_moon_state_to_moon_me(
     with _SPICE_LOCK:
         xform = np.asarray(spiceypy.sxform("J2000", "MOON_ME", et), dtype=np.float64)
     return xform @ state
+
+
+def moon_fixed_direction_to_j2000(
+    direction: NDArray[np.float64], epoch: datetime
+) -> NDArray[np.float64]:
+    """Rotate a surface direction into inertial space at the requested epoch."""
+    et = ephemeris_time(epoch)
+    with _SPICE_LOCK:
+        rotation = spiceypy.pxform("MOON_ME", "J2000", et)
+    return np.asarray(rotation @ direction, dtype=np.float64)
