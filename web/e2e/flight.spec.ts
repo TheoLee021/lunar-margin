@@ -4,9 +4,7 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
   page,
 }) => {
   test.setTimeout(90000)
-  await page.goto(
-    '/orbit?planner=compare&departure=2027-01-06&arrival=2027-01-10&duration=14',
-  )
+  await page.goto('/orbit?departure=2027-01-06&arrival=2027-01-10&duration=14')
   const url = page.url()
   const landing = page.getByRole('button', { name: 'Landing', exact: true })
   const transfer = page.getByRole('button', {
