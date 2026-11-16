@@ -14,30 +14,51 @@ export type FlightRequest = {
   ispS: number
 }
 
+function waitForSolver(delay: number, signal?: AbortSignal) {
+  signal?.throwIfAborted()
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
+      resolve()
+    }, delay)
+    function abort() {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+  })
+}
+
 export async function requestFlightPreview(
   input: FlightRequest,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(
-    `${DEFAULT_BASE_URL}/trajectory/flight-preview`,
-    {
+  const body = JSON.stringify({
+    departure: `${input.departure}T00:00:00Z`,
+    arrival: `${input.arrival}T00:00:00Z`,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    alignment_tolerance_m: input.alignmentToleranceM,
+    duration_s: input.durationS,
+    wet_mass_kg: input.wetMassKg,
+    dry_mass_kg: input.dryMassKg,
+    max_thrust_n: input.maxThrustN,
+    isp_s: input.ispS,
+  })
+  const send = () =>
+    fetch(`${DEFAULT_BASE_URL}/trajectory/flight-preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        departure: `${input.departure}T00:00:00Z`,
-        arrival: `${input.arrival}T00:00:00Z`,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        alignment_tolerance_m: input.alignmentToleranceM,
-        duration_s: input.durationS,
-        wet_mass_kg: input.wetMassKg,
-        dry_mass_kg: input.dryMassKg,
-        max_thrust_n: input.maxThrustN,
-        isp_s: input.ispS,
-      }),
+      body,
       signal,
-    },
-  )
+    })
+  let response = await send()
+  // Flight previews share one solver slot. Only retry when the server declined the work.
+  for (const delay of [1000, 2000, 4000, 8000, 8000]) {
+    if (response.status !== 429) break
+    await waitForSolver(delay, signal)
+    response = await send()
+  }
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null)
     let detail = 'Reference flight calculation failed'
