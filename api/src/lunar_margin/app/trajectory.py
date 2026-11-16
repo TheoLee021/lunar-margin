@@ -1,5 +1,7 @@
 """Date-targeted Earth-Moon trajectory preview (independent of surface analysis)."""
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, timedelta
 from threading import BoundedSemaphore
 from typing import Annotated, Self, cast
@@ -34,20 +36,27 @@ def trajectory_settings(request: Request) -> Settings:
     return cast(Settings, request.app.state.settings)
 
 
+@contextmanager
+def transfer_slot() -> Generator[None]:
+    if not _slots.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Trajectory solver busy; retry shortly")
+    try:
+        yield
+    finally:
+        _slots.release()
+
+
 @router.get("/transfer")
 def transfer(
     query: Annotated[TransferQuery, Query()],
     settings: Annotated[Settings, Depends(trajectory_settings)],
 ) -> TransferResult:
-    if not _slots.acquire(blocking=False):
-        raise HTTPException(status_code=429, detail="Trajectory solver busy; retry shortly")
     try:
-        return calculate_transfer(query.departure, query.arrival, settings.data_dir)
+        with transfer_slot():
+            return calculate_transfer(query.departure, query.arrival, settings.data_dir)
     except FileNotFoundError as error:
         raise HTTPException(
             status_code=503, detail="SPICE data missing; run the fetch pipeline"
         ) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    finally:
-        _slots.release()

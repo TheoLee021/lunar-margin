@@ -396,6 +396,10 @@ LOI 상태 경계(후속 DOI/PDI 연결을 위한 6차원 handoff):
 오류: `422` 입력 오류·비수렴·충돌 경로, `503` SPICE 파일 없음, `429` 동시 계산 한도(2건) 초과. 계산 한 건은 최대 약 20초로 제한한다. 정적 궤도로 대체하지 않는다.
 
 
+### POST /trajectory/doi-pdi-reference
+
+전이의 LOI 상태에서 목표 지점과 정렬되는 DOI/PDI 기준 궤도를 탐색한다. 요청·응답과 정렬 오차의 의미는 [DOI/PDI 기준 모델](doi-pdi-handoff.md)에 있다. 출발·도착 시각은 UTC로 정규화한다. 전이 솔버의 동시 계산 한도(2건)를 `GET /trajectory/transfer`와 공유하며, 이 경로 자체의 한도는 1건이다. 한도 초과 시 429를 반환한다.
+
 ### 후보지 탐색의 실제 지형 경사 필터
 
 `POST /candidates/search`와 `/search/dev` 모두 `max_terrain_slope_degrees`를
