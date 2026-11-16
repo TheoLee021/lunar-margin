@@ -31,7 +31,6 @@ def served(data_dir: Path, tmp_path_factory: pytest.TempPathFactory) -> Iterator
     """data_dir/candidates/demo 에 실제 소규모 탐색 결과를 만들어 둔 임시 DATA_DIR."""
     root = tmp_path_factory.mktemp("served")
     write_outputs(run_search(SMALL, data_dir, log=lambda _: None), root / "candidates" / "demo")
-    (root / "dem").symlink_to(data_dir / "dem", target_is_directory=True)
     yield root
 
 
@@ -68,8 +67,12 @@ def test_run_detail_follows_the_contract(served: Path) -> None:
     assert first["data_quality"]["stage"] == "fine"
 
 
-def test_unrestricted_run_reports_terrain_for_comparison(served: Path) -> None:
-    body = client_for(served).get("/candidates/runs/demo").json()
+def test_unrestricted_run_reports_terrain_for_comparison(
+    served: Path, data_dir: Path, tmp_path: Path
+) -> None:
+    (tmp_path / "candidates").symlink_to(served / "candidates", target_is_directory=True)
+    (tmp_path / "dem").symlink_to((data_dir / "dem").resolve(), target_is_directory=True)
+    body = client_for(tmp_path).get("/candidates/runs/demo").json()
     assert body["config"]["thresholds"]["max_terrain_slope_degrees"] is None
     for candidate in body["candidates"]:
         terrain = candidate["terrain"]
