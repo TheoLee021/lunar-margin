@@ -347,6 +347,10 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 기존 `run.elapsed_seconds`는 계산 시간이며 `total_elapsed_seconds`는 결과 저장까지 포함한다.
 새 실행만 총 시간을 기록하며 과거 결과의 시간을 추측해 채우지 않는다.
 
+### POST /trajectory/descent-reference
+
+가상 PDI에서 목표와 예비 착륙지의 기준 하강 경로를 평가한다. 요청·응답과 모델 한계는 [하강 기준 모델](descent-reference.md)에 있다. `include_earth_los=false`이면 LOLA DEM만 필요하다. 지구 시선은 동일 시각의 기하학적 지구 위치와 DEM을 사용한다. LOS 계산 구간이 SPICE 커널 범위를 벗어나면 422, 필요한 데이터가 없으면 503이다.
+
 ## 날짜별 지구–달 전이
 
 `GET /trajectory/transfer?departure=2027-01-06T00:00:00Z&arrival=2027-01-10T00:00:00Z`
