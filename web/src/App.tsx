@@ -15,6 +15,7 @@ const DatePlanner = lazy(() =>
 )
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
+const FlightWorkspace = lazy(() => import('./flight/FlightWorkspace'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
 const INITIAL_SELECTION: MissionSelection = {
   departure: '2027-01-06',
@@ -22,12 +23,14 @@ const INITIAL_SELECTION: MissionSelection = {
   duration: 14,
   siteId: null,
 }
-type View = 'mission' | 'analysis' | 'orbit' | 'search'
+type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
+  if (window.location.pathname.replace(/\/+$/, '') === '/flight')
+    return 'flight'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
@@ -56,7 +59,8 @@ function locationFor(
   planner: boolean,
 ): string {
   const url = new URL(window.location.href)
-  url.pathname = view === 'orbit' ? '/orbit' : '/'
+  url.pathname =
+    view === 'orbit' ? '/orbit' : view === 'flight' ? '/flight' : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
@@ -119,7 +123,9 @@ export default function App() {
           </p>
         }
       >
-        {view === 'analysis' ? (
+        {view === 'flight' ? (
+          <FlightWorkspace />
+        ) : view === 'analysis' ? (
           <AnalysisWorkspace
             dashboardHref={locationFor('mission', selection, false)}
             onDashboardClick={(event) => {

@@ -346,6 +346,12 @@ export function MissionWorkspace({
                 {Math.abs(selected.longitude).toFixed(4)}°
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
+              <a
+                className="hud-button mb-2 inline-flex"
+                href={`/flight?departure=${selection.departure}&arrival=${selection.landing}&lat=${selected.latitude}&lon=${selected.longitude}`}
+              >
+                3D Flight Reference ↗
+              </a>
               <MissionMetrics result={analysis} />
               {run && selectedCandidate ? (
                 <RequirementMarginPanel

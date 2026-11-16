@@ -28,6 +28,8 @@ import {
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { shouldFreeCameraAxis } from './camera'
+import { createFlightLayer } from './flightLayer'
+import type { FlightPoint } from '../flight/flightData'
 import { toLunarLocation, type LunarLocation } from './location'
 import { createMarkerLayer, type MoonMarker } from './markerLayer'
 import {
@@ -625,6 +627,8 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
+  setFlightPath(points: readonly FlightPoint[]): void
+  setFlightFrame(index: number): void
   setViewshed(map: Viewshed | null): void
   flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
@@ -667,6 +671,7 @@ export async function createMoonScene(
     MAX_PIXEL_RATIO / window.devicePixelRatio,
   )
 
+  const flightLayer = createFlightLayer(viewer)
   const moonShader = createMoonShader()
   let normalWindows: NormalWindows | undefined
   let sunlightWindows: SunlightWindows | undefined
@@ -1025,6 +1030,12 @@ export async function createMoonScene(
   let rayGeneration = 0
   const rayEntities: Entity[] = []
   return {
+    setFlightPath(points) {
+      flightLayer.setPath(points)
+    },
+    setFlightFrame(index) {
+      flightLayer.setFrame(index)
+    },
     setViewshed(map) {
       const generation = ++rayGeneration
       for (const entity of rayEntities) viewer.entities.remove(entity)
@@ -1177,6 +1188,7 @@ export async function createMoonScene(
       )
     },
     destroy() {
+      flightLayer.destroy()
       markers.destroy()
       removePreRender()
       removePostRender()
