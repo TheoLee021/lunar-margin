@@ -54,12 +54,12 @@ export function FlightPlots({
     <div className="mx-auto grid w-full max-w-3xl gap-3 px-4 py-2 text-xs">
       {points[0]?.phase !== 'POWERED_DESCENT' && (
         <figure className="rounded-lg border border-neutral-700 bg-neutral-950 p-3">
-          <figcaption>달 중심 궤도 · 궤도면 투영</figcaption>
+          <figcaption>Lunar orbit in the orbital plane</figcaption>
           <svg
             viewBox="0 0 460 260"
             className="mx-auto block max-h-[31vh] w-full"
             role="img"
-            aria-label="달 궤도 진입부터 하강까지의 궤도면 투영"
+            aria-label="Orbital plane projection from lunar orbit insertion to descent"
           >
             <MoonDisc x={230} y={130} radius={106} id={moonId} />
             <text
@@ -67,7 +67,7 @@ export function FlightPlots({
               y="134"
               fill="#b7c0c7"
             >
-              달 궤도 진입
+              Lunar orbit insertion
             </text>
             {plot.paths.map((d, i) => (
               <path
@@ -81,22 +81,24 @@ export function FlightPlots({
             <circle cx={cx} cy={cy} r="4.5" fill="white" stroke="#111" />
           </svg>
           <div className="flex justify-center gap-4">
-            {['진입 궤도', '하강 궤도', '동력하강'].map((label, i) => (
-              <span key={label} style={{ color: colors[i] }}>
-                {label}
-              </span>
-            ))}
+            {['Capture orbit', 'Descent orbit', 'Powered descent'].map(
+              (label, i) => (
+                <span key={label} style={{ color: colors[i] }}>
+                  {label}
+                </span>
+              ),
+            )}
           </div>
         </figure>
       )}
       {plot.descent.length > 0 && (
         <figure className="rounded-lg border border-neutral-700 bg-neutral-950 p-3">
-          <figcaption>동력하강 확대 · 지형 위 높이</figcaption>
+          <figcaption>Powered descent above the terrain</figcaption>
           <svg
             viewBox="0 0 460 158"
             className="block max-h-[23vh] w-full"
             role="img"
-            aria-label="동력하강 시작부터 표면 착륙까지 경과 시간과 지상고"
+            aria-label="Height above terrain from powered descent to touchdown"
           >
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
@@ -116,10 +118,10 @@ export function FlightPlots({
               fill="none"
             />
             <text x="44" y="149" fill="#d4d8dc">
-              하강 시작 · 0분
+              Descent begins · 0 min
             </text>
             <text x="409" y="149" textAnchor="end" fill="#d4d8dc">
-              착륙 · {(plot.duration / 60).toFixed(1)}분
+              Touchdown · {(plot.duration / 60).toFixed(1)} min
             </text>
             <circle
               cx={plot.profile(end)[0]}

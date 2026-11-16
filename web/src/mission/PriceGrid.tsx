@@ -1,164 +1,49 @@
-import { useEffect, useState } from 'react'
-import { fetchRun, type MissionRequest } from '../api/candidates'
-import { formatPrice, isTransitPossible, type Delivery } from '../api/pricing'
+import { assumptionLabel, englishMessage } from './plannerCopy'
+import type { PricingSettings } from './usePricingSettings'
+import { formatPrice, isTransitPossible } from '../api/pricing'
 import type { departureAvailability } from '../api/launchSchedule'
-import type { ProviderCalendarInput } from '../api/providerPricing'
 import { dayOf, iso, short } from './missionDates'
 import type { Schedule } from './types'
-import { useProviderCalendar } from './useProviderCalendar'
+import type { useProviderCalendar } from './useProviderCalendar'
 
-const DEFAULT_MISSION: MissionRequest = {
-  landing_date: '2027-01-10',
-  mission_duration_days: 14,
-  max_continuous_darkness_hours: 24,
-  max_communication_blackout_hours: 6,
-  max_terrain_slope_degrees: null,
-  search_region: 'south',
-  optimization_priority: 'balanced',
-  observer_height_m: null,
-}
-const DELIVERY_LABELS: Record<Delivery, string> = {
-  orbit: '달 궤도 투입',
-  surface: '표면 하역',
-  rover_delivery: '로버 배송',
-}
 const STATE_LABELS = {
-  quoted: '계산 완료',
-  estimated: '모델 예상 비용',
-  no_published_quote: '공개 견적 없음',
-  no_launch: '발사 일정 없음',
-  search_required: '미계산',
-  partial_coverage: '견적 일부',
-  invalid_transit: '전이 불가',
-  no_eligible: '적합 격자 없음',
-  not_computed: '미계산',
-  running: '탐색 중',
-  failed: '탐색 실패',
-  unavailable: '판단 불가',
+  quoted: 'Quote available',
+  estimated: 'Estimated cost',
+  no_published_quote: 'No published quote',
+  no_launch: 'Unavailable',
+  search_required: 'Not calculated',
+  partial_coverage: 'Partial coverage',
+  invalid_transit: 'Invalid transit',
+  no_eligible: 'No eligible cells',
+  not_computed: 'Not calculated',
+  running: 'Searching',
+  failed: 'Search failed',
+  unavailable: 'Unavailable',
 }
-export type DepartureStatus = {
-  departure: string
-  launchId: string | null
-  unavailable: boolean
-}
-
 export function PriceGrid({
   departures,
   landings,
   draft,
   availability,
-  slope,
-  onSlopeChange,
+  settings,
   onSelect,
-  onDepartureStatus,
+  calendar,
 }: {
   departures: number[]
   landings: number[]
   draft: Schedule
-  slope: string
-  onSlopeChange: (value: string) => void
+  settings: PricingSettings
   availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
-  onDepartureStatus: (status: DepartureStatus) => void
+  calendar: ReturnType<typeof useProviderCalendar>
 }) {
-  const [mass, setMass] = useState('24')
-  const [delivery, setDelivery] = useState<Delivery>('surface')
-  const [mission, setMission] = useState(DEFAULT_MISSION)
-  const [darkness, setDarkness] = useState('24')
-  const [blackout, setBlackout] = useState('6')
-  const [source, setSource] = useState(
-    () => new URLSearchParams(window.location.search).get('pricing_run') ?? '',
-  )
-  const [sourceState, setSourceState] = useState({
-    id: '',
-    loading: false,
-    error: '',
-  })
-  useEffect(() => {
-    if (!source) return
-    const controller = new AbortController()
-    fetchRun(source, { signal: controller.signal })
-      .then((run) => {
-        if (controller.signal.aborted) return
-        if (!run.mission)
-          throw new Error('임무 조건이 저장된 탐색 실행을 선택하세요.')
-        setMission(run.mission)
-        onSlopeChange(run.mission.max_terrain_slope_degrees?.toString() ?? '')
-        setDarkness(run.mission.max_continuous_darkness_hours?.toString() ?? '')
-        setBlackout(
-          run.mission.max_communication_blackout_hours?.toString() ?? '',
-        )
-        setSourceState({ id: source, loading: false, error: '' })
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted)
-          setSourceState({
-            id: source,
-            loading: false,
-            error: error instanceof Error ? error.message : String(error),
-          })
-      })
-    return () => controller.abort()
-  }, [source, onSlopeChange])
-  const optional = (value: string) =>
-    value.trim() === '' ? null : Number(value)
-  const massNumber = Number(mass),
-    slopeLimit = optional(slope),
-    dark = optional(darkness),
-    black = optional(blackout)
-  const valid =
-    (slopeLimit === null || (slopeLimit > 0 && slopeLimit <= 90)) &&
-    massNumber > 0 &&
-    massNumber <= 1_000_000 &&
-    Number.isFinite(massNumber) &&
-    (dark === null || (Number.isFinite(dark) && dark >= 0)) &&
-    (black === null || (Number.isFinite(black) && black >= 0))
-  const sourceReady =
-    source === '' || (sourceState.id === source && !sourceState.error)
-  const scheduledDepartures = departures.filter(
-    (day) => availability(iso(day)) === 'scheduled',
-  )
-  const input: ProviderCalendarInput | null =
-    valid && sourceReady && scheduledDepartures.length > 0
-      ? {
-          estimate: true,
-          selected_launch_id: draft.launchId ?? null,
-          mass_kg: massNumber,
-          delivery,
-          landing_dates: landings.map(iso),
-          departure_dates: scheduledDepartures.map(iso),
-          source_run_id: source || null,
-          mission: {
-            ...mission,
-            landing_date: iso(landings[0]!),
-            mission_duration_days: draft.duration,
-            max_continuous_darkness_hours: dark,
-            max_communication_blackout_hours: black,
-            max_terrain_slope_degrees: slopeLimit,
-          },
-        }
-      : null
-  const calendar = useProviderCalendar(input)
+  const { massNumber, delivery, slopeLimit } = settings
   const data = calendar.data
-  useEffect(() => {
-    if (!data) return
-    const departureCells = data.cells.filter(
-      (cell) => cell.departure_date === draft.departure,
-    )
-    if (!departureCells.length) return
-    onDepartureStatus({
-      departure: draft.departure,
-      launchId: draft.launchId ?? null,
-      unavailable: departureCells.some((cell) => cell.status === 'no_launch'),
-    })
-  }, [data, draft.departure, draft.launchId, onDepartureStatus])
   const prices =
     data?.cells.flatMap((cell) =>
       cell.mean_min_usd === null ? [] : [cell.mean_min_usd],
     ) ?? []
   const minimum = Math.min(...prices)
-  const hasMissing =
-    data?.dates.some((row) => row.state !== 'completed') ?? true
   function candidateHref(
     departure: number,
     landing: number,
@@ -182,177 +67,39 @@ export function PriceGrid({
   }
   return (
     <>
-      <div className="price-inputs">
-        <label>
-          화물 질량 · kg
-          <input
-            type="number"
-            min="0.001"
-            max="1000000"
-            step="any"
-            value={mass}
-            onChange={(e) => setMass(e.target.value)}
-          />
-        </label>
-        <label>
-          배송 방식
-          <select
-            value={delivery}
-            onChange={(e) => setDelivery(e.target.value as Delivery)}
-          >
-            {Object.entries(DELIVERY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          최대 허용 경사 · ° (지역 P95)
-          <input
-            type="number"
-            min="0"
-            max="90"
-            step="any"
-            placeholder="제한 없음"
-            value={slope}
-            onChange={(e) => onSlopeChange(e.target.value)}
-          />
-        </label>
-        <label>
-          최장 연속 어둠 ≤ 시간
-          <input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="조건 없음"
-            value={darkness}
-            onChange={(e) => setDarkness(e.target.value)}
-          />
-        </label>
-        <label>
-          최장 통신 두절 ≤ 시간
-          <input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="조건 없음"
-            value={blackout}
-            onChange={(e) => setBlackout(e.target.value)}
-          />
-        </label>
-        <div className="price-actions">
-          <button
-            type="button"
-            disabled={!input || calendar.calculating || !hasMissing}
-            onClick={() => {
-              void calendar.calculate()
-            }}
-          >
-            {calendar.calculating
-              ? calendar.waiting
-                ? '다른 탐색 완료 대기 중…'
-                : '날짜별 탐색 중…'
-              : '미계산 날짜 탐색 · 500m'}
-          </button>
-          {calendar.calculating ? (
-            <button type="button" onClick={calendar.stop}>
-              화면 업데이트 중단
-            </button>
-          ) : (
-            <button type="button" onClick={calendar.reload}>
-              새로고침
-            </button>
-          )}
-        </div>
-      </div>
-      {source && !sourceReady && !sourceState.error ? (
-        <p role="status">탐색 조건을 불러오는 중…</p>
-      ) : null}
-      {sourceState.error ? (
-        <p role="alert">
-          {sourceState.error}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setSource('')
-              setSourceState({ id: '', loading: false, error: '' })
-            }}
-          >
-            새 임무 조건 사용
-          </button>
-        </p>
-      ) : null}
-      {!valid ? (
-        <p role="alert">
-          경사는 0° 초과~90° 또는 빈칸, 질량은 0 초과~1,000,000kg, 어둠·두절
-          한도는 0 이상의 숫자로 입력하세요.
-        </p>
-      ) : null}
-      {calendar.loading ? (
-        <p role="status">날짜별 가격을 불러오는 중…</p>
-      ) : null}
+      {calendar.loading ? <p role="status">Loading prices by date…</p> : null}
       {calendar.error ? (
         <p role="alert">
-          {calendar.error}{' '}
+          {englishMessage(
+            calendar.error,
+            'Unable to load pricing for these dates.',
+          )}{' '}
           <button type="button" onClick={calendar.reload}>
-            가격 다시 시도
+            Retry pricing
           </button>
         </p>
       ) : null}
       {calendar.waiting ? (
         <p role="status">
-          다른 탐색이 진행 중입니다 · {calendar.waiting.run_id}
+          Another search is in progress · {calendar.waiting.run_id}
           {calendar.waiting.total > 0
             ? ` · ${calendar.waiting.done.toLocaleString()}/${calendar.waiting.total.toLocaleString()}`
             : ''}
-          {' · '}완료 후 선택한 날짜 계산을 자동으로 시작합니다.
+          {' · '}Your dates will be calculated when it finishes.
         </p>
       ) : calendar.calculating ? (
-        <p role="status">날짜별 가격 계산 중…</p>
-      ) : null}
-      {data?.selection ? (
-        <section
-          aria-label="선택한 발사사의 가격 모델"
-          className="mb-3 text-sm"
-        >
-          <p className="text-amber-300">
-            {data.selection.company_name} 모델 예상 비용 ·{' '}
-            {data.selection.tariff_basis === 'public_tariff'
-              ? '공개 단가'
-              : '공통 참조 단가'}{' '}
-            ${data.selection.tariff_usd_per_kg.toLocaleString('en-US')}/kg
-            {' · '}고정비 ${data.selection.fixed_usd.toLocaleString('en-US')}
-          </p>
-          <p className="hint">
-            {data.selection.launch_name} · 같은 적합 500m 격자 전체의 산술평균 ·
-            실제 견적 아님
-          </p>
-          <details>
-            <summary>적용 근거와 가정</summary>
-            <p className="hint">{data.selection.assumptions.join(' · ')}</p>
-            <a
-              href={data.selection.tariff_source.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {data.selection.tariff_source.title} ↗
-            </a>
-          </details>
-        </section>
-      ) : !draft.launchId ? (
-        <p className="mb-3 text-xs text-neutral-400">
-          모든 발사를 달 탐사로 가정한 모델 예상 비용 · 적합 500m 격자의 최저
-          예상 비용 평균
-        </p>
+        <p role="status">Calculating prices by date…</p>
       ) : null}
       <div className="grid-scroll">
-        <table className="cost-grid" aria-label="출발일과 착륙일별 평균 가격">
+        <table
+          className="cost-grid"
+          aria-label="Mean estimated cost by departure and arrival date"
+        >
           <thead>
             <tr>
               <th scope="col" className="axis-cell">
-                착륙 ↓<br />
-                출발 →
+                Arrival ↓<br />
+                Departure →
               </th>
               {departures.map((d) => (
                 <th key={d} scope="col">
@@ -389,7 +136,7 @@ export function PriceGrid({
                           row.run_id,
                           rowOffer?.lowest_launch_id ?? draft.launchId,
                         )}
-                        aria-label={`${short(l)} · 착륙 ${iso(l)} 후보지 탐색 열기`}
+                        aria-label={`${short(l)} · Arrival ${iso(l)} · Explore landing sites`}
                       >
                         {short(l)}
                       </a>
@@ -417,16 +164,15 @@ export function PriceGrid({
                     const label = offer
                       ? STATE_LABELS[offer.status]
                       : calendar.loading
-                        ? '불러오는 중'
-                        : '미계산'
+                        ? 'Loading'
+                        : 'Not calculated'
                     const selected =
                       dayOf(draft.departure) === d && dayOf(draft.landing) === l
                     const className =
                       mean !== null && mean <= minimum * 1.05
                         ? 'low-cost'
                         : undefined
-                    const accessibleLabel = `출발 ${iso(d)}, 착륙 ${iso(l)}, ${mean !== null ? `${draft.launchId ? '회사 모델 평균' : '최저가 평균'} ${formatPrice(mean)}` : label}${mean !== null && companyNames.length ? `, ${companyNames.join(' · ')}` : ''}`
-                    const completed = row?.state === 'completed'
+                    const accessibleLabel = `Departure ${iso(d)}, arrival ${iso(l)}, ${mean !== null ? `${draft.launchId ? 'Provider average' : 'Average minimum cost'} ${formatPrice(mean)}` : label}${mean !== null && companyNames.length ? `, ${companyNames.join(' · ')}` : ''}`
                     const content = (
                       <>
                         <span>{mean !== null ? formatPrice(mean) : label}</span>
@@ -437,8 +183,9 @@ export function PriceGrid({
                         ) : (
                           <small>
                             {offer?.status === 'partial_coverage'
-                              ? `견적 ${offer.quoted_grid_count}/${offer.eligible_grid_count}개 격자`
-                              : (row?.message ?? `${l - d}일 비행`)}
+                              ? `Quotes for ${offer.quoted_grid_count}/${offer.eligible_grid_count} cells`
+                              : englishMessage(row?.message ?? '', '') ||
+                                `${l - d}-day flight`}
                           </small>
                         )}
                       </>
@@ -448,38 +195,29 @@ export function PriceGrid({
                         {departureState !== 'scheduled' ? (
                           <div
                             className="invalid-cell"
-                            aria-label={`출발 ${iso(d)}: ${departureState === 'no_launch' ? '발사 일정 없음' : departureState === 'loading' ? '일정 확인 중' : '일정 미확인'}`}
+                            aria-label={`Departure ${iso(d)}: ${departureState === 'no_launch' ? 'Unavailable' : departureState === 'loading' ? 'Checking schedule' : 'Schedule unknown'}`}
                           >
-                            <span>
+                            <span
+                              className={
+                                departureState === 'no_launch'
+                                  ? 'unavailable-label'
+                                  : undefined
+                              }
+                            >
                               {departureState === 'no_launch'
-                                ? '발사 일정 없음'
+                                ? 'Unavailable'
                                 : departureState === 'loading'
-                                  ? '일정 확인 중'
-                                  : '일정 미확인'}
+                                  ? 'Checking schedule'
+                                  : 'Schedule unknown'}
                             </span>
                           </div>
                         ) : !possible ? (
                           <div
                             className="invalid-cell"
-                            title="전이는 3~150일이어야 합니다"
+                            title="Transit must take 3 to 150 days"
                           >
-                            —<small>전이 3~150일</small>
+                            —<small>Transit: 3–150 days</small>
                           </div>
-                        ) : completed ? (
-                          <a
-                            href={candidateHref(
-                              d,
-                              l,
-                              row.run_id,
-                              offer?.lowest_launch_id ?? draft.launchId,
-                            )}
-                            aria-label={`${accessibleLabel}, 후보지 탐색 열기`}
-                            aria-current={selected ? 'date' : undefined}
-                            className={className}
-                            title="이 날짜의 저장된 후보지 탐색 결과 열기"
-                          >
-                            {content}
-                          </a>
                         ) : (
                           <button
                             type="button"
@@ -503,16 +241,53 @@ export function PriceGrid({
       <div className="grid-key">
         <span>
           <i />
-          낮은 평균 예상 비용
+          Lowest estimates
         </span>
         <span>
           <i />
-          선택한 조합
-        </span>
-        <span>
-          공개 발사 예정일만 표시 · 전이 3~150일 · 열: 출발일 · 행: 착륙일 / UTC
+          Selected dates
         </span>
       </div>
+      {data?.selection && (
+        <details>
+          <summary>Provider pricing details</summary>{' '}
+          <section
+            aria-label="Pricing model for the selected launch provider"
+            className="mb-3 text-sm"
+          >
+            <p className="text-amber-300">
+              {data.selection.company_name} cost estimate ·{' '}
+              {data.selection.tariff_basis === 'public_tariff'
+                ? 'Published rate'
+                : 'Reference rate'}{' '}
+              ${data.selection.tariff_usd_per_kg.toLocaleString('en-US')}/kg
+              {' · '}Fixed cost $
+              {data.selection.fixed_usd.toLocaleString('en-US')}
+            </p>
+            <p className="hint">
+              {data.selection.launch_name} · Mean across all eligible 500 m
+              cells · Model estimate only
+            </p>
+            <details>
+              <summary>Sources and assumptions</summary>
+              <p className="hint">
+                {data.selection.assumptions.map(assumptionLabel).join(' ')}
+              </p>
+              <a
+                href={data.selection.tariff_source.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {englishMessage(
+                  data.selection.tariff_source.title,
+                  'Pricing reference',
+                )}{' '}
+                ↗
+              </a>
+            </details>
+          </section>
+        </details>
+      )}
     </>
   )
 }

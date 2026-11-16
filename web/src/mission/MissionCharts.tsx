@@ -117,7 +117,7 @@ function Plot({
           fill="transparent"
           style={{ cursor: 'pointer' }}
           role="slider"
-          aria-label="그래프에서 착륙일 선택"
+          aria-label="Select an arrival date on the chart"
           aria-valuemin={x0}
           aria-valuemax={x1}
           aria-valuenow={marker}
@@ -154,8 +154,8 @@ export function MissionCharts({
     return (
       <div className="planner-charts">
         <section className="group">
-          <h2>착륙지 분석</h2>
-          <p className="hint">지형과 후보 지점을 불러오는 중입니다.</p>
+          <h2>Landing site analysis</h2>
+          <p className="hint">Loading terrain and candidate sites.</p>
         </section>
       </div>
     )
@@ -165,9 +165,9 @@ export function MissionCharts({
   return (
     <div className="planner-charts">
       <section className="group chart">
-        <h2>착륙일별 점수</h2>
+        <h2>Score by arrival date</h2>
         <Plot
-          title="착륙일별 예시 점수"
+          title="Example scores by arrival date"
           x0={xs[0]}
           x1={xs[xs.length - 1]}
           y0={0}
@@ -182,8 +182,8 @@ export function MissionCharts({
           onSelect={(x) => onLanding(iso(Math.round(x) + BASE_DAY))}
         />
         <p className="hint">
-          선택한 착륙지의 날짜별 예시 점수. 곡선을 클릭해 착륙일을 비교하세요. ▲
-          최고 점수.
+          Select a point on the curve to compare example scores for this site.
+          The triangle marks the highest score.
         </p>
       </section>
     </div>

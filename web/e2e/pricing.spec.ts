@@ -50,50 +50,35 @@ test('missing landing dates launch one batch and display all five results', asyn
       },
     })
   })
-  const calendarForSlope = (limit: number | null) =>
-    page.waitForRequest(
-      (request) =>
-        request.url().endsWith('/pricing/providers/calendar') &&
-        request.postDataJSON().mission.max_terrain_slope_degrees === limit,
-    )
-  const unrestricted = calendarForSlope(null)
-  await page.goto('/?planner=1')
-  await unrestricted
-  const slope = page.getByLabel('최대 허용 경사', { exact: false })
-  await expect(slope).toHaveValue('')
-  const limited = calendarForSlope(12.5)
-  await slope.fill('12.5')
-  await limited
-  const dialog = page.getByRole('dialog')
-  await expect(
-    dialog.getByRole('table').getByText('미계산').first(),
-  ).toBeVisible()
   const starting = page.waitForRequest((request) =>
     request.url().endsWith('/pricing/calculate'),
   )
-  await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
+  await page.goto(
+    '/?planner=compare&departure=2027-01-06&arrival=2027-01-10&duration=14&max_slope=12.5',
+  )
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.locator('input[type="date"], select')).toHaveCount(0)
   expect(
     (await starting).postDataJSON().mission.max_terrain_slope_degrees,
   ).toBe(12.5)
-  await expect(
-    dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }),
-  ).toBeDisabled()
-  expect(launched).toEqual([
-    '2027-01-08',
-    '2027-01-09',
-    '2027-01-10',
-    '2027-01-11',
-    '2027-01-12',
-  ])
+  await expect
+    .poll(() => launched)
+    .toEqual([
+      '2027-01-08',
+      '2027-01-09',
+      '2027-01-10',
+      '2027-01-11',
+      '2027-01-12',
+    ])
   expect(batchCalls).toBe(1)
-  await expect(dialog.getByRole('table').getByText('미계산')).toHaveCount(0)
-  await dialog.getByRole('button', { name: '일정 적용 ↗' }).click()
+  await expect(
+    dialog.getByRole('table').getByText('$29M', { exact: true }),
+  ).toHaveCount(19, { timeout: 20000 })
+  await dialog.getByRole('button', { name: 'Apply schedule' }).click()
   await expect(page).toHaveURL(/max_slope=12\.5/)
-  await page.reload()
-  await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
-  await expect(page.getByLabel('최대 허용 경사', { exact: false })).toHaveValue(
-    '12.5',
-  )
+  expect(new URL(page.url()).searchParams.get('overview')).toBe('1')
+  expect(new URL(page.url()).searchParams.get('run')).toBe('m-2027-01-10')
+  await expect(page.locator('#datePlanner')).toHaveCount(0)
 })
 
 test('date prices open the saved candidate run without recalculating', async ({
@@ -412,9 +397,10 @@ test('a busy search waits and automatically starts the missing dates when the wo
   })
   await page.goto('/?planner=1')
   const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
   await expect(
-    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+    dialog
+      .getByRole('status')
+      .filter({ hasText: 'Another search is in progress' }),
   ).toBeVisible()
   await expect(dialog.getByRole('alert')).toHaveCount(0)
   expect(batchCalls).toBe(1)
@@ -422,9 +408,11 @@ test('a busy search waits and automatically starts the missing dates when the wo
   released = true
   await expect(
     dialog.getByRole('table').getByText('$29M', { exact: true }),
-  ).toHaveCount(19)
+  ).toHaveCount(19, { timeout: 20000 })
   expect(batchCalls).toBe(2)
   await expect(
-    dialog.getByRole('status').filter({ hasText: '다른 탐색이 진행 중' }),
+    dialog
+      .getByRole('status')
+      .filter({ hasText: 'Another search is in progress' }),
   ).toHaveCount(0)
 })

@@ -254,7 +254,7 @@ export default function MoonViewer({
           title={overlayError}
           className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-neutral-900/80 px-3 py-1.5 text-xs text-amber-300"
         >
-          지형 그림자 데이터를 불러오지 못해 사진으로 표시합니다
+          Terrain shadow data is unavailable. Showing imagery.
         </p>
       ) : null}
       <button
