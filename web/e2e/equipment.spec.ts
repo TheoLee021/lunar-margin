@@ -88,6 +88,17 @@ test('operator equipment follows the review time and recovers a partial visibili
   await expect(
     page.getByRole('button', { name: '지구 방향 켜기' }),
   ).toHaveAttribute('aria-pressed', 'false')
+  await page
+    .getByRole('button', { name: '주행 중지 · 지도로 돌아가기' })
+    .click()
+  await expect(drive).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByText(/이동 거리/)).toHaveCount(0)
+  await expect(
+    page.getByRole('checkbox', { name: '가시선 표시' }),
+  ).toBeChecked()
+  await expect(
+    page.getByRole('button', { name: '지구 방향 켜기' }),
+  ).toBeVisible()
   const picker = page.getByLabel('장비를 배치할 운영사')
   const model = page.waitForResponse(
     (r) => r.url().endsWith('/models/rover.glb') && r.ok(),
@@ -99,6 +110,13 @@ test('operator equipment follows the review time and recovers a partial visibili
   await expect(page.getByText(/이동 거리 [1-9]\d* m/)).toBeVisible()
   await model
   await page.screenshot({ path: info.outputPath('rover-drive.png') })
+  await page
+    .getByRole('button', { name: '주행 종료 · 지도로 돌아가기' })
+    .click({ timeout: 30_000 })
+  await expect(rover).toHaveAttribute('aria-pressed', 'false')
+  await expect(
+    page.getByRole('checkbox', { name: '가시선 표시' }),
+  ).toBeChecked()
   await page.getByRole('button', { name: '위에서 보기' }).click()
   await picker.selectOption('helios-grid')
   failSun = true

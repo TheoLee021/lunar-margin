@@ -466,9 +466,16 @@ export function MissionMoonViewer({
                   ? undefined
                   : `${operator.name}에는 움직이는 장비가 없습니다`
               }
-              onClick={runDrive}
+              aria-pressed={equipmentView}
+              onClick={equipmentView ? stopDrive : runDrive}
             >
-              {mobile ? `${mobile.spec.label} 주행` : '주행 장비 없음'}
+              {equipmentView
+                ? travelM === totalM
+                  ? '주행 종료 · 지도로 돌아가기'
+                  : '주행 중지 · 지도로 돌아가기'
+                : mobile
+                  ? `${mobile.spec.label} 주행`
+                  : '주행 장비 없음'}
             </button>
           ) : null}
         </div>
