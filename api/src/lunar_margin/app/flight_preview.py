@@ -3,6 +3,7 @@
 The descent is evaluated only when the nominal orbit reference is aligned with
 the chosen landing target. An illustrative customer payload is not a lander.
 """
+
 import math
 from dataclasses import dataclass
 from threading import BoundedSemaphore
