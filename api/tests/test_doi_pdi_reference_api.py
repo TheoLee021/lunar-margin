@@ -41,6 +41,7 @@ def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) ->
         )
 
     monkeypatch.setattr(endpoint, "calculate_transfer", transfer)
+
     def identity_transform(state: NDArray[np.float64], epoch: datetime) -> NDArray[np.float64]:
         del epoch
         return state.copy()
