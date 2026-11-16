@@ -53,7 +53,7 @@ def test_site_aligned_two_body_reference_is_continuous() -> None:
     assert result.samples[-1].epoch_utc == result.pdi.epoch_utc
     assert all(
         left.epoch_utc <= right.epoch_utc
-        for left, right in zip(result.samples, result.samples[1:])
+        for left, right in zip(result.samples, result.samples[1:], strict=False)
     )
 
 
