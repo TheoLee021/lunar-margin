@@ -19,6 +19,8 @@ import type { useDashboardRun } from './useDashboardRun'
 import { sunAt } from './sunPlayback'
 import { useSunPath } from './useSunPath'
 import type { Vector3 } from '../moon/sun'
+import { SiteComparisonPanel } from './SiteComparisonPanel'
+import { toggleComparison, COMPARISON_COLORS } from './siteCompare'
 
 export function MissionWorkspace({
   selection,
@@ -42,6 +44,25 @@ export function MissionWorkspace({
   const [collapsed, setCollapsed] = useState(false)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
+  const comparisonKey = JSON.stringify([
+    run?.id,
+    run?.run.generated_at,
+    selection.landing,
+    selection.duration,
+    sites.map((site) => site.id),
+  ])
+  const [checked, setChecked] = useState({
+    key: comparisonKey,
+    ids: [] as string[],
+    open: false,
+  })
+  if (result.kind !== 'loading' && checked.key !== comparisonKey)
+    setChecked({ key: comparisonKey, ids: [], open: false })
+  const checkedIds = checked.key === comparisonKey ? checked.ids : []
+  const comparisonCandidates =
+    run?.candidates
+      .filter((candidate) => checkedIds.includes(candidate.id))
+      .sort((a, b) => a.rank - b.rank) ?? []
   const [override, setOverride] = useState<{
     runId?: string
     value: number
@@ -327,6 +348,28 @@ export function MissionWorkspace({
               <ol className="space-y-1">
                 {rows.map(({ site, index, count }) => (
                   <li key={site.id}>
+                    <label
+                      className="flex min-h-9 cursor-pointer items-center gap-2 px-2 text-xs"
+                      style={{ color: COMPARISON_COLORS[index] }}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`${site.name} 비교`}
+                        checked={checkedIds.includes(site.id)}
+                        onChange={() =>
+                          setChecked((current) => ({
+                            key: comparisonKey,
+                            ids: toggleComparison(
+                              current.key === comparisonKey ? current.ids : [],
+                              site.id,
+                              sites.map((value) => value.id),
+                            ),
+                            open: false,
+                          }))
+                        }
+                      />
+                      {site.name} 비교
+                    </label>
                     <button
                       type="button"
                       aria-current={selection.siteId === site.id}
@@ -358,6 +401,24 @@ export function MissionWorkspace({
                   </li>
                 ))}
               </ol>
+              {sites.length ? (
+                <div className="my-3 space-y-2">
+                  <p className="text-xs text-neutral-400">
+                    비교할 후보를 체크하세요. 최대 5개 · 2~3개 권장. 지도 선택과
+                    별개입니다.
+                  </p>
+                  <button
+                    type="button"
+                    className="hud-button disabled:opacity-40"
+                    disabled={checkedIds.length === 0}
+                    onClick={() =>
+                      setChecked((current) => ({ ...current, open: true }))
+                    }
+                  >
+                    선택 후보 비교 ({checkedIds.length}/5)
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="hud-button justify-self-start"
@@ -471,6 +532,14 @@ export function MissionWorkspace({
         {apiStatus}
       </div>
       {children}
+      {run && checked.key === comparisonKey && checked.open ? (
+        <SiteComparisonPanel
+          candidates={comparisonCandidates}
+          config={run.config}
+          onClose={() => setChecked((current) => ({ ...current, open: false }))}
+          onClear={() => setChecked((current) => ({ ...current, ids: [] }))}
+        />
+      ) : null}
     </main>
   )
 }
