@@ -1,28 +1,17 @@
 import { expect, test } from '@playwright/test'
-import { mockScheduledDepartures } from './launch-fixture.js'
 import { mockDashboardRuns } from './dashboard-fixture.js'
 
 test('dashboard uses the date’s saved top five and analyzes only the selected candidate', async ({
   page,
   request,
 }) => {
-  await mockScheduledDepartures(page)
   const runs = await mockDashboardRuns(page, request)
   runs[0]!.candidates.reverse()
   const analysisRequests: URL[] = []
   let searches = 0
   page.on('request', (req) => {
-    const url = new URL(req.url())
-    if (
-      ['/api/analysis/earth-visibility', '/api/analysis/illumination'].includes(
-        url.pathname,
-      )
-    ) {
-      const start = Date.parse(url.searchParams.get('start') ?? '')
-      const end = Date.parse(url.searchParams.get('end') ?? '')
-      // Candidate analysis covers the mission; equipment requests sample one instant.
-      if (end - start > 30 * 60_000) analysisRequests.push(url)
-    }
+    if (req.url().includes('/api/analysis/'))
+      analysisRequests.push(new URL(req.url()))
     if (
       req.method() === 'POST' &&
       /\/(candidates\/search|pricing\/calculate)/.test(req.url())
