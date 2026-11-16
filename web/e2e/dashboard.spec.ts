@@ -38,28 +38,30 @@ test('dashboard uses the date’s saved top five and analyzes only the selected 
     }),
   )
   await page.goto('/explore')
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  const metrics = page.getByRole('complementary', { name: '선택한 지점' })
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  const metrics = page.getByRole('complementary', { name: 'Selected site' })
   await expect(
-    rail.getByRole('heading', { name: 'TOP 5 후보', exact: true }),
+    rail.getByRole('heading', { name: 'TOP 5 candidates', exact: true }),
   ).toBeVisible()
   await expect(rail.locator('ol button')).toHaveCount(5)
-  await expect(rail.locator('ol button').first()).toContainText('후보 1')
-  await expect(rail.getByRole('button', { name: /후보 6/ })).toHaveCount(0)
+  await expect(rail.locator('ol button').first()).toContainText('Candidate 1')
+  await expect(rail.getByRole('button', { name: /Candidate 6/ })).toHaveCount(0)
   await expect(metrics).toHaveCount(0)
   expect(analysisRequests).toHaveLength(0)
-  await rail.getByRole('button', { name: /후보 1/ }).click()
-  const timeline = metrics.getByRole('region', { name: '미션 기간 타임라인' })
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
+  const timeline = metrics.getByRole('region', { name: 'Mission timeline' })
   await expect(timeline.getByRole('img')).toBeVisible()
   await expect(metrics).toContainText('89.7100°S 37.5000°E')
   expect(analysisRequests.at(-1)!.searchParams.get('lat')).toBe('-89.71')
   await expect(page).toHaveURL(/site=saved-0-1/)
-  await rail.getByRole('button', { name: /후보 2/ }).click()
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
   await expect(timeline.getByRole('img')).toBeVisible()
   await expect(metrics).toContainText('89.0200°S 94.4000°W')
   expect(analysisRequests.at(-1)!.searchParams.get('lat')).toBe('-89.02')
   const beforeDates = analysisRequests.length
-  await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
+  await page
+    .getByRole('button', { name: 'Compare dates and trajectory' })
+    .click()
   const dialog = page.getByRole('dialog')
   await dialog
     .getByLabel('기준 착륙일 · UTC', { exact: true })
@@ -68,11 +70,11 @@ test('dashboard uses the date’s saved top five and analyzes only the selected 
     .getByRole('combobox', { name: /착륙 후 표면 임무/ })
     .selectOption('7')
   await dialog.getByRole('button', { name: '일정 적용 ↗' }).click()
-  await expect(rail).toContainText('2027-01-11 · 7일')
+  await expect(rail).toContainText('2027.01.11')
   await expect(metrics).toHaveCount(0)
   await expect(rail.locator('ol button')).toHaveCount(5)
   expect(analysisRequests).toHaveLength(beforeDates)
-  await rail.getByRole('button', { name: /후보 1/ }).click()
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
   await expect(timeline.getByRole('img')).toBeVisible()
   expect(analysisRequests.at(-1)!.searchParams.get('observer_height_m')).toBe(
     '6',
@@ -80,11 +82,11 @@ test('dashboard uses the date’s saved top five and analyzes only the selected 
   expect(analysisRequests.at(-1)!.searchParams.get('start')).toBe(
     '2027-01-11T00:00:00Z',
   )
-  await expect(timeline).toContainText('관측 높이 6 m')
+  await expect(timeline).toContainText('observer height 6 m')
   expect(searches).toBe(0)
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(timeline.getByRole('img')).toBeVisible()
-  await metrics.getByRole('button', { name: '후보 선택 해제' }).click()
+  await metrics.getByRole('button', { name: 'Deselect candidate' }).click()
   await expect(metrics).toHaveCount(0)
   await expect(rail).toBeVisible()
 })
@@ -114,25 +116,25 @@ test('dashboard has no example fallback for missing or failed saved results', as
     }),
   )
   await page.goto('/explore?site=site-1')
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  const metrics = page.getByRole('complementary', { name: '선택한 지점' })
-  await expect(rail).toContainText('저장된 탐색 결과가 없습니다')
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  const metrics = page.getByRole('complementary', { name: 'Selected site' })
+  await expect(rail).toContainText('No saved search result')
   await expect(rail.locator('ol button')).toHaveCount(0)
   await expect(metrics).toHaveCount(0)
   mode = 'ready'
-  await rail.getByRole('button', { name: '결과 새로고침' }).click()
+  await rail.getByRole('button', { name: 'Refresh results' }).click()
   await expect(rail.locator('ol button')).toHaveCount(5)
-  await rail.getByRole('button', { name: /후보 1/ }).click()
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
   await expect(metrics.getByRole('img')).toBeVisible()
   mode = 'error'
-  await rail.getByRole('button', { name: '결과 새로고침' }).click()
+  await rail.getByRole('button', { name: 'Refresh results' }).click()
   await expect(rail.getByRole('alert')).toContainText('503')
   await expect(rail.locator('ol button')).toHaveCount(0)
   await expect(metrics).toHaveCount(0)
   mode = 'ready'
   runs[0]!.candidates = []
-  await rail.getByRole('button', { name: '결과 새로고침' }).click()
-  await expect(rail).toContainText('이 탐색에서 선정된 후보가 없습니다')
+  await rail.getByRole('button', { name: 'Refresh results' }).click()
+  await expect(rail).toContainText('This search selected no candidates')
   await expect(rail.locator('ol button')).toHaveCount(0)
   await expect(metrics).toHaveCount(0)
 })

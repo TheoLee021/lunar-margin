@@ -9,7 +9,7 @@ test('visitors confirm, view history, and cancel without a token', async ({
   let bookingId: string | null = null
   try {
     await page.goto('/explore')
-    await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
+    await page.getByRole('button', { name: 'Site search', exact: true }).click()
     const table = page.getByRole('table')
     const row = table
       .locator('tbody tr')
@@ -98,7 +98,7 @@ test('availability failures stay visibly unknown and cannot be confirmed', async
     route.fulfill({ status: 503, json: { detail: '예약 저장소 연결 실패' } }),
   )
   await page.goto('/explore')
-  await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
+  await page.getByRole('button', { name: 'Site search', exact: true }).click()
   await expect(
     page.getByText(/예약 확인 불가 · 예약 확정이 차단/),
   ).toBeVisible()

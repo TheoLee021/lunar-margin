@@ -45,7 +45,7 @@ test('mission input submits the requested JSON, shows progress, then opens the p
     })
   })
   await page.goto('/explore')
-  await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
+  await page.getByRole('button', { name: 'Site search', exact: true }).click()
   await expect(
     page.getByText(/250 m 반경의 DEM 경사 P95에 적용합니다/),
   ).toBeVisible()
@@ -86,7 +86,7 @@ test('failed searches expose the error and permit another request', async ({
     }),
   )
   await page.goto('/explore')
-  await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
+  await page.getByRole('button', { name: 'Site search', exact: true }).click()
   await page.getByRole('button', { name: '후보지 탐색 실행' }).click()
   await expect(
     page.getByText('데이터 읽기 실패', { exact: true }),

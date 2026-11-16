@@ -74,7 +74,7 @@ it('rejects mismatched periods or sample times instead of mixing two analyses', 
           return Promise.resolve(Response.json(body))
         },
       }),
-    ).rejects.toThrow('분석 응답')
+    ).rejects.toThrow('analysis response')
   }
 })
 it('propagates one failed request without publishing a partial or example result', async () => {

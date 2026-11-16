@@ -73,7 +73,7 @@ export async function loadMissionAnalysis(
       )
     )
       throw new Error(
-        '분석 응답의 지점·기간·지평선이 요청과 일치하지 않습니다.',
+        'The analysis response does not match the requested site, period or horizon.',
       )
   }
   if (
@@ -83,7 +83,7 @@ export async function loadMissionAnalysis(
         Date.parse(time) !== Date.parse(earth.series.times[index]!),
     )
   )
-    throw new Error('분석 응답의 시간축이 일치하지 않습니다.')
+    throw new Error('The analysis response time axes do not match.')
   const day = (iso: string) => (Date.parse(iso) - start) / DAY
   const periods = (body: Analysis) =>
     [

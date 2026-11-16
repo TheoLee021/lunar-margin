@@ -43,7 +43,7 @@ export function MissionTimeline({
     return { min, max, ticks: niceTicks(min, max, 6) }
   }, [tl])
   if (tl.t.length === 0)
-    return <p className="hint">선택한 기간의 분석 표본이 없습니다.</p>
+    return <p className="hint">No analysis samples in the selected period.</p>
   const selected = Math.min(tl.t.length - 1, Math.max(0, reviewed))
   const width = 580,
     left = 43,
@@ -57,7 +57,7 @@ export function MissionTimeline({
   const series = [
     {
       key: 'sun',
-      title: '태양',
+      title: 'Sun',
       header: 20,
       bar: 245,
       color: 'var(--sun)',
@@ -65,13 +65,13 @@ export function MissionTimeline({
       cutoff: tl.sunHz,
       visible: tl.sunVis,
       segments: tl.sunPeriods,
-      yes: '햇빛 있음',
-      no: '햇빛 없음',
-      barTitle: '햇빛',
+      yes: 'Sunlit',
+      no: 'No sunlight',
+      barTitle: 'Sunlight',
     },
     {
       key: 'earth',
-      title: '지구',
+      title: 'Earth',
       header: 42,
       bar: 292,
       color: 'var(--earth)',
@@ -79,22 +79,22 @@ export function MissionTimeline({
       cutoff: tl.earthHz,
       visible: tl.earthVis,
       segments: tl.earthPeriods,
-      yes: '지구 가시',
-      no: '지구 차폐',
-      barTitle: '지구 가시성',
+      yes: 'Earth visible',
+      no: 'Earth blocked',
+      barTitle: 'Earth visibility',
     },
   ]
   return (
     <>
       <div className="mission-timeline-guide">
-        <span>색 막대 = 가시 구간</span>
-        <span className="timeline-blocked-key">빗금 = 차폐 구간</span>
+        <span>Solid bar = visible</span>
+        <span className="timeline-blocked-key">Hatched = blocked</span>
       </div>
       <svg
         className="unified-timeline"
         viewBox={`0 0 ${width} 345`}
         role="img"
-        aria-label="고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인"
+        aria-label="Timeline of elevation with sunlight and Earth visibility"
         onPointerDown={(event) => {
           const bounds = event.currentTarget.getBoundingClientRect()
           const time = Math.min(
@@ -129,7 +129,7 @@ export function MissionTimeline({
           </pattern>
         </defs>
         <text x="0" y="61" fill="var(--muted)" fontSize="9">
-          고도각 (°)
+          Elevation (°)
         </text>
         {geometry.ticks.map((value) => (
           <g key={value}>
@@ -173,8 +173,8 @@ export function MissionTimeline({
                 textAnchor="end"
               >
                 {s.key === 'sun'
-                  ? '실선: 태양 / 점선: 지형 지평선'
-                  : '실선: 지구 / 점선: 지형 지평선'}
+                  ? 'Solid: Sun / dashed: terrain horizon'
+                  : 'Solid: Earth / dashed: terrain horizon'}
               </text>
               <polyline
                 points={tl.t
@@ -266,7 +266,7 @@ export function MissionTimeline({
         ))}
       </svg>
       <div className="timeline-inspection">
-        <label htmlFor="timeline-inspection">검토 시점</label>
+        <label htmlFor="timeline-inspection">Review time</label>
         <output htmlFor="timeline-inspection">
           {timeLabel(tl.t[selected])} ·{' '}
           {new Date(Date.parse(tl.start) + tl.t[selected] * 86_400_000)
@@ -282,17 +282,17 @@ export function MissionTimeline({
           max={tl.t.length - 1}
           step={1}
           value={selected}
-          aria-label="타임라인 검토 시점"
+          aria-label="Timeline review time"
           onChange={(event) => onReview(Number(event.target.value))}
         />
         {children}
       </div>
       <p className="hint">
-        {tl.start.slice(0, 10)} → {tl.end.slice(0, 10)} UTC · {tl.stepMinutes}분
-        간격 · 관측 높이 {observerHeightM} m. 실선은 천체 중심 고도, 점선은 그
-        방위각의 지형 지평선입니다. 색 막대는 서버의 가시 구간입니다. 그래프나
-        슬라이더로 실제 표본 시각을 확인하세요. 지구 가시성은 통신 품질을 뜻하지
-        않습니다.
+        {tl.start.slice(0, 10)} → {tl.end.slice(0, 10)} UTC · {tl.stepMinutes}{' '}
+        min step · observer height {observerHeightM} m. Solid lines are the body
+        centre’s elevation, dashed lines the terrain horizon at that azimuth.
+        Bars are the server’s visible periods. Use the chart or the slider to
+        check actual sample times. Earth visibility does not mean link quality.
       </p>
     </>
   )

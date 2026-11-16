@@ -20,25 +20,30 @@ test('playing the review time moves the sunlight and asks for precise shadows on
     'ready',
     { timeout: 30_000 },
   )
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  await rail.getByRole('button', { name: /후보 2/ }).click()
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
   const timeline = page
-    .getByRole('complementary', { name: '선택한 지점' })
-    .getByRole('region', { name: '미션 기간 타임라인' })
+    .getByRole('complementary', { name: 'Selected site' })
+    .getByRole('region', { name: 'Mission timeline' })
   const time = timeline.locator('output')
   await expect(time).toHaveText('D+0 00:00 · 2027-01-10 00:00 UTC')
   // The Moon is lit by the Sun at landing, with its sunlight maps, before the time moves.
-  await expect(
-    page.getByRole('button', { name: '사진으로 보기' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show photo' })).toBeVisible()
   await expect.poll(() => sunlightMaps.length).toBeGreaterThan(0)
 
-  const play = timeline.getByRole('button', { name: '햇빛 재생', exact: true })
+  const play = timeline.getByRole('button', {
+    name: 'Play sunlight',
+    exact: true,
+  })
   await expect(play).toBeEnabled()
   const before = sunlightMaps.length
-  await timeline.getByLabel('햇빛 재생 속도').selectOption({ label: '3일/초' })
+  await timeline
+    .getByLabel('Sunlight playback speed')
+    .selectOption({ label: '3 days/s' })
   await play.click()
-  const pause = timeline.getByRole('button', { name: '햇빛 재생 일시정지' })
+  const pause = timeline.getByRole('button', {
+    name: 'Pause sunlight playback',
+  })
   await expect(pause).toBeVisible()
   await expect(time).toContainText(/^D\+[1-9]/)
   // No sunlight map is asked for while the Sun moves: the backend takes seconds for each.
@@ -52,11 +57,11 @@ test('playing the review time moves the sunlight and asks for precise shadows on
   await expect.poll(() => sunlightMaps.length).toBeGreaterThan(before)
   await expect(time).toHaveText(rested)
   await expect(
-    timeline.getByRole('slider', { name: '타임라인 검토 시점' }),
+    timeline.getByRole('slider', { name: 'Timeline review time' }),
   ).not.toHaveValue('0')
 
   // Deselecting the candidate takes the timeline away, and the review time with it.
-  await page.getByRole('button', { name: '후보 선택 해제' }).click()
-  await rail.getByRole('button', { name: /후보 2/ }).click()
+  await page.getByRole('button', { name: 'Deselect candidate' }).click()
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
   await expect(time).toHaveText('D+0 00:00 · 2027-01-10 00:00 UTC')
 })

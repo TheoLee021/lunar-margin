@@ -140,7 +140,7 @@ export function ReviewTimeline({
           type="button"
           className="hud-button"
           disabled={!path}
-          aria-label={running ? '햇빛 재생 일시정지' : '햇빛 재생'}
+          aria-label={running ? 'Pause sunlight playback' : 'Play sunlight'}
           onClick={() => {
             if (running) {
               setPlaying(false)
@@ -159,12 +159,12 @@ export function ReviewTimeline({
             setPlaying(true)
           }}
         >
-          {running ? 'Ⅱ 일시정지' : '▶ 재생'}
+          {running ? 'Ⅱ Pause' : '▶ Play'}
         </button>
         <label>
-          속도{' '}
+          Speed{' '}
           <select
-            aria-label="햇빛 재생 속도"
+            aria-label="Sunlight playback speed"
             className="bg-neutral-800"
             value={speed}
             onChange={(event) => {
@@ -181,20 +181,21 @@ export function ReviewTimeline({
           </select>
         </label>
         {sun.kind === 'loading' ? (
-          <span role="status">태양 위치 불러오는 중…</span>
+          <span role="status">Loading Sun positions…</span>
         ) : null}
         {sun.kind === 'error' ? (
           <span role="alert">
-            태양 위치를 불러오지 못했습니다.{' '}
+            Could not load Sun positions.{' '}
             <button type="button" className="underline" onClick={sun.retry}>
-              다시 시도
+              Retry
             </button>
           </span>
         ) : null}
       </div>
       <p className="hint timeline-playback-hint">
-        3D 달의 햇빛이 검토 시점을 따라 움직입니다. 움직이는 동안은 거친
-        그림자로 그리고, 멈추면 그 시각의 정밀 그림자를 받아옵니다.
+        The sunlight on the 3D Moon follows the review time. While it moves the
+        shadows are coarse; once it rests, precise shadows for that time are
+        fetched.
       </p>
     </MissionTimeline>
   )

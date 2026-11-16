@@ -38,8 +38,8 @@ test('a high lunar ridge keeps its 500m footprint visible after zooming', async 
     },
   )
   await page
-    .getByRole('complementary', { name: '미션 조건' })
-    .getByRole('button', { name: /후보 1/ })
+    .getByRole('complementary', { name: 'Mission conditions' })
+    .getByRole('button', { name: /Candidate 1/ })
     .click()
   // Check the actual rendered fill below the number, excluding its blue label.
   await expect(async () => {
@@ -74,9 +74,9 @@ test('a high lunar ridge keeps its 500m footprint visible after zooming', async 
     }, png.toString('base64'))
     expect(bluePixels).toBeGreaterThan(300)
   }).toPass({ timeout: 20_000 })
-  await page.getByRole('button', { name: '후보 선택 해제' }).click()
+  await page.getByRole('button', { name: 'Deselect candidate' }).click()
   await page.mouse.click(720, 505)
   await expect(
-    page.getByRole('complementary', { name: '선택한 지점' }),
+    page.getByRole('complementary', { name: 'Selected site' }),
   ).toBeVisible()
 })

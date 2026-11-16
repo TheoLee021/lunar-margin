@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bestValues,
   comparisonAxes,
   comparisonValues,
   toggleComparison,
@@ -76,7 +77,7 @@ describe('saved candidate comparison', () => {
     )
     expect(values[1]).toEqual({ value: 400, radius: 0 })
     expect(values[4]).toEqual({ value: 30, radius: 0 })
-    expect(axes[4]?.referenceLabel).toContain('안전 한도 아님')
+    expect(axes[4]?.referenceLabel).toContain('not a safety limit')
   })
 
   it('checks at most the top five without replacing another candidate or adding the map selection', () => {
@@ -101,5 +102,22 @@ describe('saved candidate comparison', () => {
     expect(() =>
       comparisonAxes({ ...config, window: { start: 'bad', end: 'bad' } }),
     ).toThrow()
+  })
+})
+
+describe('best value in a compared row', () => {
+  it('marks the highest value when higher is better and the lowest when lower is', () => {
+    expect(bestValues([80, 78, 76], true)).toEqual([true, false, false])
+    expect(bestValues([12, 13, 9], false)).toEqual([false, false, true])
+  })
+
+  it('marks every candidate that ties for the best', () => {
+    expect(bestValues([4, 2, 2], false)).toEqual([false, true, true])
+  })
+
+  it('never marks a missing value, and marks nothing without two values to compare', () => {
+    expect(bestValues([null, 3, 5], true)).toEqual([false, false, true])
+    expect(bestValues([null, 3], true)).toEqual([false, false])
+    expect(bestValues([7], true)).toEqual([false])
   })
 })

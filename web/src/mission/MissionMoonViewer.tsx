@@ -2,7 +2,6 @@ import {
   fetchViewshed,
   GRID_TARGET_COUNT,
   visibleGridCount,
-  type Viewshed,
 } from '../api/viewshed'
 import {
   useCallback,
@@ -31,6 +30,8 @@ import {
 import type { Vector3 } from '../moon/sun'
 import type { CandidateSite, MissionSelection } from './types'
 import type { SunPathResult } from './useSunPath'
+import type { VisibleCount } from './useVisibleCounts'
+import { ViewshedPanel, type ViewshedResult } from './ViewshedPanel'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
 
 // A side view leaves enough space to see the unit cross the terrain.
@@ -56,7 +57,7 @@ function operatorParam(): string | null {
   return new URLSearchParams(window.location.search).get('operator')
 }
 
-/** Adapts the shared Moon scene to the mission HUD's selection and camera buttons. */
+/** Adapts the shared Moon scene to the mission HUD's selection and its toolbar of 3D controls. */
 export function MissionMoonViewer({
   ref,
   selection,
@@ -66,6 +67,7 @@ export function MissionMoonViewer({
   heights,
   height,
   setHeight,
+  visibleCounts,
   sun,
   operatorId: givenOperatorId,
   sunDirection,
@@ -79,6 +81,8 @@ export function MissionMoonViewer({
   heights: readonly number[]
   height: number
   setHeight: (height: number) => void
+  /** The grid targets each of `sites` sees from `height`, in the same order. */
+  visibleCounts: readonly VisibleCount[]
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
@@ -126,11 +130,9 @@ export function MissionMoonViewer({
   const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
   const center = selected?.grid
   const key = JSON.stringify([lat, lon, height, center, attempt, demName])
-  const [result, setResult] = useState<{
-    key: string
-    distanceKm?: number
-    map: Viewshed | null
-  } | null>(null)
+  const [result, setResult] = useState<
+    ({ key: string } & ViewshedResult) | null
+  >(null)
   useEffect(() => {
     if (lat === undefined || lon === undefined) return
     const controller = new AbortController()
@@ -152,6 +154,8 @@ export function MissionMoonViewer({
     return () => controller.abort()
   }, [key, lat, lon, height, center, demName])
   const current = result?.key === key ? result : null
+  // The viewshed panel is opened from the toolbar and stays open while the Moon is used.
+  const [viewshedOpen, setViewshedOpen] = useState(false)
   const [equipmentView, setEquipmentView] = useState(false)
   const [travelM, setTravelM] = useState<number | null>(null)
   const [waypoint, setWaypoint] = useState(0)
@@ -312,40 +316,62 @@ export function MissionMoonViewer({
   const status =
     sky.kind === 'loading' ? (
       <span role="status">
-        {operator.name} 장비 {unitCount}대 · 지점별 지구·태양 가시성 계산 중…
+        {operator.name} · {unitCount} units · computing Earth and Sun visibility
+        per position…
       </span>
     ) : sky.kind === 'error' ? (
       <span role="alert" className="text-red-300">
-        장비 지점 가시성을 불러오지 못했습니다.
+        Could not load equipment visibility.
       </span>
     ) : sunMoving && selected ? (
-      '재생 중 · 정지하면 장비 가시성을 계산합니다.'
+      'Playing · equipment visibility is computed once it stops.'
     ) : sky.kind === 'idle' ? (
       selected ? (
-        '후보 분석 후 장비 가시성을 계산합니다.'
+        'Equipment visibility is computed after the candidate analysis.'
       ) : (
-        '후보를 선택하면 장비를 배치합니다.'
+        'Select a candidate to place equipment.'
       )
     ) : showControls ? (
       <>
         {sky.missing > 0 ? (
           <span role="alert" className="text-red-300">
-            {sky.missing}개 지점 계산 실패 ·{' '}
+            {sky.missing} positions failed ·{' '}
           </span>
         ) : null}
-        {operator.tagline} · 장비 {unitCount}대
+        {operator.tagline} · {unitCount} units
         {mobile
-          ? ` · 주행 ${Math.round(pathLength(mobile.path))} m, 실제 ${mobile.speedMS} m/s를 ${DEMO_SPEED_SCALE}배속으로 재생`
+          ? ` · drive ${Math.round(pathLength(mobile.path))} m, real ${mobile.speedMS} m/s played at ${DEMO_SPEED_SCALE}×`
           : ''}
       </>
     ) : sky.missing > 0 ? (
       <span role="alert" className="text-red-300">
-        {sky.missing}개 지점의 지구·태양 가시성을 계산하지 못했습니다.
+        Earth and Sun visibility could not be computed for {sky.missing}{' '}
+        positions.
       </span>
     ) : null
+  // The point whose viewshed the Moon shows: only while it is looked at in 3D.
+  const viewshedPoint =
+    !equipmentView && detail && lat !== undefined && lon !== undefined
+      ? {
+          name: observer ? 'Map point' : (selected?.name ?? 'Selected point'),
+          lat,
+          lon,
+        }
+      : null
+  const viewshedCount = current?.map ? visibleGridCount(current.map) : null
+  const viewshedSummary = !viewshedPoint
+    ? 'Viewshed'
+    : !current
+      ? 'Viewshed computing…'
+      : viewshedCount === null
+        ? 'Viewshed'
+        : `Viewshed ${viewshedCount}/${GRID_TARGET_COUNT} · ${height} m`
   return (
     <>
-      <div className="absolute inset-0" aria-label="달 남극 3D 지도">
+      <div
+        className="absolute inset-0"
+        aria-label="3D map of the lunar south pole"
+      >
         <MoonViewer
           ref={viewer}
           viewshed={
@@ -368,13 +394,87 @@ export function MissionMoonViewer({
           }}
         />
       </div>
-      <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
-        <div className="flex flex-wrap justify-end gap-2">
+      <div className="pointer-events-none absolute bottom-10 left-1/2 z-10 flex w-max max-w-[calc(100vw-624px)] -translate-x-1/2 flex-col items-center gap-2 max-xl:bottom-20 max-xl:max-w-[calc(100vw-32px)]">
+        {viewshedOpen ? (
+          <ViewshedPanel
+            id="viewshedPanel"
+            point={viewshedPoint}
+            heights={heights}
+            height={height}
+            onHeightChange={setHeight}
+            showViewshed={showViewshed}
+            onShowViewshedChange={setShowViewshed}
+            result={current}
+            onRetry={() => retry((n) => n + 1)}
+            sites={sites}
+            counts={visibleCounts}
+            selectedSiteId={selection.siteId}
+            onSelectSite={(siteId) => {
+              const site = sites.find((candidate) => candidate.id === siteId)
+              if (!site) return
+              onSelect(siteId)
+              focusSite(site)
+            }}
+          />
+        ) : null}
+        {status ? (
+          <p className="hud-panel pointer-events-auto max-w-72 px-2 py-1 text-center text-[10px] leading-snug text-neutral-400">
+            {status}
+            {(sky.kind === 'error' ||
+              (sky.kind === 'ready' && sky.missing > 0)) && (
+              <button
+                className="hud-button"
+                onClick={() => retrySky((n) => n + 1)}
+              >
+                Retry equipment analysis
+              </button>
+            )}
+          </p>
+        ) : null}
+        {selected && mobile && travelM !== null && (
+          <span className="hud-panel px-2 text-xs">
+            Distance {Math.round(travelM)} m / {Math.round(totalM)} m
+            {travelM === totalM && ' · arrived'}
+          </span>
+        )}
+        {sights && selected && shownUnit && (
+          <div
+            className="hud-panel w-max max-w-full px-3 py-2 text-xs"
+            aria-label="Equipment Earth direction"
+          >
+            {shownUnit.label} · Earth direction{' '}
+            {earth ? (
+              <span
+                className={earth.visible ? 'text-green-300' : 'text-red-300'}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block"
+                  style={{ transform: `rotate(${earth.azimuthDeg}deg)` }}
+                >
+                  ↑
+                </span>{' '}
+                {earth.azimuthDeg.toFixed(1)}° from north · elevation{' '}
+                {earth.elevationDeg.toFixed(1)}° ·{' '}
+                {earth.visible ? 'Earth visible' : 'hidden by terrain'}
+              </span>
+            ) : sky.kind === 'loading' ? (
+              'computing'
+            ) : (
+              'no measurement'
+            )}
+          </div>
+        )}
+        <div
+          role="toolbar"
+          aria-label="3D view"
+          className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto whitespace-nowrap *:shrink-0"
+        >
           {showControls ? (
             <label className="hud-button flex items-center gap-2">
-              <span className="text-neutral-400">운영사</span>
+              <span className="text-neutral-400">Operator</span>
               <select
-                aria-label="장비를 배치할 운영사"
+                aria-label="Operator whose equipment is placed"
                 className="bg-transparent outline-none"
                 value={operatorId}
                 onChange={(event) => {
@@ -401,10 +501,10 @@ export function MissionMoonViewer({
             aria-pressed={lit}
             title={
               sun.kind === 'loading'
-                ? '미션 기간의 태양 방향을 불러오는 중입니다'
+                ? 'Loading the Sun direction over the mission'
                 : sun.kind === 'error'
-                  ? '미션 기간의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
-                  : '검토 시점(선택 전에는 착륙 시각)의 태양으로 조명과 지형 그림자를 그립니다'
+                  ? 'Could not load the Sun direction over the mission. Click to retry'
+                  : 'Lights the Moon and casts terrain shadows from the Sun at the review time (the landing time until one is chosen)'
             }
             onClick={() => {
               if (sun.kind === 'error') sun.retry()
@@ -412,10 +512,10 @@ export function MissionMoonViewer({
             }}
           >
             {sun.kind === 'error'
-              ? '햇빛 다시 시도'
+              ? 'Retry sunlight'
               : lit
-                ? '사진으로 보기'
-                : '햇빛 보기'}
+                ? 'Show photo'
+                : 'Show sunlight'}
           </button>
           <button
             type="button"
@@ -427,7 +527,7 @@ export function MissionMoonViewer({
               viewer.current?.flyToOverview()
             }}
           >
-            위에서 보기
+            Top view
           </button>
           <button
             type="button"
@@ -445,16 +545,16 @@ export function MissionMoonViewer({
               if (location) viewer.current?.flyTo(location, 18000)
             }}
           >
-            선택 지점 3D로 보기
+            View selected point in 3D
           </button>
           <button
             type="button"
             className="hud-button"
             aria-pressed={sights}
-            title="지구 방향과 현재 표시된 지형과의 교차를 표시합니다. 색상은 분석 지평선 기준입니다."
+            title="Shows the direction to Earth and where it meets the displayed terrain. Colours follow the analysis horizon."
             onClick={() => setSights((shown) => !shown)}
           >
-            {sights ? '지구 방향 끄기' : '지구 방향 켜기'}
+            {sights ? 'Hide Earth direction' : 'Show Earth direction'}
           </button>
           {showControls || (selected && mobile) ? (
             <button
@@ -462,128 +562,26 @@ export function MissionMoonViewer({
               className="hud-button"
               disabled={!selected || !mobile}
               title={
-                mobile
-                  ? undefined
-                  : `${operator.name}에는 움직이는 장비가 없습니다`
+                mobile ? undefined : `${operator.name} has no mobile equipment`
               }
               onClick={runDrive}
             >
-              {mobile ? `${mobile.spec.label} 주행` : '주행 장비 없음'}
+              {mobile ? `Drive ${mobile.spec.label}` : 'No mobile equipment'}
             </button>
           ) : null}
-        </div>
-        {selected && mobile && travelM !== null && (
-          <span className="hud-panel px-2 text-xs">
-            이동 거리 {Math.round(travelM)} m / {Math.round(totalM)} m
-            {travelM === totalM && ' · 도착'}
-          </span>
-        )}
-        {sights && selected && shownUnit && (
-          <div
-            className="hud-panel pointer-events-none fixed bottom-14 left-1/2 z-10 w-max max-w-[94vw] -translate-x-1/2 px-3 py-2 text-xs"
-            aria-label="장비 지구 방향"
+          <button
+            type="button"
+            className="hud-button"
+            aria-expanded={viewshedOpen}
+            aria-controls="viewshedPanel"
+            title="Observer height, sightlines and viewshed comparison across candidates"
+            onClick={() => setViewshedOpen((open) => !open)}
           >
-            {shownUnit.label} · 지구 방향{' '}
-            {earth ? (
-              <span
-                className={earth.visible ? 'text-green-300' : 'text-red-300'}
-              >
-                <span
-                  aria-hidden="true"
-                  className="inline-block"
-                  style={{ transform: `rotate(${earth.azimuthDeg}deg)` }}
-                >
-                  ↑
-                </span>{' '}
-                북 기준 {earth.azimuthDeg.toFixed(1)}° · 고도{' '}
-                {earth.elevationDeg.toFixed(1)}° ·{' '}
-                {earth.visible ? '지구 보임' : '지형에 가림'}
-              </span>
-            ) : sky.kind === 'loading' ? (
-              '계산 중'
-            ) : (
-              '관측값 없음'
-            )}
-          </div>
-        )}
-        {status ? (
-          <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
-            {status}
-            {(sky.kind === 'error' ||
-              (sky.kind === 'ready' && sky.missing > 0)) && (
-              <button
-                className="hud-button"
-                onClick={() => retrySky((n) => n + 1)}
-              >
-                장비 분석 다시 시도
-              </button>
-            )}
-          </p>
-        ) : null}
-      </div>
-      {!equipmentView && detail && lat !== undefined && lon !== undefined && (
-        <div
-          role="status"
-          className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"
-        >
-          {observer ? '지도 관측점' : selected?.name} · 주변 가시권 · 5 km ·
-          <label>
-            관측 높이{' '}
-            <select
-              aria-label="관측 높이"
-              className="rounded bg-neutral-800 px-1"
-              value={height}
-              onChange={(event) => setHeight(Number(event.target.value))}
-            >
-              {heights.map((h) => (
-                <option key={h} value={h}>
-                  {h} m
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="ml-3 inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={showViewshed}
-              onChange={(event) => setShowViewshed(event.target.checked)}
-            />
-            가시선 표시
-          </label>
-          <div>
-            {!current ? (
-              '지형 가시권 계산 중…'
-            ) : current.map ? (
-              <>
-                <div>
-                  {lat.toFixed(4)}°, {lon.toFixed(4)}°
-                </div>
-                <strong>
-                  반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
-                </strong>
-                <div>
-                  {current.map.targets.length === GRID_TARGET_COUNT
-                    ? `보이는 격자점 ${visibleGridCount(current.map)} / ${GRID_TARGET_COUNT}`
-                    : `지형 자료 부족 · ${GRID_TARGET_COUNT}개 중 ${current.map.targets.length}개 경로 확인`}
-                </div>
-                <span className="text-amber-400">⊙ 관측점</span>　
-                <span className="text-green-400">● 보임</span>　
-                <span className="text-red-400">● 가려짐</span>
-                <div>
-                  격자점 800 m 간격 · 주황점은 첫 차폐 지점 · 빨간 선은 차폐
-                  구간
-                </div>
-              </>
-            ) : (
-              <button type="button" onClick={() => retry((n) => n + 1)}>
-                {lat > -80
-                  ? '남위 80° 이남의 지점을 선택하세요'
-                  : '계산 실패 · 다시 시도'}
-              </button>
-            )}
-          </div>
+            {viewshedSummary}{' '}
+            <span aria-hidden="true">{viewshedOpen ? '▾' : '▴'}</span>
+          </button>
         </div>
-      )}
+      </div>
     </>
   )
 }

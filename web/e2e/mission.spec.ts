@@ -1,10 +1,19 @@
 import { expect, test } from '@playwright/test'
+import { z } from 'zod'
 import { providerCalendarFixture } from './provider-pricing-fixture.js'
 import { mockScheduledDepartures } from './launch-fixture.js'
 import { mockDashboardRuns } from './dashboard-fixture.js'
 
+// The saved metrics the selected candidate's cards show.
+const SavedMetricsSchema = z.object({
+  sun: z.object({ fraction: z.number(), longest_dark_hours: z.number() }),
+  earth: z.object({
+    fraction: z.number(),
+    longest_blackout_hours: z.number(),
+  }),
+})
+
 type Analysis = {
-  metrics: { visible_fraction: number; longest_dark_hours: number }
   series: { body_elevation_deg: number[]; visible: boolean[] }
 }
 
@@ -14,7 +23,8 @@ test('mission planner previews dates, discards drafts and applies the selection'
 }) => {
   test.setTimeout(60_000)
   await mockScheduledDepartures(page)
-  await mockDashboardRuns(page, request)
+  const runs = await mockDashboardRuns(page, request)
+  const saved = SavedMetricsSchema.parse(runs[0]!.candidates[1])
   const trajectoryRequests: string[] = []
   page.on('request', (request) => {
     if (request.url().includes('/trajectory/transfer?'))
@@ -52,55 +62,60 @@ test('mission planner previews dates, discards drafts and applies the selection'
   )
   await expect(page.locator('.cesium-widget canvas')).toHaveCount(1)
   await page.getByRole('button', { name: 'Reset view to north up' }).click()
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  await rail.getByRole('button', { name: /후보 2/ }).click()
-  await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(
-    'aria-current',
-    'true',
-  )
-  const metrics = page.getByRole('complementary', { name: '선택한 지점' })
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
+  await expect(
+    rail.getByRole('button', { name: /Candidate 2/ }),
+  ).toHaveAttribute('aria-current', 'true')
+  const metrics = page.getByRole('complementary', { name: 'Selected site' })
   const metric = (label: string) =>
     metrics
       .locator('dl > div')
       .filter({ has: page.getByText(label, { exact: true }) })
       .locator('dd')
-  await expect(metric('일조율')).toHaveText(
-    `${(sun.metrics.visible_fraction * 100).toFixed(1)}%`,
+  // The cards show the saved search result; the live analysis only feeds the timeline.
+  await expect(metric('Sunlight')).toHaveText(
+    `${(saved.sun.fraction * 100).toFixed(1)}%`,
   )
-  await expect(metric('지구 가시율')).toHaveText(
-    `${(earth.metrics.visible_fraction * 100).toFixed(1)}%`,
+  await expect(metric('Communication')).toHaveText(
+    `${(saved.earth.fraction * 100).toFixed(1)}%`,
   )
-  await expect(metric('최장 연속 어둠')).toHaveText(
-    `${sun.metrics.longest_dark_hours.toFixed(1)} 시간`,
+  await expect(metric('Longest darkness')).toHaveText(
+    `${saved.sun.longest_dark_hours.toFixed(1)} h`,
   )
-  await expect(metric('최장 지구 차폐')).toHaveText(
-    `${earth.metrics.longest_dark_hours.toFixed(1)} 시간`,
+  await expect(metric('Longest comm outage')).toHaveText(
+    `${saved.earth.longest_blackout_hours.toFixed(1)} h`,
   )
-  const timeline = metrics.getByRole('region', { name: '미션 기간 타임라인' })
+  // This saved result predates terrain metrics: unknown, never an ideal zero.
+  await expect(metric('Local slope')).toHaveText('—')
+  await expect(metric('Local roughness')).toHaveText('—')
+  const timeline = metrics.getByRole('region', { name: 'Mission timeline' })
   await expect(
     timeline.getByRole('img', {
-      name: '고도각과 햇빛·지구 가시성을 함께 표시하는 타임라인',
+      name: 'Timeline of elevation with sunlight and Earth visibility',
     }),
   ).toBeVisible()
-  await timeline.getByRole('slider', { name: '타임라인 검토 시점' }).fill('1')
+  await timeline.getByRole('slider', { name: 'Timeline review time' }).fill('1')
   await expect(timeline.locator('output')).toHaveText(
     'D+0 00:30 · 2027-01-10 00:30 UTC',
   )
   await expect(
     timeline.getByText(
-      `태양 ${degree(sun.series.body_elevation_deg[1]!)} · ${sun.series.visible[1] ? '햇빛 있음' : '햇빛 없음'}`,
+      `Sun ${degree(sun.series.body_elevation_deg[1]!)} · ${sun.series.visible[1] ? 'Sunlit' : 'No sunlight'}`,
       { exact: true },
     ),
   ).toBeVisible()
   await expect(
     timeline.getByText(
-      `지구 ${degree(earth.series.body_elevation_deg[1]!)} · ${earth.series.visible[1] ? '지구 가시' : '지구 차폐'}`,
+      `Earth ${degree(earth.series.body_elevation_deg[1]!)} · ${earth.series.visible[1] ? 'Earth visible' : 'Earth blocked'}`,
       { exact: true },
     ),
   ).toBeVisible()
-  await page.getByRole('button', { name: '선택 지점 3D로 보기' }).click()
-  await page.getByRole('button', { name: '위에서 보기' }).click()
-  const opener = page.getByRole('button', { name: '미션 날짜 비교 열기' })
+  await page.getByRole('button', { name: 'View selected point in 3D' }).click()
+  await page.getByRole('button', { name: 'Top view' }).click()
+  const opener = page.getByRole('button', {
+    name: 'Compare dates and trajectory',
+  })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: '미션 날짜 UTC' })
   await expect(dialog).toBeVisible()
@@ -155,7 +170,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   await expect(opener).toContainText('2027.01.06')
-  await expect(opener).toContainText('14일')
+  await expect(opener).toContainText('14 days')
   await expect(opener).toBeFocused()
   await expect(timeline).toContainText('2027-01-10 → 2027-01-24 UTC')
 
@@ -170,26 +185,27 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(dialog).not.toBeVisible()
   await expect(opener).toContainText('2027.01.07')
   await expect(opener).toContainText('2027.01.11')
-  await expect(opener).toContainText('7일')
+  await expect(opener).toContainText('7 days')
   await expect(metrics).toHaveCount(0)
-  await rail.getByRole('button', { name: /후보 2/ }).click()
-  await expect(rail.getByRole('button', { name: /후보 2/ })).toHaveAttribute(
-    'aria-current',
-    'true',
-  )
+  await rail.getByRole('button', { name: /Candidate 2/ }).click()
+  await expect(
+    rail.getByRole('button', { name: /Candidate 2/ }),
+  ).toHaveAttribute('aria-current', 'true')
 
   await expect(timeline).toContainText('2027-01-11 → 2027-01-18 UTC')
-  // An unavailable body must clear old metrics; retry restores the paired result.
+  // An unavailable body must clear the old timeline while the saved metrics stay; retry
+  // restores the paired result.
   await page.route('**/api/analysis/earth-visibility?**', (route) =>
     route.fulfill({ status: 503, json: { detail: 'NASA data not found' } }),
   )
-  await rail.getByRole('button', { name: /후보 1/ }).click()
+  await rail.getByRole('button', { name: /Candidate 1/ }).click()
   await expect(metrics.getByRole('alert')).toContainText('(503)')
-  await expect(metrics.locator('dd')).toHaveCount(0)
+  await expect(metrics.getByRole('definition')).toHaveCount(6)
   await expect(metrics.locator('.unified-timeline')).toHaveCount(0)
   await page.unroute('**/api/analysis/earth-visibility?**')
-  await metrics.getByRole('button', { name: '분석 다시 시도' }).click()
-  await expect(metrics.getByRole('definition')).toHaveCount(4)
+  await metrics.getByRole('button', { name: 'Retry analysis' }).click()
+  await expect(metrics.locator('.unified-timeline')).toHaveCount(1)
+  await expect(metrics.getByRole('definition')).toHaveCount(6)
 
   await page.setViewportSize({ width: 390, height: 844 })
   await opener.click()
@@ -260,15 +276,17 @@ test('mission planner previews dates, discards drafts and applies the selection'
     dialog.getByRole('combobox', { name: /착륙 후 표면 임무/ }),
   ).toHaveValue('7')
   await expect(metrics).toHaveCount(0)
-  await expect(rail).toContainText('저장된 탐색 결과가 없습니다')
+  await expect(rail).toContainText('No saved search result')
   await dialog.getByRole('button', { name: '날짜 패널 닫기' }).click()
   await expect(opener).toContainText('2027.01.13')
   await expect(opener).toContainText('2027.01.18')
-  await page.getByRole('link', { name: '상세 분석', exact: true }).click()
+  await page
+    .getByRole('link', { name: 'Detailed analysis', exact: true })
+    .click()
   await expect(page).toHaveURL(/view=analysis/)
   await expect(page.getByLabel('위도 (°)')).toBeVisible()
   await page.getByRole('link', { name: '미션 대시보드', exact: true }).click()
   await expect(
-    page.getByRole('complementary', { name: '미션 조건' }),
+    page.getByRole('complementary', { name: 'Mission conditions' }),
   ).toBeVisible()
 })

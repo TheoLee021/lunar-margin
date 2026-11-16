@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Candidate, SearchConfig } from '../api/candidates'
-import { requirementMargins } from './requirementMargins'
+import {
+  formatAmount,
+  limitAlerts,
+  requirementMargins,
+} from './requirementMargins'
 
 type Site = Parameters<typeof requirementMargins>[0]
 type Config = Parameters<typeof requirementMargins>[1]
@@ -88,9 +92,9 @@ describe('requirementMargins', () => {
     expect(rows).toEqual([
       {
         key: 'sun-dark',
-        label: '최장 연속 어둠',
+        label: 'Longest darkness',
         bound: 'max',
-        unit: '시간',
+        unit: 'h',
         value: 20,
         limit: 24,
         margin: 4,
@@ -118,7 +122,7 @@ describe('requirementMargins', () => {
   it('하한 조건은 값에서 한도를 뺀 만큼이 여유고, 비율은 퍼센트로 센다', () => {
     const rows = requirementMargins(site(), config({ min_sun_fraction: 0.5 }))
     const sun = row(rows, 'sun-fraction')
-    expect(sun).toMatchObject({ bound: 'min', unit: '%', label: '일조율' })
+    expect(sun).toMatchObject({ bound: 'min', unit: '%', label: 'Sunlight' })
     expect(sun?.value).toBeCloseTo(60)
     expect(sun?.limit).toBeCloseTo(50)
     expect(sun?.margin).toBeCloseTo(10)
@@ -170,9 +174,9 @@ describe('requirementMargins', () => {
     expect(rows).toEqual([
       {
         key: 'communication-blackout',
-        label: '최장 지구 차폐',
+        label: 'Longest Earth blackout',
         bound: 'max',
-        unit: '시간',
+        unit: 'h',
         value: 4,
         limit: 6,
         margin: 2,
@@ -194,8 +198,8 @@ describe('requirementMargins', () => {
       ),
     )
     expect(rows.map((entry) => entry.label)).toEqual([
-      'RF 통신 가능 비율',
-      'RF 최장 두절',
+      'RF availability',
+      'Longest RF outage',
     ])
     expect(row(rows, 'communication-fraction')?.margin).toBeCloseTo(30)
     expect(row(rows, 'communication-blackout')).toMatchObject({
@@ -212,9 +216,53 @@ describe('requirementMargins', () => {
     )
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      label: 'RF 최장 두절',
+      label: 'Longest RF outage',
       value: null,
       margin: null,
     })
+  })
+})
+
+describe('formatAmount', () => {
+  it('단위마다 정해진 자릿수와 표기로 쓴다', () => {
+    expect(formatAmount(60, '%')).toBe('60.0%')
+    expect(formatAmount(20, 'h')).toBe('20.0 h')
+    expect(formatAmount(8, '°')).toBe('8.0°')
+    expect(formatAmount(1.5, 'm')).toBe('1.50 m')
+  })
+})
+
+describe('limitAlerts', () => {
+  it('한도 안쪽이거나 값이 없는 조건은 알리지 않는다', () => {
+    const rows = requirementMargins(
+      site({ terrain: null }),
+      config({
+        max_sun_dark_hours: 20,
+        min_sun_fraction: 0.5,
+        max_terrain_slope_degrees: 10,
+      }),
+    )
+    expect(limitAlerts(rows)).toEqual([])
+  })
+
+  it('상한을 넘은 조건은 값과 한도, 넘은 양을 말한다', () => {
+    const rows = requirementMargins(
+      site({ sun: { ...site().sun, longest_dark_hours: 30 } }),
+      config({ max_sun_dark_hours: 24 }),
+    )
+    expect(limitAlerts(rows)).toEqual([
+      'Longest darkness 30.0 h · limit ≤ 24.0 h · over by 6.0 h',
+    ])
+  })
+
+  it('하한에 못 미친 비율은 모자란 양을 퍼센트포인트로 말한다', () => {
+    const rows = requirementMargins(
+      site(),
+      config({ min_sun_fraction: 0.7, max_terrain_slope_degrees: 5 }),
+    )
+    expect(limitAlerts(rows)).toEqual([
+      'Sunlight 60.0% · limit ≥ 70.0% · short by 10.0 pp',
+      'Local slope P95 8.0° · limit ≤ 5.0° · over by 3.0°',
+    ])
   })
 })

@@ -57,7 +57,7 @@ function addComparisonMetrics(
   }
 }
 
-test('checked candidates compare saved values without selecting a map site and reset for a new result', async ({
+test('the dialog compares the checked candidates without selecting a map site and starts over for a new result', async ({
   page,
   request,
 }) => {
@@ -70,41 +70,58 @@ test('checked candidates compare saved values without selecting a map site and r
     if (/\/api\/analysis\//.test(sent.url())) analyses++
   })
   await page.goto('/explore')
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  await rail.getByRole('checkbox', { name: '후보 1 비교' }).check()
-  await rail.getByRole('checkbox', { name: '후보 3 비교' }).check()
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  const open = rail.getByRole('button', { name: 'Compare candidates' })
+  const dialog = page.getByRole('dialog', {
+    name: 'TOP 5 candidate comparison',
+  })
+  const checked = dialog.getByRole('checkbox', { checked: true })
+  // The candidates to compare are chosen in the dialog: all five until it is narrowed down.
+  await expect(rail.getByRole('checkbox')).toHaveCount(0)
+  await open.click()
+  await expect(checked).toHaveCount(5)
+  for (const rank of [2, 4, 5])
+    await dialog
+      .getByRole('checkbox', { name: `Compare candidate ${rank}` })
+      .uncheck()
   expect(analyses).toBe(0)
   await expect(page).not.toHaveURL(/site=/)
-  await rail.getByRole('button', { name: '선택 후보 비교 (2/5)' }).click()
-  const dialog = page.getByRole('dialog', { name: 'TOP 5 후보 비교' })
   await expect(
-    dialog.getByRole('img', { name: '후보별 여섯 지표 레이더' }),
+    dialog.getByRole('img', { name: 'Radar of six metrics per candidate' }),
   ).toBeVisible()
   await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(2)
   await expect(
-    dialog.getByRole('columnheader', { name: '후보 1', exact: true }),
+    dialog.getByRole('columnheader', { name: 'Candidate 1', exact: true }),
   ).toBeVisible()
   await expect(
-    dialog.getByRole('columnheader', { name: '후보 3', exact: true }),
+    dialog.getByRole('columnheader', { name: 'Candidate 3', exact: true }),
   ).toBeVisible()
   await expect(
-    dialog.getByRole('columnheader', { name: '후보 2', exact: true }),
+    dialog.getByRole('columnheader', { name: 'Candidate 2', exact: true }),
   ).toHaveCount(0)
   await expect(
     dialog
-      .getByRole('table', { name: '후보 실제 지표' })
+      .getByRole('table', { name: 'Candidate actual metrics' })
       .getByRole('row')
-      .filter({ hasText: '일조율' }),
+      .filter({ hasText: 'Sunlight' }),
   ).toContainText('80.0%')
+  // The most favourable value of each row is marked among the compared candidates.
   await expect(
-    dialog.getByRole('row').filter({ hasText: 'RF 링크 마진' }),
+    dialog
+      .getByRole('table', { name: 'Candidate actual metrics' })
+      .getByRole('row')
+      .filter({ hasText: 'Sunlight' })
+      .locator('td[data-best]'),
+  ).toHaveText('80.0%')
+  await expect(
+    dialog.getByRole('row').filter({ hasText: 'RF link margin' }),
   ).toContainText('15.0 dB')
   await expect(
     dialog
-      .getByRole('table', { name: '후보 조건별 여유' })
+      .getByRole('table', { name: 'Candidate margins per condition' })
       .getByRole('row')
-      .filter({ hasText: '최장 연속 어둠' }),
-  ).toContainText('+12.0 시간')
+      .filter({ hasText: 'Longest darkness' }),
+  ).toContainText('+12.0 h')
   await dialog.screenshot({
     path: 'test-results/site-comparison-desktop.png',
   })
@@ -113,37 +130,46 @@ test('checked candidates compare saved values without selecting a map site and r
     .first()
     .getAttribute('points')
   await page.keyboard.press('Escape')
-  await rail.getByRole('checkbox', { name: '후보 2 비교' }).check()
-  await rail.getByRole('button', { name: '선택 후보 비교 (3/5)' }).click()
+  await expect(dialog).toBeHidden()
+  await open.click()
+  await dialog.getByRole('checkbox', { name: 'Compare candidate 2' }).check()
+  await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(3)
   await expect(
     dialog.locator('svg polygon[data-candidate]').first(),
   ).toHaveAttribute('points', before!)
-  await dialog.getByRole('button', { name: '비교 닫기' }).click()
+  await dialog.getByRole('button', { name: 'Close comparison' }).click()
   await Promise.all([
     page.waitForResponse((response) =>
       response.url().endsWith('/candidates/runs/' + first.id),
     ),
-    rail.getByRole('button', { name: '결과 새로고침' }).click(),
+    rail.getByRole('button', { name: 'Refresh results' }).click(),
   ])
-  await expect(rail.getByRole('checkbox', { checked: true })).toHaveCount(3)
+  await open.click()
+  await expect(checked).toHaveCount(3)
   await expect(
-    rail.getByRole('checkbox', { name: '후보 3 비교' }),
+    dialog.getByRole('checkbox', { name: 'Compare candidate 3' }),
   ).toBeChecked()
+  await dialog.getByRole('button', { name: 'Close comparison' }).click()
   first.id = 'saved-dashboard-replacement'
   await page.route(
     '**/api/candidates/runs/saved-dashboard-replacement',
     (route) => route.fulfill({ json: first }),
   )
-  await rail.getByRole('button', { name: '결과 새로고침' }).click()
-  await expect(
-    rail.getByRole('checkbox').filter({ has: page.locator(':checked') }),
-  ).toHaveCount(0)
-  await expect(rail.getByRole('checkbox', { checked: true })).toHaveCount(0)
-  await expect(
-    rail.getByRole('button', { name: '선택 후보 비교 (0/5)' }),
-  ).toBeDisabled()
-  await rail.getByRole('checkbox', { name: '후보 1 비교' }).check()
-  await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().endsWith('/candidates/runs/saved-dashboard-replacement'),
+    ),
+    rail.getByRole('button', { name: 'Refresh results' }).click(),
+  ])
+  // A new saved result starts over with all five.
+  await open.click()
+  await expect(checked).toHaveCount(5)
+  await dialog.getByRole('checkbox', { name: 'Compare candidate 1' }).uncheck()
+  await expect(checked).toHaveCount(4)
+  await dialog.getByRole('button', { name: 'Close comparison' }).click()
+  await page
+    .getByRole('button', { name: 'Compare dates and trajectory' })
+    .click()
   const planner = page.getByRole('dialog')
   await planner
     .getByLabel('기준 착륙일 · UTC', { exact: true })
@@ -152,11 +178,17 @@ test('checked candidates compare saved values without selecting a map site and r
     .getByRole('combobox', { name: /착륙 후 표면 임무/ })
     .selectOption('7')
   await planner.getByRole('button', { name: '일정 적용 ↗' }).click()
-  await expect(rail).toContainText('2027-01-11 · 7일')
-  await expect(rail.getByRole('checkbox', { checked: true })).toHaveCount(0)
+  await expect(rail).toContainText('2027.01.11')
+  await expect(rail.locator('ol button')).toHaveCount(5)
+  await open.click()
+  await expect(checked).toHaveCount(5)
+  // Selecting from the comparison is explicit: it picks the map site and leaves the dialog.
+  await dialog.getByRole('button', { name: 'Select candidate 3' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/site=saved-1-3/)
   await expect(
-    rail.getByRole('button', { name: '선택 후보 비교 (0/5)' }),
-  ).toBeDisabled()
+    rail.getByRole('button', { name: /Candidate 3/ }),
+  ).toHaveAttribute('aria-current', 'true')
 })
 
 test('all five candidates and their actual metrics fit a mobile comparison dialog', async ({
@@ -167,14 +199,15 @@ test('all five candidates and their actual metrics fit a mobile comparison dialo
   const runs = await mockDashboardRuns(page, request)
   addComparisonMetrics(runs)
   await page.goto('/explore')
-  const rail = page.getByRole('complementary', { name: '미션 조건' })
-  for (let rank = 1; rank <= 5; rank++)
-    await rail.getByRole('checkbox', { name: `후보 ${rank} 비교` }).check()
-  await rail.getByRole('button', { name: '선택 후보 비교 (5/5)' }).click()
-  const dialog = page.getByRole('dialog', { name: 'TOP 5 후보 비교' })
+  const rail = page.getByRole('complementary', { name: 'Mission conditions' })
+  const open = rail.getByRole('button', { name: 'Compare candidates' })
+  await open.click()
+  const dialog = page.getByRole('dialog', {
+    name: 'TOP 5 candidate comparison',
+  })
   await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(5)
   await expect(
-    dialog.getByRole('table', { name: '후보 실제 지표' }),
+    dialog.getByRole('table', { name: 'Candidate actual metrics' }),
   ).toBeVisible()
   const fits = await dialog.evaluate((element) => {
     const box = element.getBoundingClientRect()
@@ -187,29 +220,36 @@ test('all five candidates and their actual metrics fit a mobile comparison dialo
   })
   expect(fits).toBe(true)
   await dialog.screenshot({ path: 'test-results/site-comparison-mobile.png' })
-  await dialog.getByRole('button', { name: '비교 선택 모두 해제' }).click()
+  await dialog
+    .getByRole('button', { name: 'Clear comparison selection' })
+    .click()
   await expect(
-    dialog.getByText('후보를 체크하면 실제 지표를 비교할 수 있습니다.'),
+    dialog.getByText('Check candidates to compare their actual metrics.'),
   ).toBeVisible()
-  await dialog.getByRole('button', { name: '비교 닫기' }).click()
+  await dialog.getByRole('button', { name: 'Close comparison' }).click()
   Object.assign(runs[0]!.candidates[4]!, { terrain: null })
-  await rail.getByRole('button', { name: '결과 새로고침' }).click()
-  await rail.getByRole('checkbox', { name: '후보 5 비교' }).check()
-  await rail.getByRole('button', { name: '선택 후보 비교 (1/5)' }).click()
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().endsWith('/candidates/runs/' + runs[0]!.id),
+    ),
+    rail.getByRole('button', { name: 'Refresh results' }).click(),
+  ])
+  await open.click()
+  await dialog.getByRole('checkbox', { name: 'Compare candidate 5' }).check()
   await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(0)
   await expect(
     dialog
-      .getByRole('table', { name: '후보 실제 지표' })
+      .getByRole('table', { name: 'Candidate actual metrics' })
       .getByRole('row')
-      .filter({ hasText: '지역 경사 P95' })
+      .filter({ hasText: 'Local slope P95' })
       .getByRole('cell')
       .first(),
   ).toHaveText('—')
   await expect(
     dialog
-      .getByRole('table', { name: '후보 조건별 여유' })
+      .getByRole('table', { name: 'Candidate margins per condition' })
       .getByRole('row')
-      .filter({ hasText: '지역 경사 P95' })
+      .filter({ hasText: 'Local slope P95' })
       .getByRole('cell')
       .last(),
   ).toHaveText('—')
@@ -222,14 +262,23 @@ test('partial terrain coverage hides both terrain values and their margins', asy
   const runs = await mockDashboardRuns(page, request)
   addComparisonMetrics(runs, 0.9)
   await page.goto('/explore')
-  await page.getByRole('checkbox', { name: '후보 1 비교' }).check()
-  await page.getByRole('button', { name: '선택 후보 비교 (1/5)' }).click()
-  const dialog = page.getByRole('dialog', { name: 'TOP 5 후보 비교' })
+  await page.getByRole('button', { name: 'Compare candidates' }).click()
+  const dialog = page.getByRole('dialog', {
+    name: 'TOP 5 candidate comparison',
+  })
+  for (const rank of [2, 3, 4, 5])
+    await dialog
+      .getByRole('checkbox', { name: `Compare candidate ${rank}` })
+      .uncheck()
   await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(0)
   await expect(dialog.locator('g[data-candidate] circle')).toHaveCount(4)
-  for (const metric of ['지역 경사 P95', '지역 거칠기 P95']) {
-    const values = dialog.getByRole('table', { name: '후보 실제 지표' })
-    const margins = dialog.getByRole('table', { name: '후보 조건별 여유' })
+  for (const metric of ['Local slope P95', 'Local roughness P95']) {
+    const values = dialog.getByRole('table', {
+      name: 'Candidate actual metrics',
+    })
+    const margins = dialog.getByRole('table', {
+      name: 'Candidate margins per condition',
+    })
     await expect(
       values
         .getByRole('row')

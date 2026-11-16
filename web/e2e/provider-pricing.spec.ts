@@ -331,7 +331,9 @@ test('selected launch operator reprices the same date and grids and survives nav
   await dialog.getByRole('button', { name: '일정 적용' }).click()
   await expect(page).toHaveURL(/launch_id=spacex-demo/)
   await page.reload()
-  await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
+  await page
+    .getByRole('button', { name: 'Compare dates and trajectory' })
+    .click()
   await expect(picker).toHaveValue('spacex-demo')
   await expect(model).toContainText('SpaceX 모델 예상 비용')
 })
