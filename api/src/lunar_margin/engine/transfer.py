@@ -17,7 +17,13 @@ from scipy.integrate import solve_ivp
 from scipy.interpolate import CubicHermiteSpline
 from scipy.optimize import brentq, root
 
-from lunar_margin.engine.ephemeris import load_kernels, moon_states
+from lunar_margin.engine.ephemeris import (
+    elapsed_si_seconds,
+    ephemeris_time,
+    inertial_moon_state_to_moon_me,
+    load_kernels,
+    moon_states,
+)
 
 Vec = NDArray[np.float64]
 MU_E = 398600.435436
@@ -49,6 +55,25 @@ class TransferMetrics:
 
 
 @dataclass(frozen=True)
+class LoiHandoff:
+    """Physical LOI boundary, before and after impulsive circularization.
+
+    Each 6D state is position followed by velocity. J2000 states are relative
+    to the Moon center (km, km/s); MOON_ME states are (m, m/s). This is not
+    a surface-targeted descent orbit or a modeled post-LOI maneuver.
+    """
+
+    epoch_utc: datetime
+    center: str
+    inertial_frame: str
+    fixed_frame: str
+    pre_loi_j2000_km_kmps: list[float]
+    post_loi_j2000_km_kmps: list[float]
+    pre_loi_moon_me_m_mps: list[float]
+    post_loi_moon_me_m_mps: list[float]
+
+
+@dataclass(frozen=True)
 class TransferResult:
     departure: datetime
     arrival: datetime
@@ -63,6 +88,7 @@ class TransferResult:
     transfer: list[OrbitSample]
     capture: list[OrbitSample]
     moon_orbit_km: list[list[float]]
+    loi_handoff: LoiHandoff
 
 
 def _stumpff(z: float) -> tuple[float, float]:
@@ -112,12 +138,14 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     """Fit a direct transfer to exact UTC endpoints or raise ValueError; no fixture fallback."""
     if departure.tzinfo is None or arrival.tzinfo is None:
         raise ValueError("Dates must include a timezone")
-    duration = (arrival - departure).total_seconds()
-    if not 86400 <= duration <= 10 * 86400:
+    calendar_seconds = (arrival - departure).total_seconds()
+    if not 86400 <= calendar_seconds <= 10 * 86400:
         raise ValueError("Direct-transfer preview supports flight times of 1 to 10 days")
     if not (1900 <= departure.year <= 2100 and 1900 <= arrival.year <= 2100):
         raise ValueError("Dates must fall between 1900 and 2100")
     load_kernels(data_dir / "spice")
+    departure_et = ephemeris_time(departure)
+    duration = ephemeris_time(arrival) - departure_et
     grid = np.linspace(0, duration + POST_SECONDS, math.ceil((duration + POST_SECONDS) / 1800) + 1)
     ephemeris = moon_states(departure, grid)
     moon = CubicHermiteSpline(grid, ephemeris[:, :3], ephemeris[:, 3:])
@@ -308,6 +336,24 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     )
     loi = float(np.linalg.norm(captured_velocity - state[3:]))
     captured_state = np.r_[state[:3], captured_velocity]
+
+    # Preserve exact impulsive-burn boundary conditions, not finite differences
+    # of sparse public OrbitSample positions. The Moon-centered inertial state
+    # is the orbit integrator's interpolated Moon J2000 state at arrival.
+    pre_moon_j2000 = np.r_[state[:3] - end, state[3:] - end_velocity]
+    post_moon_j2000 = np.r_[captured_state[:3] - end, captured_state[3:] - end_velocity]
+    pre_moon_si = pre_moon_j2000 * 1000.0
+    post_moon_si = post_moon_j2000 * 1000.0
+    loi_handoff = LoiHandoff(
+        epoch_utc=arrival,
+        center="MOON",
+        inertial_frame="J2000",
+        fixed_frame="MOON_ME",
+        pre_loi_j2000_km_kmps=pre_moon_j2000.tolist(),
+        post_loi_j2000_km_kmps=post_moon_j2000.tolist(),
+        pre_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(pre_moon_si, arrival).tolist(),
+        post_loi_moon_me_m_mps=inertial_moon_state_to_moon_me(post_moon_si, arrival).tolist(),
+    )
     t_post = np.unique(
         np.r_[
             np.linspace(duration, duration + POST_SECONDS, 420),
@@ -336,7 +382,9 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     def samples(times: Vec, positions: Vec, moons: Vec) -> list[OrbitSample]:
         return [
             OrbitSample(float(t), p.tolist(), m.tolist())
-            for t, p, m in zip(times, positions, moons, strict=True)
+            for t, p, m in zip(
+                elapsed_si_seconds(departure_et, times), positions, moons, strict=True
+            )
         ]
 
     return TransferResult(
@@ -350,7 +398,7 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         up.tolist(),
         direction.tolist(),
         TransferMetrics(
-            duration / 86400,
+            calendar_seconds / 86400,
             PARKING,
             float(np.linalg.norm(relative_r) - R_M),
             error,
@@ -362,4 +410,5 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
         samples(t_pre, np.asarray(pre.y[:3].T), moon_pre),
         samples(t_post, np.asarray(post.y[:3].T), moon_post),
         moon_states(departure, np.linspace(0, 29 * 86400, 240))[:, :3].tolist(),
+        loi_handoff,
     )
