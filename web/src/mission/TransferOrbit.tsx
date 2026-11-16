@@ -61,12 +61,12 @@ export function TransferOrbit({
           if (controller.signal.aborted) return
           const message =
             error instanceof ApiError && error.status === 422
-              ? '이 날짜 조합의 궤도를 계산할 수 없습니다. 1900~2100년, 비행 간격 1~10일 안에서 다른 출발·도착일로 다시 시도하세요.'
+              ? 'No trajectory is available for these dates. Choose dates between 1900 and 2100 with a flight time of 1 to 10 days.'
               : error instanceof ApiError && error.status === 503
-                ? '궤도 계산에 필요한 SPICE 데이터가 없습니다. 백엔드의 데이터 준비 상태를 확인하세요.'
+                ? 'The SPICE data needed for this trajectory is unavailable.'
                 : error instanceof ApiError && error.status === 429
-                  ? '다른 궤도를 계산하고 있습니다. 잠시 후 다시 시도하세요.'
-                  : '날짜별 궤도를 계산하지 못했습니다. API 연결을 확인한 뒤 다시 시도하세요.'
+                  ? 'Another trajectory is being calculated. Try again shortly.'
+                  : 'Unable to calculate the trajectory. Check the API connection and try again.'
           setStored({ key, state: { kind: 'error', message } })
         })
     }, 450)
@@ -76,17 +76,17 @@ export function TransferOrbit({
     }
   }, [departure, arrival, key, latitude, longitude, durationS])
   return (
-    <section className="transfer-section" aria-label="지구–달 계산 궤도">
+    <section className="transfer-section" aria-label="Earth–Moon trajectory">
       <div className="window-toolbar">
         <div>
           <div className="section-kicker">EARTH → MOON · LUNAR CAPTURE</div>
-          <h3>지구–달 비행 궤도</h3>
+          <h3>Earth–Moon trajectory</h3>
         </div>
-        <span className="example-label">날짜별 계산 궤도</span>
+        <span className="example-label">Calculated for selected dates</span>
       </div>
       {state.kind === 'loading' ? (
         <p className="orbit-status" role="status">
-          선택한 출발·도착일의 궤도를 계산하는 중…
+          Calculating the trajectory for your dates…
         </p>
       ) : state.kind === 'error' ? (
         <div className="orbit-status" role="alert">
@@ -97,17 +97,18 @@ export function TransferOrbit({
               setAttempt((n) => n + 1)
             }}
           >
-            궤도 다시 계산
+            Recalculate trajectory
           </button>
         </div>
       ) : (
         <OrbitPlayback key={key} data={state.data} active={active} />
       )}
       <p className="orbit-note">
-        선택한 날짜의 00:00 UTC 기준 · DE440 달 위치와 지구·달 중력으로
-        계산합니다. 지구 주차궤도 200 km → 달 도착 고도 100 km. 출발 궤도면은
-        자동 선택합니다. 달 진입 기동은 착륙 목표({latitude}°, {longitude}°)에
-        맞춰 궤도면을 변경합니다.
+        The model uses DE440 lunar positions at 00:00 UTC and Earth and Moon
+        gravity. The spacecraft leaves a 200 km Earth parking orbit and enters
+        lunar orbit at 100 km. The model selects the departure plane and adjusts
+        the lunar orbit plane for the target landing site ({latitude}°,{' '}
+        {longitude}°).
       </p>
     </section>
   )
@@ -196,13 +197,13 @@ function OrbitPlayback({
       <div className="orbit-plot-grid">
         <figure className="orbit-plot">
           <figcaption>
-            <strong>지구 중심 · 전체 전이</strong>
-            <span>지구 주차궤도 → 달 접근</span>
+            <strong>Earth-centered transfer</strong>
+            <span>Earth parking orbit to lunar approach</span>
           </figcaption>
           <svg
             viewBox="0 0 600 560"
             role="img"
-            aria-label="달의 전체 공전 궤도와 지구에서 달까지의 계산된 전이 경로"
+            aria-label="Lunar orbit and spacecraft transfer from Earth to the Moon"
           >
             <defs>
               <radialGradient id={gradient} cx="30%" cy="25%">
@@ -270,41 +271,41 @@ function OrbitPlayback({
             </g>
             <g className="orbit-annotations">
               <text x={earth[0] - 16} y={earth[1] + 27} textAnchor="end">
-                지구 · 출발
+                Earth at departure
               </text>
               <text
                 x={departureMoon[0] - 12}
                 y={departureMoon[1] - 12}
                 textAnchor="end"
               >
-                달 · 출발 시점
+                Moon at departure
               </text>
               <text
                 x={arrivalMoon[0] - 8}
                 y={arrivalMoon[1] - 18}
                 textAnchor="end"
               >
-                달 · 진입 시점
+                Moon at insertion
               </text>
             </g>
           </svg>
           <div className="orbit-plot-legend">
-            <span className="key-reference">출발 후 29일간 달 경로</span>
-            <span className="key-motion">비행 중 달의 이동</span>
-            <span className="key-transfer">우주선 전이</span>
+            <span className="key-reference">Lunar path over 29 days</span>
+            <span className="key-motion">Lunar motion during flight</span>
+            <span className="key-transfer">Spacecraft trajectory</span>
           </div>
         </figure>
         <figure className="orbit-plot">
           <figcaption>
-            <strong>달 중심 · 접근과 궤도 진입</strong>
+            <strong>Moon-centered approach and capture</strong>
             <span>
-              진입점(LOI)을 기준으로 접근 궤도면과 진입 후 궤도면을 펼친 단면
+              Approach and capture planes aligned at lunar orbit insertion (LOI)
             </span>
           </figcaption>
           <svg
             viewBox="0 0 600 560"
             role="img"
-            aria-label="달 중심 좌표축에서 본 접근 경로와 궤도 진입 후 14시간의 공전 경로"
+            aria-label="Lunar approach and the first 14 hours in orbit around the Moon"
           >
             <defs>
               <clipPath id={closeClip}>
@@ -355,7 +356,7 @@ function OrbitPlayback({
                 y={center[1] + data.moon_radius_km * close.scale + 30}
                 textAnchor="middle"
               >
-                달
+                Moon
               </text>
               <path
                 d={`M${insertion[0] - 3},${insertion[1] - 8} l-18,-28 h-65`}
@@ -367,38 +368,38 @@ function OrbitPlayback({
                 y={insertion[1] - 44}
                 textAnchor="end"
               >
-                LOI · 고도 100 km
+                LOI · altitude 100 km
               </text>
             </g>
           </svg>
           <div className="orbit-plot-legend">
-            <span className="key-surface">달 표면</span>
-            <span className="key-transfer">진입 전 접근</span>
-            <span className="key-capture">진입 후 원형 궤도</span>
+            <span className="key-surface">Lunar surface</span>
+            <span className="key-transfer">Approach</span>
+            <span className="key-capture">Circular orbit after insertion</span>
           </div>
         </figure>
       </div>
       <dl className="orbit-metrics">
         <div>
-          <dt>계산 비행 시간</dt>
+          <dt>Flight time</dt>
           <dd>
-            {data.metrics.travel_time_days.toFixed(3)} <small>일</small>
+            {data.metrics.travel_time_days.toFixed(3)} <small>days</small>
           </dd>
         </div>
         <div>
-          <dt>달 진입 고도</dt>
+          <dt>Insertion altitude</dt>
           <dd>
             {data.metrics.arrival_altitude_km.toFixed(0)} <small>km</small>
           </dd>
         </div>
         <div>
-          <dt>출발 TLI Δv</dt>
+          <dt>Departure TLI Δv</dt>
           <dd>
             {data.metrics.tli_delta_v_km_s.toFixed(3)} <small>km/s</small>
           </dd>
         </div>
         <div>
-          <dt>진입 LOI Δv</dt>
+          <dt>Insertion LOI Δv</dt>
           <dd>
             {data.metrics.loi_delta_v_km_s.toFixed(3)} <small>km/s</small>
           </dd>
@@ -412,9 +413,11 @@ function OrbitPlayback({
               if (index === last) setIndex(0)
               setPlaying(!running)
             }}
-            aria-label={running ? '궤도 재생 일시정지' : '궤도 재생'}
+            aria-label={
+              running ? 'Pause trajectory playback' : 'Play trajectory'
+            }
           >
-            {running ? 'Ⅱ 일시정지' : '▶ 재생'}
+            {running ? 'Ⅱ Pause' : '▶ Play'}
           </button>
           <button
             type="button"
@@ -423,12 +426,12 @@ function OrbitPlayback({
               setIndex(data.transfer.length - 1)
             }}
           >
-            달 궤도 진입 보기
+            Jump to orbit insertion
           </button>
         </div>
         <output aria-live="off">
-          T+{Math.floor(hours / 24)}일 {Math.floor(hours % 24)}시간 ·{' '}
-          {captured ? '달 궤도 진입 후' : '달로 비행 중'}
+          T+{Math.floor(hours / 24)}d {Math.floor(hours % 24)}h ·{' '}
+          {captured ? 'In lunar orbit' : 'En route to the Moon'}
         </output>
         <input
           type="range"
@@ -436,15 +439,15 @@ function OrbitPlayback({
           max={last}
           step="1"
           value={index}
-          aria-label="궤도 재생 시점"
+          aria-label="Trajectory playback time"
           onChange={(e) => {
             setPlaying(false)
             setIndex(Number(e.target.value))
           }}
         />
         <div className="orbit-legend">
-          <span>전이·접근</span>
-          <span>달 궤도 진입 후 14시간</span>
+          <span>Transfer and approach</span>
+          <span>First 14 hours in lunar orbit</span>
         </div>
       </div>
     </>
@@ -487,10 +490,10 @@ function PlotAxes({
         )
       })}
       <text x="300" y="547" textAnchor="middle">
-        투영 x [{unit}]
+        Projected x [{unit}]
       </text>
       <text x="26" y="280" textAnchor="middle" transform="rotate(-90 26 280)">
-        투영 y [{unit}]
+        Projected y [{unit}]
       </text>
     </g>
   )

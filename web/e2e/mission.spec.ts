@@ -105,7 +105,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   const dialog = page.getByRole('dialog', { name: '미션 날짜 UTC' })
   await expect(dialog).toBeVisible()
   await expect(
-    dialog.getByRole('region', { name: '지구–달 계산 궤도' }),
+    dialog.getByRole('region', { name: 'Earth–Moon trajectory' }),
   ).toHaveCount(0)
 
   await dialog
@@ -138,7 +138,7 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(grid.locator('thead')).toContainText('Jan 08')
 
   await expect(
-    dialog.getByRole('img', { name: '착륙일별 예시 점수' }),
+    dialog.getByRole('img', { name: 'Example scores by arrival date' }),
   ).toBeVisible()
   await expect(
     dialog.getByRole('region', { name: '미션 기간 타임라인' }),
@@ -210,21 +210,23 @@ test('mission planner previews dates, discards drafts and applies the selection'
   await expect(page).toHaveURL(/\/orbit\?/)
   await expect(dialog).toHaveCount(0)
   await expect(
-    page.getByRole('heading', { name: '비행 궤도', exact: true }),
+    page.getByRole('heading', { name: 'Flight trajectory', exact: true }),
   ).toBeVisible()
-  const orbit = page.getByRole('region', { name: '지구–달 계산 궤도' })
-  await expect(page.getByLabel('지구 출발일 · UTC')).toHaveValue('2027-01-13')
-  await expect(page.getByLabel('달 도착일 · UTC')).toHaveValue('2027-01-17')
+  const orbit = page.getByRole('region', { name: 'Earth–Moon trajectory' })
+  await expect(page.getByLabel('Earth departure · UTC')).toHaveValue(
+    '2027-01-13',
+  )
+  await expect(page.getByLabel('Lunar arrival · UTC')).toHaveValue('2027-01-17')
   await expect(
-    orbit.getByRole('slider', { name: '궤도 재생 시점' }),
+    orbit.getByRole('slider', { name: 'Trajectory playback time' }),
   ).toBeVisible({ timeout: 30_000 })
   const firstPath = await orbit
     .locator('.orbit-transfer-path')
     .first()
     .getAttribute('d')
-  await page.getByLabel('달 도착일 · UTC').fill('2027-01-18')
+  await page.getByLabel('Lunar arrival · UTC').fill('2027-01-18')
   await expect(
-    orbit.getByRole('slider', { name: '궤도 재생 시점' }),
+    orbit.getByRole('slider', { name: 'Trajectory playback time' }),
   ).toBeVisible({ timeout: 30_000 })
   await expect(
     orbit.locator('.orbit-transfer-path').first(),
@@ -238,15 +240,15 @@ test('mission planner previews dates, discards drafts and applies the selection'
   expect(orbitUrl.searchParams.get('arrival')).toBe('2027-01-18')
   expect(orbitUrl.searchParams.get('duration')).toBe('7')
   expect(orbitUrl.searchParams.get('site')).toBeNull()
-  await expect(page.getByLabel('달 도착일 · UTC')).toHaveValue('2027-01-18')
+  await expect(page.getByLabel('Lunar arrival · UTC')).toHaveValue('2027-01-18')
   await page.goBack()
   await expect(dialog).toBeVisible()
   await expect(
     dialog.getByLabel('기준 착륙일 · UTC', { exact: true }),
   ).toHaveValue('2027-01-18')
   await page.goForward()
-  await expect(page.getByLabel('달 도착일 · UTC')).toHaveValue('2027-01-18')
-  await page.getByRole('button', { name: '← 날짜 계획으로 돌아가기' }).click()
+  await expect(page.getByLabel('Lunar arrival · UTC')).toHaveValue('2027-01-18')
+  await page.getByRole('button', { name: '← Back to date planner' }).click()
   await expect(dialog).toBeVisible()
   await expect(
     dialog.getByLabel('기준 출발일 · UTC', { exact: true }),

@@ -47,6 +47,16 @@ function overviewRun() {
   return params.get('overview') === '1' ? params.get('run') : null
 }
 
+function currentOverlay(): Overlay {
+  const params = new URLSearchParams(window.location.search)
+  const planner = params.get('planner')
+  return planner === '1' || planner === 'compare'
+    ? 'planner'
+    : params.get('compare') === '1'
+      ? 'compare'
+      : null
+}
+
 function currentView(): View {
   if (overviewRun()) return 'mission'
   const path = window.location.pathname.replace(/\/+$/, '')
@@ -57,15 +67,6 @@ function currentView(): View {
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
     : 'landing'
-}
-
-function currentOverlay(): Overlay {
-  const params = new URLSearchParams(window.location.search)
-  return params.get('planner') === '1'
-    ? 'planner'
-    : params.get('compare') === '1'
-      ? 'compare'
-      : null
 }
 
 function initialSelection(): MissionSelection {
@@ -147,9 +148,9 @@ export default function App() {
       locationFor(view, selection, overlay),
     )
   }, [view, selection, overlay])
-  function toggleOverview(runId: string | null) {
+  function toggleOverview(runId: string | null, nextSelection = selection) {
     const url = new URL(
-      locationFor('mission', selection, null),
+      locationFor('mission', nextSelection, null),
       window.location.origin,
     )
     if (runId) {
@@ -159,6 +160,7 @@ export default function App() {
       url.searchParams.delete('overview')
     }
     window.history.pushState(null, '', url)
+    setSelection(nextSelection)
     setPanelRun(runId)
     setOverlay(null)
   }
@@ -269,14 +271,9 @@ export default function App() {
             comparing={overlay === 'compare'}
             onComparingChange={(open) => setOverlay(open ? 'compare' : null)}
             nav={stageNav}
-            onApply={(schedule) => {
-              setSelection((current) => ({
-                ...current,
-                ...schedule,
-                siteId: null,
-              }))
-              setOverlay(null)
-            }}
+            onApply={(schedule, runId) =>
+              toggleOverview(runId, { ...selection, ...schedule, siteId: null })
+            }
             onViewOrbit={(schedule) =>
               navigate('orbit', null, {
                 ...selection,
@@ -329,7 +326,7 @@ function MissionApp({
   onComparingChange: (open: boolean) => void
   /** The stage links. An open dialog covers the page, so it shows them instead. */
   nav: ReactNode
-  onApply: (schedule: Schedule) => void
+  onApply: (schedule: Schedule, runId: string) => void
   onViewOrbit: (schedule: Schedule) => void
 }) {
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })
@@ -409,12 +406,12 @@ function MissionApp({
             className="w-full rounded text-left"
             aria-haspopup="dialog"
             aria-controls="datePlanner"
-            aria-label="미션 날짜 비교 열기"
+            aria-label="Compare dates and trajectory"
             onClick={() => onPlannerChange(true)}
           >
             <MissionSummary selection={selection} />
             <span className="mt-3 block text-right text-xs text-amber-400">
-              날짜 계획 보기 ↗
+              Compare dates and trajectory ↗
             </span>
           </button>
         }
@@ -433,7 +430,7 @@ function MissionApp({
                 role="status"
                 className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
               >
-                날짜 패널을 불러오는 중입니다.
+                Loading date comparison…
               </div>
             }
           >

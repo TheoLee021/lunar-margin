@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { startCalendar } from '../api/pricing'
 import type { RunStatus } from '../api/candidates'
 import {
@@ -41,111 +41,81 @@ export function useProviderCalendar(input: ProviderCalendarInput | null) {
     key: string
     status: RunStatus
   } | null>(null)
-  const job = useRef<AbortController | null>(null)
   useEffect(() => {
-    job.current?.abort()
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout>
     const request: ProviderCalendarInput | null = JSON.parse(key)
-    const load = async () => {
-      if (request === null) return
+    if (!request) return
+    const controller = new AbortController()
+    const { signal } = controller
+    async function load(request: ProviderCalendarInput) {
       try {
-        const data = await fetchProviderCalendar(request, {
-          signal: controller.signal,
-        })
-        if (!controller.signal.aborted) {
-          setState({ key, data, error: '', loading: false })
-          if (data.dates.some((d) => d.state === 'running'))
-            timer = setTimeout(() => {
-              void load()
-            }, 250)
+        let data = await fetchProviderCalendar(request, { signal })
+        signal.throwIfAborted()
+        setState({ key, data, error: '', loading: false })
+        if (data.dates.every((date) => date.state === 'completed')) return
+        setActive(key)
+        const missing = data.dates.filter(
+          (date) => date.state !== 'completed' && date.state !== 'running',
+        )
+        if (missing.length) {
+          const started = await startCalendar(
+            {
+              ...request,
+              landing_dates: missing.map((date) => date.landing_date),
+            },
+            {
+              signal,
+              onBusy: (status) => {
+                if (!signal.aborted) setWaiting(status ? { key, status } : null)
+              },
+            },
+          )
+          if (started.run_ids.some((id, i) => id !== missing[i]?.run_id))
+            throw new Error(
+              'The search results do not match the requested dates.',
+            )
         }
-      } catch (error: unknown) {
-        if (!controller.signal.aborted)
-          setState({
+        while (!signal.aborted) {
+          await pause(signal)
+          data = await fetchProviderCalendar(request, { signal })
+          signal.throwIfAborted()
+          setState({ key, data, error: '', loading: false })
+          const failed = data.dates.find(
+            (d) => d.state === 'failed' || d.state === 'unavailable',
+          )
+          if (failed)
+            throw new Error(
+              failed.message ?? 'Unable to calculate prices for these dates.',
+            )
+          if (data.dates.every((d) => d.state === 'completed')) break
+        }
+      } catch (error) {
+        if (!signal.aborted)
+          setState((previous) => ({
             key,
-            data: null,
+            data: previous.key === key ? previous.data : null,
             error: error instanceof Error ? error.message : String(error),
             loading: false,
-          })
+          }))
+      } finally {
+        if (!signal.aborted) setActive(null)
       }
     }
-    timer = setTimeout(() => {
-      void load()
+    const timer = setTimeout(() => {
+      setWaiting(null)
+      setActive(null)
+      void load(request)
     }, 250)
     return () => {
-      controller.abort()
       clearTimeout(timer)
-      job.current?.abort()
+      controller.abort()
     }
   }, [key, revision])
-  const current =
-    state.key === key
-      ? state
-      : { key, data: null, error: '', loading: input !== null }
-  async function calculate() {
-    if (input === null) return
-    job.current?.abort()
-    const controller = new AbortController()
-    job.current = controller
-    setActive(key)
-    setWaiting(null)
-    try {
-      let data = await fetchProviderCalendar(input, {
-        signal: controller.signal,
-      })
-      if (data.dates.every((d) => d.state === 'completed')) return
-      const missing = data.dates.filter(
-        (d) => d.state !== 'completed' && d.state !== 'running',
-      )
-      if (missing.length) {
-        const started = await startCalendar(
-          { ...input, landing_dates: missing.map((d) => d.landing_date) },
-          {
-            signal: controller.signal,
-            onBusy: (status) => {
-              if (!controller.signal.aborted)
-                setWaiting(status ? { key, status } : null)
-            },
-          },
-        )
-        if (started.run_ids.some((id, i) => id !== missing[i]?.run_id))
-          throw new Error('탐색 실행이 요청한 일정과 일치하지 않습니다.')
-      }
-      while (!controller.signal.aborted) {
-        data = await fetchProviderCalendar(input, { signal: controller.signal })
-        if (controller.signal.aborted) return
-        setState({ key, data, error: '', loading: false })
-        const failed = data.dates.find(
-          (d) => d.state === 'failed' || d.state === 'unavailable',
-        )
-        if (failed)
-          throw new Error(failed.message ?? '날짜별 탐색에 실패했습니다.')
-        if (data.dates.every((d) => d.state === 'completed')) return
-        await pause(controller.signal)
-      }
-    } catch (error: unknown) {
-      if (!controller.signal.aborted)
-        setState((previous) => ({
-          ...previous,
-          key,
-          error: error instanceof Error ? error.message : String(error),
-          loading: false,
-        }))
-    } finally {
-      if (job.current === controller) setActive(null)
-    }
-  }
   return {
-    ...current,
+    ...(state.key === key
+      ? state
+      : { key, data: null, error: '', loading: input !== null }),
     calculating: active === key,
     waiting: active === key && waiting?.key === key ? waiting.status : null,
-    calculate,
     reload: () => setRevision((v) => v + 1),
-    stop: () => {
-      job.current?.abort()
-      setActive(null)
-      setRevision((v) => v + 1)
-    },
   }
 }

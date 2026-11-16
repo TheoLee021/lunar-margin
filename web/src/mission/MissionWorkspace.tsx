@@ -142,8 +142,11 @@ export function MissionWorkspace({
     (candidate) => candidate.id === selected?.id,
   )
   const searchUrl = new URL(window.location.href)
+  // The search view lives at the root; this page is at /explore.
+  searchUrl.pathname = '/'
   searchUrl.searchParams.set('view', 'search')
   searchUrl.searchParams.delete('planner')
+  searchUrl.searchParams.delete('compare')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
   const sun = useSunPath(selection.landing, selection.duration)

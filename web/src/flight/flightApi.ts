@@ -1,3 +1,4 @@
+import { waitForSolver } from '../api/waitForSolver'
 import { ApiError, DEFAULT_BASE_URL } from '../api/client'
 import {
   ExampleDescentSchema,
@@ -16,21 +17,6 @@ export type FlightRequest = {
   dryMassKg: number
   maxThrustN: number
   ispS: number
-}
-
-function waitForSolver(delay: number, signal?: AbortSignal) {
-  signal?.throwIfAborted()
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', abort)
-      resolve()
-    }, delay)
-    function abort() {
-      clearTimeout(timer)
-      reject(signal?.reason)
-    }
-    signal?.addEventListener('abort', abort, { once: true })
-  })
 }
 
 let lastPreview: { body: string; data: FlightPreview } | undefined
@@ -122,6 +108,8 @@ export async function requestExample(
     },
   )
   if (!response.ok)
-    throw new Error(`하강 예시 계산 실패 (HTTP ${response.status})`)
+    throw new Error(
+      `Unable to calculate the example descent (HTTP ${response.status})`,
+    )
   return ExampleDescentSchema.parse(await response.json()).results[0].path
 }

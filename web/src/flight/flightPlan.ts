@@ -42,6 +42,6 @@ export function useFlightPlan(
 }
 
 export function utc(value: string) {
-  if (!Number.isFinite(Date.parse(value))) return '유효한 날짜를 선택하세요'
+  if (!Number.isFinite(Date.parse(value))) return 'Choose a valid date'
   return new Date(value).toISOString().slice(0, 19).replace('T', ' ') + ' UTC'
 }
