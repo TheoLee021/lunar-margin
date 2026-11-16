@@ -1,137 +1,115 @@
 import type { Candidate, SearchConfig } from '../api/candidates'
 
-export type RequirementStatus = 'PASS' | 'FAIL' | 'UNKNOWN'
-
-export type RequirementMargin = {
+/** 저장된 탐색 조건 하나와, 후보의 값이 그 한도에서 얼마나 떨어져 있는지. */
+export interface RequirementMargin {
   key: string
   label: string
+  /** 'min'은 값이 한도 이상, 'max'는 한도 이하여야 하는 조건이다. */
+  bound: 'min' | 'max'
+  unit: '%' | '시간' | '°' | 'm'
   value: number | null
   limit: number
+  /** 한도 안쪽으로 남은 여유. 음수면 한도를 벗어난 것이고, 값이 없으면 null이다. */
   margin: number | null
-  unit: string
-  status: RequirementStatus
-  interpretation: string
 }
 
-type Direction = 'maximum' | 'minimum'
+type Site = Pick<Candidate, 'sun' | 'earth' | 'rf' | 'terrain'>
+type Config = Pick<SearchConfig, 'thresholds' | 'rf'>
+type Maybe = number | null | undefined
 
-function metric(
+function row(
   key: string,
   label: string,
-  value: number | null | undefined,
-  limit: number | null | undefined,
-  unit: string,
-  direction: Direction,
-  interpretation: string,
+  bound: RequirementMargin['bound'],
+  unit: RequirementMargin['unit'],
+  value: Maybe,
+  limit: Maybe,
 ): RequirementMargin | null {
-  if (limit == null) return null // An unset requirement is not a failed requirement.
-  const number = value == null || !Number.isFinite(value) ? null : value
+  if (limit == null) return null // 한도가 없는 조건은 표에 넣지 않는다
   const margin =
-    number === null
-      ? null
-      : direction === 'maximum'
-        ? limit - number
-        : number - limit
-  return {
-    key,
-    label,
-    value: number,
-    limit,
-    margin,
-    unit,
-    status: margin === null ? 'UNKNOWN' : margin >= 0 ? 'PASS' : 'FAIL',
-    interpretation,
-  }
+    value == null ? null : bound === 'max' ? limit - value : value - limit
+  return { key, label, bound, unit, value: value ?? null, limit, margin }
 }
 
-/** Evaluate only thresholds saved in a completed search, never invent a lander specification. */
+const percent = (fraction: Maybe) => (fraction == null ? null : fraction * 100)
+
+/**
+ * 탐색에 저장된 한도와 후보의 저장된 지표만으로 여유를 계산한다.
+ * 적격 여부는 판정하지 않는다. 판정은 백엔드의 eligibility가 맡는다.
+ * RF 탐색이면 통신 조건을 지구 LOS가 아니라 명목 RF 값으로 본다.
+ */
 export function requirementMargins(
-  candidate: Candidate,
-  config: SearchConfig,
+  site: Site,
+  config: Config,
 ): RequirementMargin[] {
   const t = config.thresholds
-  const commIsRf = config.rf != null
+  const rf = config.rf != null
   return [
-    metric(
+    row(
       'sun-fraction',
-      '최소 태양 기하 가시율',
-      candidate.sun.fraction == null ? null : candidate.sun.fraction * 100,
-      t.min_sun_fraction == null ? null : t.min_sun_fraction * 100,
+      '일조율',
+      'min',
       '%',
-      'minimum',
-      'Solar LOS does not determine generated power.',
+      percent(site.sun.fraction),
+      percent(t.min_sun_fraction),
     ),
-    metric(
+    row(
       'sun-dark',
-      '최대 연속 암흑',
-      candidate.sun.longest_dark_hours,
+      '최장 연속 어둠',
+      'max',
+      '시간',
+      site.sun.longest_dark_hours,
       t.max_sun_dark_hours,
-      'h',
-      'maximum',
-      'Energy storage and thermal feasibility require a separate spacecraft model.',
     ),
-    metric(
-      'communication-fraction',
-      commIsRf ? '최소 명목 RF 가능율' : '최소 지구 기하 가시율',
-      commIsRf
-        ? candidate.rf?.fraction == null
-          ? null
-          : candidate.rf.fraction * 100
-        : candidate.earth.fraction == null
-          ? null
-          : candidate.earth.fraction * 100,
-      commIsRf
-        ? t.min_rf_fraction == null
-          ? null
-          : t.min_rf_fraction * 100
-        : t.min_earth_fraction == null
-          ? null
-          : t.min_earth_fraction * 100,
-      '%',
-      'minimum',
-      commIsRf
-        ? 'Nominal RF excludes operational ground-station availability and weather.'
-        : 'Geometric Earth LOS does not certify RF link closure.',
-    ),
-    metric(
-      'communication-blackout',
-      commIsRf ? '최대 명목 RF 두절' : '최대 지구 기하 차폐',
-      commIsRf
-        ? candidate.rf?.longest_blackout_hours
-        : candidate.earth.longest_blackout_hours,
-      commIsRf ? t.max_rf_blackout_hours : t.max_earth_blackout_hours,
-      'h',
-      'maximum',
-      commIsRf
-        ? 'Nominal RF continuity is not an end-to-end contact schedule.'
-        : 'Earth occultation is based on terrain geometry only.',
-    ),
-    metric(
+    rf
+      ? row(
+          'communication-fraction',
+          'RF 통신 가능 비율',
+          'min',
+          '%',
+          percent(site.rf?.fraction),
+          percent(t.min_rf_fraction),
+        )
+      : row(
+          'communication-fraction',
+          '지구 가시율',
+          'min',
+          '%',
+          percent(site.earth.fraction),
+          percent(t.min_earth_fraction),
+        ),
+    rf
+      ? row(
+          'communication-blackout',
+          'RF 최장 두절',
+          'max',
+          '시간',
+          site.rf?.longest_blackout_hours,
+          t.max_rf_blackout_hours,
+        )
+      : row(
+          'communication-blackout',
+          '최장 지구 차폐',
+          'max',
+          '시간',
+          site.earth.longest_blackout_hours,
+          t.max_earth_blackout_hours,
+        ),
+    row(
       'slope',
-      '최대 지역 경사 P95',
-      candidate.terrain?.slope_p95_deg,
-      t.max_terrain_slope_degrees,
+      '지역 경사 P95',
+      'max',
       '°',
-      'maximum',
-      '250 m regional proxy; not meter-scale touchdown safety.',
+      site.terrain?.slope_p95_deg,
+      t.max_terrain_slope_degrees,
     ),
-    metric(
+    row(
       'roughness',
-      '최대 지역 거칠기 P95',
-      candidate.terrain?.roughness_p95_m,
-      t.max_terrain_roughness_m,
+      '지역 거칠기 P95',
+      'max',
       'm',
-      'maximum',
-      'DEM-scale roughness proxy; boulders are unresolved.',
+      site.terrain?.roughness_p95_m,
+      t.max_terrain_roughness_m,
     ),
-  ].filter((entry): entry is RequirementMargin => entry !== null)
-}
-
-export function marginSummary(
-  rows: RequirementMargin[],
-): 'FAIL' | 'UNKNOWN' | 'PASS' | 'NOT_ASSESSED' {
-  if (rows.length === 0) return 'NOT_ASSESSED'
-  if (rows.some((row) => row.status === 'FAIL')) return 'FAIL'
-  if (rows.some((row) => row.status === 'UNKNOWN')) return 'UNKNOWN'
-  return 'PASS'
+  ].filter((entry) => entry !== null)
 }

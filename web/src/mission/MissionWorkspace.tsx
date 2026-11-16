@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
-import { MissionEngineering } from './MissionEngineering'
+import { RequirementMarginPanel } from './RequirementMarginPanel'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -223,10 +223,9 @@ export function MissionWorkspace({
               </p>
               <MissionMetrics result={analysis} />
               {run && selectedCandidate ? (
-                <MissionEngineering
+                <RequirementMarginPanel
                   candidate={selectedCandidate}
                   config={run.config}
-                  runId={run.id}
                 />
               ) : null}
               {selectedCandidate?.rf ? (
