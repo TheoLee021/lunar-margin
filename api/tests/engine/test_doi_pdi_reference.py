@@ -1,4 +1,5 @@
 """Synthetic geometry checks for the LOI -> DOI -> PDI orbital reference."""
+
 from datetime import UTC, datetime
 
 import numpy as np
@@ -21,9 +22,7 @@ def identity(state: np.ndarray, epoch: datetime) -> np.ndarray:
 def initial_state() -> np.ndarray:
     """Near-polar orbit with PDI directly over the specified south-pole target."""
     lat, lon = np.radians(-89.0), np.radians(30.0)
-    target = np.array(
-        [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)]
-    )
+    target = np.array([np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)])
     start = -target
     tangent = np.cross(np.array([0.0, 0.0, 1.0]), start)
     tangent /= np.linalg.norm(tangent)
@@ -40,15 +39,9 @@ def test_site_aligned_two_body_reference_is_continuous() -> None:
     before = np.asarray(result.doi_pre.j2000_m_mps)
     after = np.asarray(result.doi_post.j2000_m_mps)
     assert np.linalg.norm(before[:3] - after[:3]) == pytest.approx(0, abs=0.01)
-    assert np.linalg.norm(before[3:] - after[3:]) == pytest.approx(
-        result.doi_delta_v_mps, abs=1e-7
-    )
-    assert np.linalg.norm(result.pdi.j2000_m_mps[:3]) == pytest.approx(
-        R_M + 15_000, abs=0.001
-    )
-    assert np.linalg.norm(result.loi.j2000_m_mps[:3]) == pytest.approx(
-        R_M + 100_000, abs=0.001
-    )
+    assert np.linalg.norm(before[3:] - after[3:]) == pytest.approx(result.doi_delta_v_mps, abs=1e-7)
+    assert np.linalg.norm(result.pdi.j2000_m_mps[:3]) == pytest.approx(R_M + 15_000, abs=0.001)
+    assert np.linalg.norm(result.loi.j2000_m_mps[:3]) == pytest.approx(R_M + 100_000, abs=0.001)
     assert result.samples[0].epoch_utc >= EPOCH
     assert result.samples[-1].epoch_utc == result.pdi.epoch_utc
     assert all(
@@ -58,9 +51,7 @@ def test_site_aligned_two_body_reference_is_continuous() -> None:
 
 
 def test_site_outside_orbital_plane_does_not_fake_aligned_pdi() -> None:
-    result = reference_doi_pdi(
-        initial_state(), EPOCH, -85.0, 120.0, identity, tolerance_m=50
-    )
+    result = reference_doi_pdi(initial_state(), EPOCH, -85.0, 120.0, identity, tolerance_m=50)
     assert result.status == "NO_ALIGNED_REFERENCE"
     assert result.aligned_pdi_moon_me_m_mps is None
     assert result.approach_error_m > result.tolerance_m
