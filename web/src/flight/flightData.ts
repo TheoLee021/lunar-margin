@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-const vector3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()])
+const vector3 = z.tuple([
+  z.number().finite(),
+  z.number().finite(),
+  z.number().finite(),
+])
 const phase = z.object({
   epoch_utc: z.iso.datetime({ offset: true }),
   phase: z.string(),
@@ -26,7 +30,11 @@ const flightSample = z.object({
 })
 export const FlightPreviewSchema = z.object({
   model: z.literal('REFERENCE_ONLY_NOT_FLIGHT_CERTIFIED'),
-  status: z.enum(['NO_PDI_REFERENCE', 'DESCENT_REFERENCE_PASSED', 'DESCENT_REFERENCE_FAILED']),
+  status: z.enum([
+    'NO_PDI_REFERENCE',
+    'DESCENT_REFERENCE_PASSED',
+    'DESCENT_REFERENCE_FAILED',
+  ]),
   note: z.string(),
   target_latitude: z.number(),
   target_longitude: z.number(),
@@ -51,16 +59,18 @@ export const FlightPreviewSchema = z.object({
     samples: z.array(orbitSample).min(2),
   }),
   descent_epoch_utc: z.string().nullable(),
-  descent: z.object({
-    status: z.string(),
-    duration_s: z.number(),
-    loft_m: z.number(),
-    propellant_kg: z.number().nullable(),
-    min_clearance_m: z.number().nullable(),
-    max_thrust_n: z.number().nullable(),
-    min_thrust_n: z.number().nullable(),
-    samples: z.array(flightSample),
-  }).nullable(),
+  descent: z
+    .object({
+      status: z.string(),
+      duration_s: z.number(),
+      loft_m: z.number(),
+      propellant_kg: z.number().nullable(),
+      min_clearance_m: z.number().nullable(),
+      max_thrust_n: z.number().nullable(),
+      min_thrust_n: z.number().nullable(),
+      samples: z.array(flightSample),
+    })
+    .nullable(),
 })
 
 export type FlightPreview = z.infer<typeof FlightPreviewSchema>
