@@ -27,15 +27,14 @@ MAX_SPAN = timedelta(days=366 * 3)
 MAX_SAMPLES = 100_000
 
 
-class AnalysisQuery(BaseModel):
+class SampledRange(BaseModel):
+    """[start, end)를 step_minutes 간격으로 나눈 표본 시각들. 쿼리 모델이 물려받아 쓴다."""
+
     model_config = ConfigDict(extra="forbid")
 
-    lat: float = Field(ge=-90.0, le=-80.0)
-    lon: float = Field(ge=-360.0, le=360.0)
     start: AwareDatetime
     end: AwareDatetime
     step_minutes: int = Field(default=30, ge=5, le=360)
-    observer_height_m: float = Field(default=0.0, ge=0.0, le=100.0)
 
     @model_validator(mode="after")
     def _check_range(self) -> Self:
@@ -47,6 +46,12 @@ class AnalysisQuery(BaseModel):
         if samples > MAX_SAMPLES:
             raise ValueError(f"too many samples ({samples} > {MAX_SAMPLES}); raise step_minutes")
         return self
+
+
+class AnalysisQuery(SampledRange):
+    lat: float = Field(ge=-90.0, le=-80.0)
+    lon: float = Field(ge=-360.0, le=360.0)
+    observer_height_m: float = Field(default=0.0, ge=0.0, le=100.0)
 
 
 class Metrics(BaseModel):
@@ -124,26 +129,32 @@ def get_settings() -> Settings:
 
 
 @lru_cache(maxsize=2)
-def _load_dem(data_dir: Path) -> PolarDem:
-    """DEM과 SPICE 커널을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
-    img_source, lbl_source = DEM_SOURCES["80s_80m"]
+def load_analysis_dem(data_dir: Path, dem_name: str = "80s_80m") -> PolarDem:
+    """DEM을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
+    if dem_name not in DEM_SOURCES:
+        raise HTTPException(status_code=422, detail="unknown DEM")
+    img_source, lbl_source = DEM_SOURCES[dem_name]
     img = data_dir / "dem" / img_source.filename
     lbl = data_dir / "dem" / lbl_source.filename
-    if not img.exists() or not lbl.exists() or not (data_dir / "spice").is_dir():
+    if not img.exists() or not lbl.exists():
         raise HTTPException(
             status_code=503,
             detail="NASA data not found; run `uv run python -m lunar_margin.pipeline.fetch`",
         )
+    return PolarDem.from_files(img, lbl)
+
+
+def require_spice(data_dir: Path) -> None:
     try:
         load_kernels(data_dir / "spice")
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail=f"{error}") from error
-    return PolarDem.from_files(img, lbl)
 
 
 @lru_cache(maxsize=2)
 def _build_analyzer(data_dir: Path) -> Analyzer:
-    dem = _load_dem(data_dir)
+    dem = load_analysis_dem(data_dir)
+    require_spice(data_dir)
 
     def analyze(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
         return analyze_site(
@@ -165,7 +176,7 @@ def get_analyzer(settings: Annotated[Settings, Depends(get_settings)]) -> Analyz
 
 
 def get_dem(settings: Annotated[Settings, Depends(get_settings)]) -> PolarDem:
-    return _load_dem(settings.data_dir)
+    return load_analysis_dem(settings.data_dir)
 
 
 def _utc(moment: datetime) -> str:

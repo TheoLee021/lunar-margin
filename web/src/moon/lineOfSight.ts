@@ -12,6 +12,7 @@ export interface SkyDirection {
   elevationDeg: number
   /** Terrain horizon height at that azimuth, degrees. What the body has to clear. */
   horizonDeg: number
+  clearanceDeg?: number
   visible: boolean
 }
 
@@ -19,6 +20,7 @@ const SkyDirectionSchema = z.object({
   azimuthDeg: z.number().finite(),
   elevationDeg: z.number().min(-90).max(90),
   horizonDeg: z.number().min(-90).max(90),
+  clearanceDeg: z.number().finite().optional(),
   visible: z.boolean(),
 })
 
@@ -28,7 +30,7 @@ const SkyDirectionSchema = z.object({
  * can take it away.
  */
 export function sightMarginDeg(direction: SkyDirection): number {
-  return direction.elevationDeg - direction.horizonDeg
+  return direction.clearanceDeg ?? direction.elevationDeg - direction.horizonDeg
 }
 
 /** Validates one sky direction taken from an analysis response. Throws on invalid input. */

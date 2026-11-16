@@ -1,3 +1,5 @@
+import type { Viewshed } from '../api/viewshed'
+import type { FlightPoint } from '../flight/flightData'
 import {
   useEffect,
   useImperativeHandle,
@@ -42,9 +44,18 @@ export interface MoonViewerHandle {
     headingDeg: number,
   ): void
   releaseFollow(): void
+  /**
+   * The light of a Sun that is still moving, such as a time being played. Nothing is asked of the
+   * backend until `setSunDirection` gives the Sun it comes to rest at. Throws on invalid input.
+   */
+  previewSunDirection(direction: unknown): void
 }
 
 interface MoonViewerProps {
+  showSightlines?: boolean
+  viewshed?: Viewshed | null
+  flightPoints?: readonly FlightPoint[]
+  flightFrame?: number
   ref?: Ref<MoonViewerHandle>
   /** Labelled points such as candidate landing sites. */
   markers?: readonly MoonMarker[]
@@ -63,10 +74,15 @@ type LoadState =
 // download overlaps React's first render instead of waiting for the effect.
 const sceneModule = import('./scene')
 
+const NO_FLIGHT: readonly FlightPoint[] = []
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
 
 export default function MoonViewer({
   ref,
+  viewshed = null,
+  showSightlines = true,
+  flightPoints = NO_FLIGHT,
+  flightFrame = 0,
   markers = NO_MARKERS,
   selectedMarkerId = null,
   onMarkerSelect,
@@ -103,6 +119,22 @@ export default function MoonViewer({
     if (ready) sceneRef.current?.setSelectedMarker(selectedMarkerId)
   }, [ready, selectedMarkerId])
 
+  useEffect(() => {
+    if (ready) sceneRef.current?.setSightlinesVisible(showSightlines)
+  }, [ready, showSightlines])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setViewshed(viewshed)
+  }, [ready, viewshed])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setFlightPath(flightPoints)
+  }, [ready, flightPoints])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setFlightFrame(flightFrame)
+  }, [ready, flightFrame, flightPoints])
+
   useImperativeHandle(
     ref,
     () => ({
@@ -133,6 +165,10 @@ export default function MoonViewer({
         else
           pending.current.sun =
             direction === null ? null : parseSunDirection(direction)
+      },
+      previewSunDirection(direction) {
+        if (sceneRef.current) sceneRef.current.previewSunDirection(direction)
+        else pending.current.sun = parseSunDirection(direction)
       },
     }),
     [],

@@ -1,18 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 // 실제 Postgres + API 필요. docs/reservations.md로 DB/임무 실행을 준비한다.
-test('operator confirmation updates candidate availability and cancellation releases it', async ({
+test('visitors confirm, view history, and cancel without a token', async ({
   page,
   request,
 }) => {
-  const token = process.env.RESERVATION_E2E_ADMIN_TOKEN
-  if (!token)
-    throw new Error(
-      'Set RESERVATION_E2E_ADMIN_TOKEN for the local reservation API',
-    )
   const company = `E2E-${Date.now()}`
   let bookingId: string | null = null
-  const headers = { Authorization: `Bearer ${token}` }
   try {
     await page.goto('/')
     await page.getByRole('button', { name: '후보지 탐색', exact: true }).click()
@@ -25,13 +19,14 @@ test('operator confirmation updates candidate availability and cancellation rele
     const candidateButton = row.getByRole('button')
     const candidateId = await candidateButton.innerText()
     await candidateButton.click()
-    await page.getByText('운영자 예약 관리', { exact: true }).click()
-    await page.getByLabel('운영자 토큰').fill(token)
+    await page.getByText('예약 관리', { exact: true }).click()
+    await expect(page.getByLabel('운영자 토큰')).toHaveCount(0)
+    await expect(page.getByText(/공개 데모로 누구나/)).toBeVisible()
     await page.getByLabel('회사명', { exact: true }).fill(company)
     await page.getByLabel('임무명', { exact: true }).fill('Reservation test')
     await page.getByRole('button', { name: '선택 격자 예약 확정' }).click()
     await expect(page.getByText(/예약을 확정했습니다/)).toBeVisible()
-    const listResponse = await request.get('/api/reservations', { headers })
+    const listResponse = await request.get('/api/reservations')
     expect(listResponse.ok()).toBe(true)
     const list: {
       reservations: {
@@ -58,7 +53,6 @@ test('operator confirmation updates candidate availability and cancellation rele
     ).toBeDisabled()
     // 다른 호출자도 화면의 비활성 버튼을 우회해 중복 예약할 수 없다.
     const conflict = await request.post('/api/reservations', {
-      headers,
       data: {
         company: 'Other',
         mission_name: 'Overlap',
@@ -93,8 +87,7 @@ test('operator confirmation updates candidate availability and cancellation rele
         .filter({ hasText: candidateId }),
     ).toContainText('예약 가능')
   } finally {
-    if (bookingId)
-      await request.post(`/api/reservations/${bookingId}/cancel`, { headers })
+    if (bookingId) await request.post(`/api/reservations/${bookingId}/cancel`)
   }
 })
 
@@ -112,7 +105,7 @@ test('availability failures stay visibly unknown and cannot be confirmed', async
   await expect(
     page.getByRole('table').locator('tbody tr').first(),
   ).toContainText('미확인 · 예약 불가')
-  await page.getByText('운영자 예약 관리', { exact: true }).click()
+  await page.getByText('예약 관리', { exact: true }).click()
   await expect(
     page.getByRole('button', { name: '선택 격자 예약 확정' }),
   ).toBeDisabled()

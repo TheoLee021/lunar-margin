@@ -1,3 +1,4 @@
+import { FlightConditions, type FlightOverride } from './flight/flightPlan'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { fetchHealth } from './api/client'
 import { MissionWorkspace } from './mission/MissionWorkspace'
@@ -22,12 +23,14 @@ const INITIAL_SELECTION: MissionSelection = {
   duration: 14,
   siteId: null,
 }
-type View = 'mission' | 'analysis' | 'orbit' | 'search'
+type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
 function currentView(): View {
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
+  if (window.location.pathname.replace(/\/+$/, '') === '/flight')
+    return 'flight'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'analysis' || view === 'orbit' || view === 'search'
     ? view
@@ -56,7 +59,8 @@ function locationFor(
   planner: boolean,
 ): string {
   const url = new URL(window.location.href)
-  url.pathname = view === 'orbit' ? '/orbit' : '/'
+  url.pathname =
+    view === 'orbit' ? '/orbit' : view === 'flight' ? '/flight' : '/'
   if (view === 'analysis' || view === 'search')
     url.searchParams.set('view', view)
   else url.searchParams.delete('view')
@@ -74,6 +78,7 @@ function locationFor(
 
 export default function App() {
   const [view, setView] = useState<View>(currentView)
+  const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
   const [planner, setPlanner] = useState(
     () => new URLSearchParams(window.location.search).get('planner') === '1',
@@ -111,7 +116,7 @@ export default function App() {
     setPlanner(openPlanner)
   }
   return (
-    <>
+    <FlightConditions.Provider value={{ override, apply }}>
       <Suspense
         fallback={
           <p role="status" className="p-4 text-sm text-neutral-300">
@@ -135,8 +140,10 @@ export default function App() {
               navigate('mission')
             }}
           />
-        ) : view === 'orbit' ? (
+        ) : view === 'orbit' || view === 'flight' ? (
           <OrbitWorkspace
+            initialLanding={view === 'flight'}
+            siteId={selection.siteId}
             schedule={selection}
             onScheduleChange={(schedule) =>
               setSelection((current) => ({
@@ -215,7 +222,7 @@ export default function App() {
           </button>
         </div>
       ) : null}
-    </>
+    </FlightConditions.Provider>
   )
 }
 
@@ -335,6 +342,8 @@ function MissionApp({
           }
         >
           <DatePlanner
+            site={site}
+            selectedSiteId={selection.siteId}
             schedule={selection}
             onApply={onApply}
             onViewOrbit={onViewOrbit}

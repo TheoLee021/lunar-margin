@@ -38,7 +38,9 @@ from lunar_margin.engine.candidates.projection import polar_radius_m
 from lunar_margin.engine.candidates.ranking import RankScores, communication_component, score_sites
 from lunar_margin.engine.candidates.regions import label_regions
 from lunar_margin.engine.candidates.selection import select_diverse
+from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
+from lunar_margin.engine.viewshed import visible_grid_fraction
 from lunar_margin.pipeline.candidate_map import (
     MapCandidate,
     MapCoarse,
@@ -164,6 +166,37 @@ def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettin
     )
 
 
+def score_search_field(
+    config: SearchConfig,
+    sites: SitePoints,
+    field: MetricField,
+    filtered: FilterResult,
+    visibility_dem: PolarDem | None,
+    *,
+    coarse: bool = False,
+) -> RankScores:
+    visibility = None
+    if visibility_dem is not None and config.weights.visibility:
+        considered = filtered.status == Status.ELIGIBLE
+        if coarse and not considered.any():
+            considered = field.computed
+        visibility = np.full(len(sites), np.nan)
+        for index in np.flatnonzero(considered):
+            visibility[index] = visible_grid_fraction(
+                visibility_dem,
+                float(sites.x_m[index]),
+                float(sites.y_m[index]),
+                config.observer_height_m,
+            )
+    return score_sites(
+        field,
+        config.weights,
+        visibility=visibility,
+        rf=config.rf is not None,
+        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+    )
+
+
 def promotion_mask(
     field: MetricField,
     filtered: FilterResult,
@@ -249,6 +282,8 @@ def run_search(
 
     load_kernels(data_dir / "spice")
     dem = open_dem(dem_pairs)
+    visibility_dem = PolarDem.from_files(*dem_pairs[0]) if config.weights.visibility else None
+
     workers = config.workers or os.cpu_count() or 1
 
     def reporter(stage: str) -> Callable[[int, int], None] | None:
@@ -311,11 +346,8 @@ def run_search(
             config.thresholds,
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
-        coarse_scores = score_sites(
-            coarse_field,
-            config.weights,
-            rf=config.rf is not None,
-            duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+        coarse_scores = score_search_field(
+            config, coarse, coarse_field, coarse_filter, visibility_dem, coarse=True
         )
         promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
@@ -351,12 +383,7 @@ def run_search(
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
     )
-    fine_scores = score_sites(
-        fine_field,
-        config.weights,
-        rf=config.rf is not None,
-        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
-    )
+    fine_scores = score_search_field(config, fine, fine_field, fine_filter, visibility_dem)
     eligible_f = (fine_filter.status == Status.ELIGIBLE) & ~np.isnan(fine_scores.total)
     fine_region = label_regions(fine, eligible_f)
     selection = select_diverse(
@@ -399,6 +426,7 @@ def run_search(
                 total=coarse_scores.total[keep],
                 sun_component=coarse_scores.sun_component[keep],
                 earth_component=coarse_scores.earth_component[keep],
+                visibility_component=coarse_scores.visibility_component[keep],
                 components_used=coarse_scores.components_used[keep],
             )
         )
@@ -419,6 +447,7 @@ def run_search(
         total=np.concatenate([s.total for s in score_parts]),
         sun_component=np.concatenate([s.sun_component for s in score_parts]),
         earth_component=np.concatenate([s.earth_component for s in score_parts]),
+        visibility_component=np.concatenate([s.visibility_component for s in score_parts]),
         components_used=np.concatenate([s.components_used for s in score_parts]),
     )
     rank: NDArray[np.int32] = np.concatenate(rank_parts)
@@ -645,6 +674,9 @@ def _record(outcome: SearchOutcome, k: int) -> CandidateRecord:
                     / 3600,
                 )[k]
             ),
+            visible_grid_points=round(float(sc.visibility_component[k]) * 120)
+            if np.isfinite(sc.visibility_component[k])
+            else None,
             components_used=int(sc.components_used[k]),
         ),
         region_id=int(outcome.region_id[k]),

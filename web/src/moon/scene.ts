@@ -1,5 +1,10 @@
+import type { Viewshed } from '../api/viewshed'
 // Imperative Cesium scene for the Moon. Loaded lazily by MoonViewer; React never holds Cesium state.
 import {
+  ArcType,
+  Color,
+  ConstantProperty,
+  Entity,
   BoundingSphere,
   Cartesian2,
   Cartesian3,
@@ -27,6 +32,8 @@ import {
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { createAssetLayer, type MoonAsset } from './assetLayer'
 import { shouldFreeCameraAxis } from './camera'
+import { createFlightLayer } from './flightLayer'
+import type { FlightPoint } from '../flight/flightData'
 import { toLunarLocation, type LunarLocation } from './location'
 import { createMarkerLayer, type MoonMarker } from './markerLayer'
 import {
@@ -45,6 +52,7 @@ import {
 } from './overlayTiles'
 import { parseSunDirection, type Vector3 } from './sun'
 import { loadSunlightMap, type SunlightMap } from './sunlightMap'
+import { sunlitNearby, type SunlitNearby } from './sunlitNearby'
 import { createSunlightWindows, type SunlightWindows } from './sunlightWindows'
 import type { TileLevel } from './overlayTiles'
 
@@ -97,10 +105,26 @@ const EXPOSURE_SUN_DEG = 3.5
 // The view term is taken as if looking straight down, so brightness does not change as the camera
 // tilts; on near-vertical slopes it is held at this cosine, where Lommel-Seeliger would blow up.
 const MIN_VIEW_COS = 0.2
-// Light reaching shadowed ground (scattered off sunlit terrain), as a reflectance. It needs sunlit
-// ground nearby: it fades out to where the Sun is FILL_GONE_DEG below the horizon of a smooth
-// sphere, so the night side of the overlay is as black as the photo's.
+// Light reaching shadowed ground (sunlight scattered off sunlit terrain), as a reflectance.
+// Seen from afar it is SHADOW_FILL without shape, so shadows read as black, as in orbital photos.
+// Where the screen spans no more than FILL_NEAR_SPAN_M of ground it is SHADOW_FILL_NEAR and shows
+// the terrain: it falls on the slopes as a light from the side away from the Sun, FILL_LIGHT_DEG
+// above the horizon (the slopes that scatter sunlight face the Sun, so their light travels back
+// towards it), except for the share FILL_AMBIENT, which reaches every slope alike. The two blend
+// out to FILL_FAR_SPAN_M. Both levels are brighter than the scattered light is at the exposure of
+// sunlit ground: the fill is an eye adapting to the shadow it looks into, not a measurement.
 const SHADOW_FILL = 0.005
+const SHADOW_FILL_NEAR = 0.01
+const FILL_LIGHT_DEG = 10
+const FILL_AMBIENT = 0.15
+const FILL_NEAR_SPAN_M = 70_000
+const FILL_FAR_SPAN_M = 200_000
+// The fill needs sunlit ground nearby, wherever the Sun stands: it follows the sunlit share of the
+// surroundings (sunlitNearby.ts, worked out from the wide sunlight map when it arrives) and is
+// whole from FILL_REACH_SHARE up. Ground with no sunlit terrain around it stays black, by day or
+// night. Until that map has arrived, and on backends without one, the fill instead fades out to
+// where the Sun is FILL_GONE_DEG below the horizon of a smooth sphere.
+const FILL_REACH_SHARE = 0.08
 const FILL_GONE_DEG = 3
 const SUN_RADIUS_DEG = 0.2665
 const OVERLAY_FADE_M = 10_000
@@ -167,6 +191,19 @@ function sunlightTexture(map: SunlightMap): TextureUniform {
   })
 }
 
+function sunlitNearbyTexture(nearby: SunlitNearby): TextureUniform {
+  // Coarse cells of a smooth quantity: the GPU's own filtering between them is enough.
+  return new TextureUniform({
+    typedArray: nearby.data,
+    width: nearby.width,
+    height: nearby.height,
+    pixelFormat: PixelFormat.LUMINANCE,
+    repeat: false,
+    minificationFilter: TextureMinificationFilter.LINEAR,
+    magnificationFilter: TextureMagnificationFilter.LINEAR,
+  })
+}
+
 /** Reflectance of level ground under a Sun this high; the shader's flatGround is the same model. */
 function flatGround(sunHeightDeg: number): number {
   const mu0 = Math.sin(CesiumMath.toRadians(sunHeightDeg))
@@ -186,6 +223,8 @@ function createMoonShader(): CustomShader {
         type: UniformType.VEC3,
         value: new Cartesian3(0, 0, 1),
       },
+      u_viewshed: { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
+      u_viewshedGrid: { type: UniformType.VEC3, value: new Cartesian3() },
       u_sunLit: { type: UniformType.FLOAT, value: 0 },
       u_overlayReady: { type: UniformType.FLOAT, value: 0 },
       u_horizon: { type: UniformType.SAMPLER_2D, value: placeholderTexture() },
@@ -227,6 +266,17 @@ function createMoonShader(): CustomShader {
       u_wideSunlightGrid: {
         type: UniformType.VEC3,
         value: new Cartesian3(1, 0, 0),
+      },
+      // The sunlit share of the surroundings, over the same ground as u_wideSunlight (sunlitNearby.ts).
+      u_sunlitNearby: {
+        type: UniformType.SAMPLER_2D,
+        value: placeholderTexture(),
+      },
+      // From texture coordinates of u_wideSunlight to those of u_sunlitNearby, whose last cells
+      // reach past the edge of the map.
+      u_sunlitNearbyScale: {
+        type: UniformType.VEC2,
+        value: new Cartesian2(1, 1),
       },
       ...Object.fromEntries(
         fineSlots.flatMap((slot) => [
@@ -387,7 +437,7 @@ function createMoonShader(): CustomShader {
       return mix(2.0 * mu0 / (mu0 + 1.0), mu0, ${LAMBERT_SHARE.toFixed(2)});
     }
 
-    void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+    void shadeTerrain(FragmentInput fsInput, inout czm_modelMaterial material) {
       vec3 p = fsInput.attributes.positionWC;
       // Seen from behind: the far side through a hole in the near side (see HOLE_GREY).
       bool hole = !gl_FrontFacing;
@@ -485,10 +535,12 @@ ${fineSlots
       // Cast shadows of the wide zone: its sunlight map, and until that has arrived only the Sun
       // setting behind a smooth sphere.
       float visible = discFraction(sunEl);
+      vec2 wideUv = vec2(0.0);
       if (u_wideSunlightGrid.z > 0.5) {
         vec2 mapPixel = vec2(u_wideSunlightGrid.y + xy.x / u_wideSunlightGrid.x, u_wideSunlightGrid.y - xy.y / u_wideSunlightGrid.x);
         vec2 toUv = vec2(1.0, -1.0) / (u_wideSunlightGrid.x * u_wideSunlightGrid.z);
-        visible = textureGrad(u_wideSunlight, (mapPixel + 0.5) / u_wideSunlightGrid.z, dxyDx * toUv, dxyDy * toUv).r;
+        wideUv = (mapPixel + 0.5) / u_wideSunlightGrid.z;
+        visible = textureGrad(u_wideSunlight, wideUv, dxyDx * toUv, dxyDy * toUv).r;
       }
       if (top > 0.0) {
         // Interpolate the horizon first, then take the disc fraction once: shadow edges follow
@@ -517,11 +569,52 @@ ${sunWindowSlots
       float mu0 = max(dot(normalWC, sun), 0.0);
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
       float lommelSeeliger = 2.0 * mu0 / (mu0 + mu);
-      float fill = ${SHADOW_FILL.toFixed(3)} * smoothstep(${(-Math.sin(CesiumMath.toRadians(FILL_GONE_DEG))).toFixed(6)}, 0.0, sunSin);
+      // How much of the fill light reaches here (see FILL_REACH_SHARE). Ground that sees the whole
+      // Sun has sunlit ground around it, and is spared the lookup.
+      float fillReach = 1.0;
+      if (visible < 0.999) {
+        if (u_wideSunlightGrid.z > 0.5) {
+          // Level 0 by name: inside a branch the GPU cannot work out a level of its own.
+          float sunlitNearby = textureLod(u_sunlitNearby, wideUv * u_sunlitNearbyScale, 0.0).r;
+          fillReach = smoothstep(0.0, ${FILL_REACH_SHARE.toFixed(3)}, sunlitNearby);
+        } else {
+          fillReach = smoothstep(${(-Math.sin(CesiumMath.toRadians(FILL_GONE_DEG))).toFixed(6)}, 0.0, sunSin);
+        }
+      }
+      // The fill light (see SHADOW_FILL): shapeless from afar, lighting the slopes close in.
+      float fillNear = 1.0 - smoothstep(${FILL_NEAR_SPAN_M.toFixed(1)}, ${FILL_FAR_SPAN_M.toFixed(1)}, footprint * czm_viewport.z);
+      vec3 sunLevel = sun - sunSin * up;
+      float sunLevelLength = length(sunLevel);
+      vec3 fillFrom = ${Math.sin(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)} * up
+        - ${Math.cos(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)} * (sunLevelLength > 1e-4 ? sunLevel / sunLevelLength : east);
+      // Level ground gets the same from the light as from the ambient share.
+      float fillShape = mix(max(dot(normalWC, fillFrom), 0.0) / ${Math.sin(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)}, 1.0, ${FILL_AMBIENT.toFixed(2)});
+      float fill = fillReach * mix(${SHADOW_FILL.toFixed(3)}, ${SHADOW_FILL_NEAR.toFixed(3)} * fillShape, fillNear);
       float reflectance = visible * mix(lommelSeeliger, mu0, ${LAMBERT_SHARE.toFixed(2)}) + fill;
       float exposure = ${SUN_EXPOSURE.toFixed(2)} * min(1.0, ${flatGround(EXPOSURE_SUN_DEG).toFixed(6)} / max(flatGround(sunSin), 1e-6));
       vec3 sunlit = filmic(vec3(exposure * reflectance));
       material.diffuse = mix(photo, sunlit, weight);
+    }
+    void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+      shadeTerrain(fsInput, material);
+      if (u_viewshedGrid.z < 0.5 || !gl_FrontFacing) return;
+      vec3 up = normalize(fsInput.attributes.positionWC);
+      if (up.z >= 0.0) return;
+      vec2 xy = 2.0 * 1737400.0 * up.yx / (1.0 - up.z);
+      vec2 offset = xy - u_viewshedGrid.xy;
+      // Draw the observer on the very same tile fragment and projection as the mask.
+      float pixelM = clamp(max(length(dFdx(offset)), length(dFdy(offset))), 0.1, 35.0);
+      float markerDistance = length(offset) / pixelM;
+      if (markerDistance < 5.5) {
+        material.diffuse = markerDistance < 3.5 ? vec3(1.0, 0.55, 0.02) : vec3(1.0);
+        return;
+      }
+      if (length(offset) > 5000.0) return;
+      ivec2 cell = clamp(ivec2(floor(offset / 80.0 + 62.5)), ivec2(0), ivec2(124));
+      int code = int(round(texelFetch(u_viewshed, cell, 0).r * 255.0));
+      if (code == 0) return;
+      vec3 tint = code == 2 ? vec3(0.10, 0.78, 0.40) : vec3(0.88, 0.25, 0.20);
+      material.diffuse = mix(material.diffuse, tint, code == 2 ? 0.055 : 0.14);
     }
   `,
   })
@@ -538,6 +631,10 @@ export interface MoonSceneOptions {
 }
 
 export interface MoonScene {
+  setFlightPath(points: readonly FlightPoint[]): void
+  setFlightFrame(index: number): void
+  setSightlinesVisible(visible: boolean): void
+  setViewshed(map: Viewshed | null): void
   /**
    * `pitchDeg` is the camera's tilt, negative looking down, and `headingDeg` the
    * compass direction it faces. Both default to the whole-site view from above.
@@ -571,6 +668,12 @@ export interface MoonScene {
   releaseFollow(): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
+  /**
+   * The same light for a Sun that is still moving (a time being played or dragged): nothing is
+   * asked of the backend, so the shadows are the coarser ones the tiles give. `setSunDirection`
+   * with the Sun it comes to rest at brings the precise shadows back.
+   */
+  previewSunDirection(direction: unknown): void
   resetNorth(): void
   destroy(): void
 }
@@ -605,6 +708,7 @@ export async function createMoonScene(
     MAX_PIXEL_RATIO / window.devicePixelRatio,
   )
 
+  const flightLayer = createFlightLayer(viewer)
   const moonShader = createMoonShader()
   let normalWindows: NormalWindows | undefined
   let sunlightWindows: SunlightWindows | undefined
@@ -612,6 +716,8 @@ export async function createMoonScene(
   let sunlightLevel: TileLevel | undefined
   // The grid of the wide sunlight map, once the backend has said that it holds the wide zone.
   let wideSunlight: NormalWideMeta['sunlight'] | undefined
+  // The Sun the precise shadows (sunlight maps and windows) are for: null without sunlight, and
+  // while the Sun is moving, when the backend could not keep up with it (a map takes seconds).
   let sun: Vector3 | null = null
   // One of the two whole sunlight maps: asks the backend for the map of the current Sun and hands
   // it to the shader when it arrives. Without it the shader's coarser shadows keep showing.
@@ -619,6 +725,8 @@ export async function createMoonScene(
     wide: boolean,
     textureUniform: string,
     gridUniform: string,
+    // Whatever else the shader needs from the map, set before the map itself is switched on.
+    prepare?: (map: SunlightMap) => void,
   ) => {
     let pending: AbortController | undefined
     const clear = () => {
@@ -641,6 +749,7 @@ export async function createMoonScene(
         .then((map) => {
           if (request.signal.aborted) return
           if (map.width !== grid.size_px || map.height !== grid.size_px) return
+          prepare?.(map)
           moonShader.setUniform(textureUniform, sunlightTexture(map))
           moonShader.setUniform(
             gridUniform,
@@ -656,6 +765,17 @@ export async function createMoonScene(
     true,
     'u_wideSunlight',
     'u_wideSunlightGrid',
+    (map) => {
+      const nearby = sunlitNearby(map)
+      moonShader.setUniform('u_sunlitNearby', sunlitNearbyTexture(nearby))
+      moonShader.setUniform(
+        'u_sunlitNearbyScale',
+        new Cartesian2(
+          map.width / (nearby.width * nearby.cellPx),
+          map.height / (nearby.height * nearby.cellPx),
+        ),
+      )
+    },
   )
   // For a new Sun the wide map is asked for first: the backend computes one map at a time, and this
   // one is quick and covers the whole first screen. The 80 m map then sharpens the middle.
@@ -778,8 +898,11 @@ export async function createMoonScene(
         error instanceof Error ? error.message : String(error),
       )
     })
+  let tileset: Cesium3DTileset
   try {
-    const tileset = await Cesium3DTileset.fromIonAssetId(CESIUM_MOON_ASSET_ID)
+    tileset = await Cesium3DTileset.fromIonAssetId(CESIUM_MOON_ASSET_ID, {
+      enablePick: true,
+    })
     options.signal.throwIfAborted()
     tileset.customShader = moonShader
     // Back faces fill the holes of the tiles: see HOLE_GREY.
@@ -877,7 +1000,7 @@ export async function createMoonScene(
   }
 
   const markers = createMarkerLayer(viewer)
-  const assets = createAssetLayer(viewer)
+  const assets = createAssetLayer(viewer, tileset)
 
   // How long the camera leaves a viewer's own framing alone before resuming the chase.
   const HANDS_OFF_MS = 3000
@@ -914,9 +1037,27 @@ export async function createMoonScene(
       }
       const surface = pickSurface(position)
       if (!surface) return
-      options.onPick(
-        toLunarLocation(Cartographic.fromCartesian(surface, Ellipsoid.MOON)),
-      )
+      const ground = Cartographic.fromCartesian(surface, Ellipsoid.MOON)
+      const request = ++flight
+      const location = toLunarLocation(ground)
+      const publish = (height: number) => {
+        if (request === flight && !viewer.isDestroyed())
+          options.onPick({ ...location, surfaceHeightM: height })
+      }
+      if (scene.sampleHeightSupported) {
+        // An overview tile can be kilometres off the detailed terrain inside a crater.
+        const fallback = ground.height
+        void scene
+          .sampleHeightMostDetailed([ground])
+          .then(([sample]) => {
+            publish(
+              sample && Number.isFinite(sample.height)
+                ? sample.height
+                : fallback,
+            )
+          })
+          .catch(() => publish(fallback))
+      } else publish(ground.height)
     },
     ScreenSpaceEventType.LEFT_CLICK,
   )
@@ -939,10 +1080,110 @@ export async function createMoonScene(
   }
   camera.setView(overview)
 
+  const sightlinesVisible = new ConstantProperty(true)
+  let rayGeneration = 0
+  const rayEntities: Entity[] = []
   return {
+    setFlightPath(points) {
+      flightLayer.setPath(points)
+    },
+    setFlightFrame(index) {
+      flightLayer.setFrame(index)
+    },
+    setSightlinesVisible(visible) {
+      sightlinesVisible.setValue(visible)
+      scene.requestRender()
+    },
+    setViewshed(map) {
+      const generation = ++rayGeneration
+      for (const entity of rayEntities) viewer.entities.remove(entity)
+      rayEntities.length = 0
+      if (map) {
+        const draw = (heightShift: number) => {
+          if (viewer.isDestroyed() || generation !== rayGeneration) return
+          const position = ([lon, lat, height]: [number, number, number]) =>
+            Cartesian3.fromDegrees(
+              lon,
+              lat,
+              height + heightShift,
+              Ellipsoid.MOON,
+            )
+          for (const [target, hit] of map.targets) {
+            const end = position(target)
+            rayEntities.push(
+              viewer.entities.add({
+                position: end,
+                point: {
+                  pixelSize: 4,
+                  color: hit === null ? Color.AQUAMARINE : Color.SALMON,
+                  disableDepthTestDistance: Infinity,
+                },
+              }),
+            )
+            if (hit === null) continue
+            const first = position(hit)
+            rayEntities.push(
+              viewer.entities.add({
+                position: first,
+                point: {
+                  pixelSize: 6,
+                  color: Color.ORANGERED,
+                  outlineColor: Color.WHITE,
+                  outlineWidth: 1,
+                  disableDepthTestDistance: Infinity,
+                },
+                polyline: {
+                  show: sightlinesVisible,
+                  positions: [first, end],
+                  arcType: ArcType.NONE,
+                  width: 1.4,
+                  material: Color.SALMON,
+                  depthFailMaterial: Color.SALMON,
+                },
+              }),
+            )
+          }
+        }
+        // Register all DEM points to the rendered surface at the observer, preserving line geometry.
+        if (scene.sampleHeightSupported)
+          void scene
+            .sampleHeightMostDetailed([
+              Cartographic.fromDegrees(map.lon, map.lat),
+            ])
+            .then(([ground]) => {
+              draw(
+                ground && Number.isFinite(ground.height)
+                  ? ground.height + map.observer_height_m - map.eye_height_m
+                  : 0,
+              )
+            })
+            .catch(() => draw(0))
+        else draw(0)
+      }
+      if (!map) {
+        moonShader.setUniform('u_viewshedGrid', new Cartesian3())
+        return
+      }
+      const data = new Uint8Array(map.cells.length * 4)
+      for (let i = 0; i < map.cells.length; i++)
+        data[i * 4] = map.cells.charCodeAt(i) - 48
+      moonShader.setUniform(
+        'u_viewshed',
+        dataTexture({ width: 125, height: 125, data }),
+      )
+      moonShader.setUniform(
+        'u_viewshedGrid',
+        new Cartesian3(map.center_x_m, map.center_y_m, 1),
+      )
+    },
     flyTo(location, rangeM = SITE_RANGE_M, pitchDeg, headingDeg = 0) {
       const request = ++flight
-      const position = Cartesian3.fromDegrees(location.lon, location.lat)
+      const position = Cartesian3.fromDegrees(
+        location.lon,
+        location.lat,
+        location.surfaceHeightM ?? 0,
+        Ellipsoid.MOON,
+      )
       const arrive = (surface: Cartesian3) => {
         if (viewer.isDestroyed() || request !== flight) return
         flyAround(
@@ -955,7 +1196,8 @@ export async function createMoonScene(
           2,
         )
       }
-      if (scene.clampToHeightSupported) {
+      if (location.surfaceHeightM !== undefined) arrive(position)
+      else if (scene.clampToHeightSupported) {
         void scene
           .clampToHeightMostDetailed([position])
           .then(([surface]) => arrive(surface ?? position))
@@ -978,13 +1220,16 @@ export async function createMoonScene(
     follow(location, rangeM, pitchDeg, headingDeg) {
       // Aim at the terrain, not the reference sphere: the two are kilometres apart
       // at the pole, and the equipment stands on the terrain.
-      const onEllipsoid = Cartesian3.fromDegrees(
+      const surface = tileset.getHeight(
+        Cartographic.fromDegrees(location.lon, location.lat),
+        scene,
+      )
+      const target = Cartesian3.fromDegrees(
         location.lon,
         location.lat,
-        0,
+        surface ?? 0,
         Ellipsoid.MOON,
       )
-      const target = scene.clampToHeight(onEllipsoid) ?? onEllipsoid
       if (performance.now() - lastInputAt < HANDS_OFF_MS) {
         // Hands on the controls: carry the frame along with the target and leave
         // the distance and angle exactly as the viewer set them.
@@ -1029,6 +1274,18 @@ export async function createMoonScene(
         followFocus()
       }
     },
+    previewSunDirection(direction) {
+      moonShader.setUniform(
+        'u_sunDirectionWC',
+        new Cartesian3(...parseSunDirection(direction)),
+      )
+      moonShader.setUniform('u_sunLit', 1)
+      if (sun === null) return
+      // The maps and windows of the Sun it left come down, and none is asked for on the way.
+      sun = null
+      refreshSunlightMaps()
+      followFocus()
+    },
     resetNorth() {
       const canvas = scene.canvas
       const centre = pickSurface(
@@ -1051,6 +1308,8 @@ export async function createMoonScene(
     destroy() {
       inputCanvas.removeEventListener('wheel', noteInput)
       inputCanvas.removeEventListener('pointerdown', noteInput)
+      assets.destroy()
+      flightLayer.destroy()
       markers.destroy()
       removePreRender()
       removePostRender()

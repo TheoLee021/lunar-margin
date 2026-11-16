@@ -184,7 +184,7 @@
 | `max_communication_blackout_hours` | 지구가 보이지 않는 최장 연속 시간(통신 두절) 한도. `null`이면 조건 없음. 0 이상 |
 | `max_terrain_slope_degrees` | 0 초과 90 이하 또는 `null`. 후보 중심 250 m 반경의 DEM 경사 P95에 적용(160 m 경사 기준, 400 m 거칠기 창). 유효 지형 표본 100%와 P95 ≤ 한도를 모두 만족해야 통과. `null`이면 지형 필터를 적용하지 않는다 |
 | `search_region` | `"south"`만 가능. `"global"`은 422 ("hybrid global search is planned and not available yet") |
-| `optimization_priority` | `"balanced"`(일조 0.5 : 지구 0.5), `"solar"`(0.75 : 0.25), `"earth"`(0.25 : 0.75). 점수 가중치이며 적격 여부와는 별개 |
+| `optimization_priority` | `"balanced"`(일조 40%, 통신 40%, 가시권 20%), `"solar"`(60%, 20%, 20%), `"earth"`(20%, 60%, 20%), `"visibility"`(일조 25%, 통신 25%, 주변 가시권 50%). 주변 가시권은 임무 관측 높이에서 반경 5 km 안의 800 m 간격 격자점 120개 중 보이는 비율이다. 거친 격자와 정밀 격자 점수에 모두 반영하며 선정 결과의 `score.visible_grid_points`에 개수를 기록한다. 자료가 불완전하면 이 성분은 제외한다. 점수 가중치이며 적격 여부와는 별개 |
 | `observer_height_m` | 0~100 또는 `null`(= 0, 지표면) |
 
 두 한도는 **필수 적격 조건**이라 넘는 지점은 후보에서 빠진다(`summary.reasons`에 사유별 개수). 두 한도가 모두 `null`이면 필터 없이 점수 순위만으로 뽑는다.
@@ -294,6 +294,30 @@
 
 오류: `422` 시각이 없거나 타임존이 없음, `503` SPICE 커널 없음.
 
+### `GET /sunlight/sun-directions?start=&end=&step_minutes=`
+
+한 구간의 표본 시각마다 달에서 태양을 향하는 방향. 뷰어가 미션 기간의 햇빛을 시간에 따라 움직여 보일 때, 구간 전체를 한 번에 받는다.
+
+- `start`, `end`: 타임존 포함 ISO 8601. 표본은 `[start, end)`를 `step_minutes` 간격으로 나눈 시각이다 (`/analysis/*`의 `series.times`와 같은 시각).
+- `step_minutes`: 기본 30, 5~360. 기간은 3년 이하, 표본은 100,000개 이하. 다른 쿼리 키는 거절한다.
+
+```json
+{
+  "start": "2027-01-10T00:00:00Z",
+  "end": "2027-01-10T01:00:00Z",
+  "step_minutes": 30,
+  "directions": [
+    [-0.894677, 0.446459, -0.01511],
+    [-0.89269, 0.450419, -0.015103]
+  ]
+}
+```
+
+- `start`, `end`는 UTC로 바꾼 요청 시각. `directions[i]`는 `start + i * step_minutes`의 방향 `[x, y, z]`이고, 그 시각으로 `GET /sunlight/sun-direction`을 요청한 값과 같다 (같은 계산, 소수 6자리).
+- 28일을 30분 간격으로 받으면 1,344개, 약 40 KB.
+
+오류: `422` 시각이 없거나 타임존이 없음, 끝이 시작보다 늦지 않음, 간격·기간·표본 수가 범위 밖. `503` SPICE 커널 없음.
+
 ### `GET /sunlight/south-pole.png?x=&y=&z=`
 
 태양 방향 하나에 대한 남극 햇빛 지도: 각 지점에서 지형에 가리지 않고 보이는 태양 원반의 비율. 뷰어 셰이더의 지형 그림자(cast shadow)에 쓴다. 그림자는 태양 방향마다 달라 미리 구울 수 없으므로 요청이 오면 DEM으로 계산한다 (약 3초, 메모리 약 0.8 GB). 한 번에 하나만 계산하고 최근 결과 8개를 메모리에 둔다. 클라이언트는 `429`를 받으면 `Retry-After`만큼 기다렸다가 몇 번 다시 요청한다.
@@ -347,6 +371,10 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 기존 `run.elapsed_seconds`는 계산 시간이며 `total_elapsed_seconds`는 결과 저장까지 포함한다.
 새 실행만 총 시간을 기록하며 과거 결과의 시간을 추측해 채우지 않는다.
 
+### POST /trajectory/descent-reference
+
+가상 PDI에서 목표와 예비 착륙지의 기준 하강 경로를 평가한다. 요청·응답과 모델 한계는 [하강 기준 모델](descent-reference.md)에 있다. `include_earth_los=false`이면 LOLA DEM만 필요하다. 지구 시선은 동일 시각의 기하학적 지구 위치와 DEM을 사용한다. LOS 계산 구간이 SPICE 커널 범위를 벗어나면 422, 필요한 데이터가 없으면 503이다.
+
 ## 날짜별 지구–달 전이
 
 `GET /trajectory/transfer?departure=2027-01-06T00:00:00Z&arrival=2027-01-10T00:00:00Z`
@@ -374,10 +402,27 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 | `transfer`, `capture` | 출발→도착과 진입 후 좌표 표본 |
 | `moon_orbit_km` | 출발 후 29일간 달의 지구 중심 J2000 위치 표본 |
 
+전이는 SPICE 도착·출발 ET의 차이로 전파한다. 좌표 표본의 경과 초는 윤초를 포함하는 TAI 경과시간이고, `travel_time_days`는 요청한 UTC 달력 일정의 일수다.
+
+LOI 상태 경계(후속 DOI/PDI 연결을 위한 6차원 handoff):
+
+- `loi_handoff.epoch_utc`: 정확한 LOI UTC 시각(요청한 `arrival`과 동일).
+- `center="MOON"`, `inertial_frame="J2000"`, `fixed_frame="MOON_ME"`.
+- `pre_loi_j2000_km_kmps`, `post_loi_j2000_km_kmps`: 달 중심 J2000 관성좌표계에서 [x,y,z,vx,vy,vz]. 위치 단위 km, 속도 km/s.
+- `pre_loi_moon_me_m_mps`, `post_loi_moon_me_m_mps`: 같은 상태를 SPICE `sxform(J2000, MOON_ME, epoch)`의 **6×6 회전 프레임 상태변환**으로 변환한 [x,y,z,vx,vy,vz] (m, m/s). 달 회전으로 인한 속도 보정을 포함한다.
+- LOI는 같은 위치에서 순간 속도만 변하는 접선원궤도화 모델이다. Pre/post 위치가 일치하고, 속도 차이의 크기가 기존 `metrics.loi_delta_v_km_s`와 일치하도록 검증한다.
+- 이 상태는 **실제 생성된 Earth–Moon Transfer의 결과**이지, 이후 DOI/PDI나 착륙점 접근이 성립한다는 주장이 아니다. 전이 솔버는 자유롭게 궤도면을 선택하므로 착륙지·남극 궤도에 정렬되지 않을 수 있다. 지형고도, 실제 착륙선 질량, 유한추력·궤도면 변경, DOI 연료는 포함하지 않는다.
+- 내부의 달 중심 상태는 전이 솔버와 동일한 Hermite 보간 달 위치·속도를 기준으로 산출한다. 공개 좌표 표본을 차분해서 임의 속도를 만드는 방식은 사용하지 않는다. 다음 단계에서 SPICE 정확 상태와 보간 오차를 별도로 평가해야 한다.
+- #69의 현재 PDI는 가상의 목표지 기반 상태이므로 **자동으로 handoff를 연결하지 않는다**. 궤도면 정렬·DOI 전파·PDI 경계 검증을 별도 기능으로 개발한 후에만 연결 가능하다.
+
 각 좌표 표본은 `{seconds, spacecraft_km: [x,y,z], moon_km: [x,y,z]}`. 시간은 출발부터 경과한 초, 위치는 지구 중심 J2000의 km. 전이 마지막 표본과 진입 첫 표본은 동일 시각·동일 위치이며 진입에서 접선 방향을 유지하며 속력만 순간 변경한다. LOI 전후 각각 10분 구간에 5초 간격 표본을 추가한다. 확대도는 각 표본의 달 위치를 뺀 뒤 진입 궤도면에 투영한다.
 
 오류: `422` 입력 오류·비수렴·충돌 경로, `503` SPICE 파일 없음, `429` 동시 계산 한도(2건) 초과. 계산 한 건은 최대 약 20초로 제한한다. 정적 궤도로 대체하지 않는다.
 
+
+### POST /trajectory/doi-pdi-reference
+
+전이의 LOI 상태에서 목표 지점과 정렬되는 DOI/PDI 기준 궤도를 탐색한다. 요청·응답과 정렬 오차의 의미는 [DOI/PDI 기준 모델](doi-pdi-handoff.md)에 있다. 출발·도착 시각은 UTC로 정규화한다. 전이 솔버의 동시 계산 한도(2건)를 `GET /trajectory/transfer`와 공유하며, 이 경로 자체의 한도는 1건이다. 한도 초과 시 429를 반환한다.
 
 ### 후보지 탐색의 실제 지형 경사 필터
 
@@ -573,7 +618,9 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ## 격자 예약 (추가 계약)
 
-기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 Postgres 환경변수가 없거나 저장소에 연결할 수 없으면 503이다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
+기존 후보지 응답은 변경하지 않는다. 정책·설치·DB migration은 [reservations.md](reservations.md)를 참고한다. 예약 API는 `RESERVATION_DATABASE_URL`이 있으면 직접 Postgres로 연결하고, 없으면 기존 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`로 서버 전용 RPC를 호출한다. 두 방식 모두 미설정이거나 저장소에 연결할 수 없으면 503이다. Supabase URL은 프로젝트 기본 주소 또는 `/rest/v1/` 주소를 지원한다. 기존 분석/후보 탐색 API는 계속 사용할 수 있다.
+
+공개 데모 정책에 따라 예약 확정·이력 조회·취소는 로그인과 운영자 토큰 없이 누구나 사용할 수 있다. 다른 방문자의 예약도 취소할 수 있다. `RESERVATION_ADMIN_TOKEN`이나 Supabase 운영자 해시는 사용하지 않으며 `Authorization` 헤더도 필요 없다. Supabase 서비스 키는 백엔드에만 보관한다. 중복 예약 제약·입력 검증·저장소 장애 시 503은 유지한다.
 
 ### GET /candidates/runs/{run_id}/availability
 
@@ -601,7 +648,7 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ### POST /reservations
 
-운영자 전용. `Authorization: Bearer <RESERVATION_ADMIN_TOKEN>` 필요. 등록과 확정을 하나의 트랜잭션으로 수행한다.
+공개 데모 예약, 인증 헤더 없음. 등록과 확정을 하나의 트랜잭션으로 수행한다.
 
 ```json
 {
@@ -614,7 +661,7 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 }
 ```
 
-회사·임무명은 공백 제거 후 1~120자, 격자는 남극 고정 500m 셀, 기간은 정수 1~365일이다. 현재 분석 가능 기간(1850-01-01~2150-01-01 UTC) 안에 있어야 한다. cell ID·확정 시각·상태는 클라이언트에서 받지 않고 서버에서 생성한다. 겹치는 확정 예약이 있으면 409, 입력 오류 422, 운영자 토큰 없음/오류 401, 운영자 기능 미설정 503. 충돌이 나면 availability를 다시 조회한다.
+회사·임무명은 공백 제거 후 1~120자, 격자는 남극 고정 500m 셀, 기간은 정수 1~365일이다. 현재 분석 가능 기간(1850-01-01~2150-01-01 UTC) 안에 있어야 한다. cell ID·확정 시각·상태는 클라이언트에서 받지 않고 서버에서 생성한다. 겹치는 확정 예약이 있으면 409, 입력 오류 422, 저장소 미설정/연결 실패는 503이다. 충돌이 나면 availability를 다시 조회한다.
 
 성공 201, 예약 응답:
 
@@ -636,11 +683,11 @@ not a guarantee for arbitrary hardware, observer heights or mission lengths.
 
 ### GET /reservations?limit=100&offset=0
 
-운영자 전용, `Cache-Control: no-store`. `limit` 1~100, `offset` 0 이상. 확정 시각 내림차순·UUID 순으로 `{"reservations": [예약 응답...]}`. 취소된 이력도 포함한다.
+공개 조회, 인증 헤더 없음, `Cache-Control: no-store`. `limit` 1~100, `offset` 0 이상. 확정 시각 내림차순·UUID 순으로 `{"reservations": [예약 응답...]}`. 취소된 이력도 포함한다.
 
 ### POST /reservations/{id}/cancel
 
-운영자 전용, 본문 없음. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
+공개 데모 취소, 인증 헤더·본문 없음. 방문자 누구나 해당 ID의 예약을 취소할 수 있다. 성공 200과 취소된 예약 응답(`status: "cancelled"`, `cancelled_at` UTC). 이미 취소한 예약에는 같은 취소 시각을 반환한다. 다른 ID는 404, 잘못된 UUID는 422. 기록은 삭제하지 않고 해당 기간을 다시 예약할 수 있게 한다.
 
 ### 발사 예정일과 모델 예상 비용 (추가)
 
@@ -827,3 +874,34 @@ RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 �
 회사별 `/pricing/providers/compare`의 선택적 `source_run_id`는 저장 검색의 500 m 세밀 격자를
 식별한다. `terrain_excluded_reason: search_constraints_not_met`이면 그 검색의 제약 미충족이다.
 검색 실행을 전달하지 않은 지도 지점은 독립 가격 모델이며 검색 후보의 판정으로 간주하지 않는다.
+
+### GET /analysis/viewshed
+
+주어진 남극 좌표(`lat`, `lon`, 도)에서 지정한 높이의 관측자가 반경 5 km 안의 표면을 볼 수
+있는지 탐색과 같은 LOLA DEM으로 계산한다. `dem_name` 기본값은 `80s_80m`이다. 응답은 요청 좌표, 남극 극입체투영 중심
+`center_x_m`, `center_y_m`, 125×125 격자의 행 우선 문자열 `cells`이다.
+중심은 (62, 62), 열과 행이 증가할수록 각각 +x, +y 방향이다. 2는 가시,
+1은 차폐, 0은 범위 밖 또는 결측이다. 기존 분석 엔드포인트처럼 데이터 미설치 시 503을 반환한다.
+
+`eye_height_m`은 달 기준구 위 관측 눈높이이며 `rays`는 북쪽부터 시계 방향 15° 간격의
+24개 수평 직선이다. 각 쌍은 [거리(m), 지형 교차 여부]다. 첫 DEM 교차에서 멈추며,
+반경 끝이나 결측에서 중단된 선에는 교차점을 표시하지 않는다.
+
+`targets`는 800 m 표시 격자의 [목표점, 첫 차폐점 또는 null] 목록이다. 각 위치는
+[경도°, 위도°, 기준구 위 고도 m]이고 경로에 결측이 있는 목표는 생략한다.
+
+면의 각 80 m 격자 중심과 표시 목표점에는 같은 차폐 판정을 쓴다. 시선이 DEM 보간
+격자 경계를 통과할 때마다 구간을 나누고, 각 구간에서 쌍선형 지형과 곡률을 반영한
+시선 간 높이 차(이차식)의 최솟값을 확인한다. 첫 차폐 구간에서는 진입 위치를
+이분법으로 구한다. 차폐점은 해당 목표로 향하는 시선에 대한 값이다.
+
+선택 매개변수 `observer_height_m`는 지면 위 관측 높이(m, 기본 2, 0~100)이다.
+응답에 적용 높이를 포함하며 가시권, 목표점 차폐, 수평선 교차에 동일하게 적용한다.
+
+### POST /trajectory/flight-preview
+
+출발·달 궤도 진입 UTC와 목표 위경도(`latitude`, `longitude`)를 받아 궤도와 하강을 연결한다. `arrival`은 LOI 시각이다. 정렬된 PDI가 있으면 같은 위치·속도를 하강 엔진에 전달한다. `estimated_touchdown_utc`는 하강 기준 경로가 추력·연료·지형 조건을 통과한 경우의 PDI UTC + 평가된 하강 기간이다. 정렬 실패 또는 하강 조건 실패 시 null이다. 하강 기간과 착륙선 제원은 시나리오 입력이다.
+
+착륙 목표가 있는 예측은 동일한 전이·근월점에서 순간 원궤도화 기동의 방향을 변경한다. 착륙 시각에 회전한 목표와 진입 위치를 포함하는 궤도면을 구하고, 접선 방향 두 개 중 진입 속도와 더 가까운 쪽을 선택한다. `GET /trajectory/transfer`에도 선택적으로 `latitude`, `longitude`, `duration_s`를 전달하면 같은 LOI를 계산한다. 좌표 생략 시 기존 접선 원궤도화가 유지된다.
+
+하강 접근 거리는 `planned_downrange_m`(기본 240 km)이다. 연결된 비행의 `orbit.approach_error_m`는 PDI에서 궤도 진행 방향으로 이 거리만큼 앞선 지점과 착륙 시각의 목표 사이의 지표 거리다. 단독 DOI/PDI API는 기존 PDI 직하점 오차를 유지한다. `capture_delta_v_mps`는 궤도면 변경을 포함한 진입 전후 속도 벡터 차이의 크기다. 입력 질량은 PDI 시점 제원이므로 LOI·DOI 연료 공급 능력은 별도 검증 대상이다.

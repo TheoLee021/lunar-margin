@@ -98,3 +98,9 @@ function distanceM(
     Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2
   return 2 * Math.asin(Math.min(1, Math.sqrt(h))) * 1_737_400
 }
+
+it('separates diagonal offsets at the south pole', () => {
+  const pole = { lat: -90, lon: 0 }
+  expect(offsetLocation(pole, 100, 100).lon).toBeCloseTo(45)
+  expect(offsetLocation(pole, 100, -100).lon).toBeCloseTo(135)
+})

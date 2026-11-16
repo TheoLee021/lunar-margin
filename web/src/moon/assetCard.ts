@@ -6,6 +6,8 @@ export interface AssetCardInput {
   observerHeightM: number
   earth: SkyDirection | null
   /** The Sun at the same point: power, where the Earth is comms. */
+  measured?: boolean
+  waypointSample?: boolean
   sun?: SkyDirection | null
 }
 
@@ -18,14 +20,20 @@ const degrees = (value: number): string => `${value.toFixed(2)}°`
 function bodyLines(
   name: string,
   direction: SkyDirection | null | undefined,
+  measured?: boolean,
 ): string[] {
   if (direction === undefined) return []
-  if (direction === null) return [`${name} 가시성 계산 전`]
+  if (direction === null)
+    return [`${name} 가시성 ${measured ? '계산 실패' : '계산 전'}`]
   const margin = sightMarginDeg(direction)
+  const amount =
+    Math.abs(margin) > 0 && Math.abs(margin) < 0.005
+      ? '<0.01°'
+      : degrees(Math.abs(margin))
   return [
     direction.visible
-      ? `${name} 보임 · 여유 ${degrees(margin)}`
-      : `${name} 차폐 · ${degrees(Math.abs(margin))} 모자람`,
+      ? `${name} 보임 · 여유 ${amount}`
+      : `${name} 차폐 · ${amount} 모자람`,
     `  고도 ${degrees(direction.elevationDeg)} / 지평선 ${degrees(direction.horizonDeg)}`,
   ]
 }
@@ -43,11 +51,14 @@ export function assetCardText({
   observerHeightM,
   earth,
   sun,
+  measured,
+  waypointSample,
 }: AssetCardInput): string {
   return [
     label,
-    ...bodyLines('지구', earth),
-    ...bodyLines('태양', sun),
+    ...(waypointSample ? ['최근 경유점 기준'] : []),
+    ...bodyLines('지구', earth, measured),
+    ...bodyLines('태양', sun, measured),
     `관측 높이 ${metres(observerHeightM)}`,
   ].join('\n')
 }

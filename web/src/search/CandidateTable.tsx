@@ -18,6 +18,7 @@ interface Props {
   candidates: readonly Candidate[]
   reservations: ReadonlyMap<string, CandidateAvailability> | null
   prices: CandidatePrices
+  observerHeight: number
   highlightedId: string | null
   selectedId: string | null
   onHover: (id: string | null) => void
@@ -39,6 +40,7 @@ const COLUMNS: readonly {
   { key: 'rfBlackout', label: 'RF 최장 두절', align: 'right' },
   { key: 'slope', label: '지역 경사 P95', align: 'right' },
   { key: 'roughness', label: '지역 거칠기 P95', align: 'right' },
+  { key: 'visibility', label: '주변 가시권 (5 km)', align: 'right' },
   { key: 'score', label: '점수', align: 'right' },
   { key: 'region', label: '영역', align: 'right' },
 ]
@@ -47,6 +49,7 @@ export function CandidateTable({
   candidates,
   reservations,
   prices,
+  observerHeight,
   highlightedId,
   selectedId,
   onHover,
@@ -113,7 +116,9 @@ export function CandidateTable({
                     onClick={() => toggle(col.key)}
                     className="hover:text-neutral-100"
                   >
-                    {col.label}
+                    {col.key === 'visibility'
+                      ? `주변 가시권 (5 km · ${observerHeight} m 높이)`
+                      : col.label}
                     {sort.key === col.key
                       ? sort.dir === 'asc'
                         ? ' ▲'
@@ -232,6 +237,11 @@ export function CandidateTable({
                   {c.terrain?.roughness_p95_m == null
                     ? '—'
                     : `${c.terrain.roughness_p95_m.toFixed(2)} m`}
+                </td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap tabular-nums text-emerald-300">
+                  {c.score.visible_grid_points == null
+                    ? '지형 자료 부족'
+                    : `${c.score.visible_grid_points} / 120`}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {scoreText(c.score.total)}

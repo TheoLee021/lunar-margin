@@ -20,6 +20,7 @@ import {
   Ray,
   Transforms,
   VerticalOrigin,
+  type Cesium3DTileset,
   type Viewer,
 } from 'cesium'
 import { assetCardText } from './assetCard'
@@ -77,6 +78,8 @@ export interface AssetModel {
 
 export interface MoonAsset {
   id: string
+  measured?: boolean
+  waypointSample?: boolean
   label: string
   location: LunarLocation
   /**
@@ -155,7 +158,7 @@ interface RayPicker {
   pickFromRay?: (
     ray: Ray,
     objectsToExclude?: readonly unknown[],
-  ) => { position?: Cartesian3 } | undefined
+  ) => { position?: Cartesian3; object?: { primitive?: unknown } } | undefined
 }
 
 export interface AssetLayer {
@@ -165,6 +168,7 @@ export interface AssetLayer {
    */
   setAssets(assets: readonly MoonAsset[]): void
   /** Show or hide the arrows pointing at the Earth. */
+  destroy(): void
   setSightsVisible(visible: boolean): void
 }
 
@@ -191,6 +195,7 @@ interface Live {
 }
 
 interface Drawn {
+  asset: MoonAsset
   /** Carries the card and the badge; the geometry hangs off `pieces`. */
   anchor: Entity
   pieces: Entity[]
@@ -199,7 +204,10 @@ interface Drawn {
   live: Live
 }
 
-export function createAssetLayer(viewer: Viewer): AssetLayer {
+export function createAssetLayer(
+  viewer: Viewer,
+  tileset: Cesium3DTileset,
+): AssetLayer {
   const drawn = new Map<string, Drawn>()
   /**
    * The sight arrows are primitives, not entities. An entity polyline whose positions
@@ -210,6 +218,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
   const sights = new PolylineCollection()
   viewer.scene.primitives.add(sights)
   let sightsVisible = true
+  let terrainChanged = true
 
   const sightMaterial = (color: Color) =>
     Material.fromType('PolylineArrow', {
@@ -228,9 +237,11 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
    * unit follows the terrain down to the finest tile that has loaded.
    */
   const groundAt = (location: LunarLocation, live: Live): number => {
-    const clamped = viewer.scene.clampToHeight(positionAt(location, 0))
-    if (clamped && Number.isFinite(clamped.x))
-      live.ground = Cartographic.fromCartesian(clamped, Ellipsoid.MOON).height
+    const height = tileset.getHeight(
+      Cartographic.fromDegrees(location.lon, location.lat),
+      viewer.scene,
+    )
+    if (height !== undefined && Number.isFinite(height)) live.ground = height
     return live.ground
   }
 
@@ -297,12 +308,8 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
    * terrain the ray meets. Only tiles that have loaded can be hit, so the answer sharpens
    * as the viewer zooms, the same way the ground height under a unit does.
    */
-  const sightPositions = (
-    asset: MoonAsset,
-    ground: number,
-    own: Drawn | undefined,
-  ): Cartesian3[] => {
-    if (!asset.earth) return []
+  const sightPositions = (asset: MoonAsset, ground: number): Cartesian3[] => {
+    if (!sightsVisible || !asset.earth) return []
     const frame = Transforms.eastNorthUpToFixedFrame(
       positionAt(asset.location, ground),
       Ellipsoid.MOON,
@@ -330,11 +337,13 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
     let reach = SIGHT_LENGTH_M
     const picker = viewer.scene as unknown as RayPicker
     try {
-      const hit = picker.pickFromRay?.(
-        new Ray(start, direction),
-        own ? [own.anchor, own.mast, ...own.pieces] : [],
-      )
-      if (hit?.position) {
+      const hit =
+        !asset.earth.visible &&
+        picker.pickFromRay?.(new Ray(start, direction), [
+          sights,
+          ...viewer.entities.values,
+        ])
+      if (hit && hit.position && hit.object?.primitive === tileset) {
         const distance = Cartesian3.distance(start, hit.position)
         if (distance < reach)
           reach = Math.max(SIGHT_MIN_M, distance - SIGHT_HIT_BACKOFF_M)
@@ -357,7 +366,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       pieces: piecePositions(asset, 0),
       orientation: Quaternion.IDENTITY,
       mast: positionAt(asset.location, asset.observerHeightM / 2),
-      color: EARTH_CLEAR,
+      color: MAST_COLOR,
       card: assetCardText(asset),
       ground: 0,
     }
@@ -381,10 +390,7 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       ...(symbol
         ? {
             billboard: {
-              image: new CallbackProperty(
-                () => assetSymbolImage(symbol, live.color.toCssHexString()),
-                false,
-              ),
+              image: assetSymbolImage(symbol, live.color.toCssHexString()),
               verticalOrigin: VerticalOrigin.BOTTOM,
               pixelOffset: new Cartesian2(0, -32),
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -436,11 +442,12 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       material: sightMaterial(live.color),
     })
 
-    return { anchor, pieces, mast, sight, live }
+    return { asset, anchor, pieces, mast, sight, live }
   }
 
   const paint = (asset: MoonAsset, entities: Drawn): void => {
     const { live } = entities
+    entities.asset = asset
     live.card = assetCardText(asset)
     const ground = groundAt(asset.location, live)
     live.anchor = positionAt(asset.location, ground + asset.shape.heightM / 2)
@@ -456,39 +463,84 @@ export function createAssetLayer(viewer: Viewer): AssetLayer {
       )
     entities.mast.show = wantsMast(asset)
 
-    const positions = sightPositions(asset, ground, entities)
+    const positions = sightPositions(asset, ground)
     entities.sight.positions = positions
     entities.sight.show = sightsVisible && positions.length > 0
 
-    const color = asset.earth?.visible ? EARTH_CLEAR : EARTH_BLOCKED
+    const color = !asset.earth
+      ? MAST_COLOR
+      : asset.earth.visible
+        ? EARTH_CLEAR
+        : EARTH_BLOCKED
     if (!Color.equals(color, live.color)) {
       live.color = color
+      if (asset.symbol && entities.anchor.billboard)
+        entities.anchor.billboard.image = new ConstantProperty(
+          assetSymbolImage(asset.symbol, color.toCssHexString()),
+        )
       entities.sight.material = sightMaterial(color)
     }
   }
 
+  const dirty = () => {
+    terrainChanged = true
+  }
+  const removeTileListener = tileset.allTilesLoaded.addEventListener(dirty)
+  const removeCameraListener = viewer.camera.moveEnd.addEventListener(dirty)
+  const removeRefresh = viewer.scene.preRender.addEventListener(() => {
+    if (!terrainChanged) return
+    terrainChanged = false
+    for (const entry of drawn.values()) paint(entry.asset, entry)
+  })
+  const remove = (entry: Drawn) => {
+    viewer.entities.remove(entry.anchor)
+    viewer.entities.remove(entry.mast)
+    for (const piece of entry.pieces) viewer.entities.remove(piece)
+    sights.remove(entry.sight)
+  }
   return {
+    destroy() {
+      removeTileListener()
+      removeCameraListener()
+      removeRefresh()
+      for (const entry of drawn.values()) remove(entry)
+      drawn.clear()
+      viewer.scene.primitives.remove(sights)
+    },
     setAssets(assets) {
       const keep = new Set(assets.map((asset) => asset.id))
       for (const [id, entities] of drawn) {
         if (keep.has(id)) continue
-        viewer.entities.remove(entities.anchor)
-        viewer.entities.remove(entities.mast)
-        for (const piece of entities.pieces) viewer.entities.remove(piece)
-        sights.remove(entities.sight)
+        remove(entities)
         drawn.delete(id)
       }
       for (const asset of assets) {
         let entities = drawn.get(asset.id)
+        if (entities && entities.asset.shape !== asset.shape) {
+          remove(entities)
+          entities = undefined
+        }
         if (!entities) {
           entities = create(asset)
           drawn.set(asset.id, entities)
         }
+        const previous = entities.asset
+        if (
+          previous !== asset &&
+          previous.location.lat === asset.location.lat &&
+          previous.location.lon === asset.location.lon &&
+          previous.earth === asset.earth &&
+          previous.sun === asset.sun &&
+          previous.measured === asset.measured &&
+          previous.headingDeg === asset.headingDeg
+        )
+          continue
         paint(asset, entities)
       }
     },
     setSightsVisible(visible) {
       sightsVisible = visible
+      terrainChanged = true
       for (const entities of drawn.values())
         entities.sight.show = visible && entities.sight.positions.length > 0
     },

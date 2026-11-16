@@ -60,13 +60,18 @@ def utc_range(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.f
     return et0 + step_s * np.arange(count, dtype=np.float64)
 
 
-def body_vectors(body: Literal["SUN", "EARTH"], et: NDArray[np.float64]) -> NDArray[np.float64]:
-    """달 중심에서 본 천체의 위치 벡터(km, MOON_ME 프레임, LT+S 보정). 모양 (N, 3).
+def body_vectors(
+    body: Literal["SUN", "EARTH"],
+    et: NDArray[np.float64],
+    *,
+    correction: Literal["LT+S", "NONE"] = "LT+S",
+) -> NDArray[np.float64]:
+    """달 중심에서 본 천체의 위치 벡터(km, MOON_ME 프레임, 기본 LT+S 보정). 모양 (N, 3).
 
     지점과 무관하므로 한 번만 계산해 여러 지점에 재사용할 수 있다.
     """
     with _SPICE_LOCK:
-        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
+        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", correction, "MOON")
     return np.asarray(positions, dtype=np.float64)
 
 
@@ -80,6 +85,12 @@ def sun_direction(moment: datetime) -> tuple[float, float, float]:
     x, y, z = body_vectors("SUN", np.array([et]))[0]
     norm = math.sqrt(x * x + y * y + z * z)
     return (float(x / norm), float(y / norm), float(z / norm))
+
+
+def sun_directions(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.float64]:
+    """[start, end)를 step_minutes 간격으로 나눈 시각마다의 sun_direction. 모양 (N, 3)."""
+    vectors = body_vectors("SUN", utc_range(start, end, step_minutes))
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
 
 
 def topocentric_azel(
@@ -113,12 +124,58 @@ def body_azel(
     return topocentric_azel(body_vectors(body, et), lat_deg, lon_deg, observer_height_m)
 
 
+def ephemeris_time(epoch: datetime) -> float:
+    if epoch.tzinfo is None:
+        raise ValueError("epoch must include a timezone")
+    utc = epoch.astimezone(UTC)
+    with _SPICE_LOCK:
+        return float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+
+
+def elapsed_si_seconds(start_et: float, offsets: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Convert integration offsets in TDB to elapsed atomic seconds for the public timeline."""
+    with _SPICE_LOCK:
+        start_tai = spiceypy.unitim(start_et, "TDB", "TAI")
+        return np.array(
+            [
+                round(spiceypy.unitim(start_et + float(t), "TDB", "TAI") - start_tai, 6)
+                for t in offsets
+            ],
+            dtype=np.float64,
+        )
+
+
 def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.float64]:
     """Geometric Earth-centered J2000 Moon states, km and km/s (no light-time correction)."""
-    if start.tzinfo is None:
-        raise ValueError("start must include a timezone")
-    utc = start.astimezone(UTC).replace(tzinfo=None)
+    et = ephemeris_time(start)
     with _SPICE_LOCK:
-        et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
         states, _ = spiceypy.spkezr("MOON", (et + seconds).tolist(), "J2000", "NONE", "EARTH")
     return np.asarray(states, dtype=np.float64)
+
+
+def inertial_moon_state_to_moon_me(
+    state_j2000_m: NDArray[np.float64], epoch: datetime
+) -> NDArray[np.float64]:
+    """Transform a Moon-CENTERED 6D J2000 state to MOON_ME at one epoch.
+
+    Position is metres, velocity metres/second. SPICE sxform includes the
+    derivative of the rotating lunar frame, unlike a 3x3 pxform rotation.
+    Kernels must already have been loaded by load_kernels.
+    """
+    state = np.asarray(state_j2000_m, dtype=np.float64)
+    if state.shape != (6,) or not np.isfinite(state).all():
+        raise ValueError("Moon-centered state must be six finite SI numbers")
+    et = ephemeris_time(epoch)
+    with _SPICE_LOCK:
+        xform = np.asarray(spiceypy.sxform("J2000", "MOON_ME", et), dtype=np.float64)
+    return xform @ state
+
+
+def moon_fixed_direction_to_j2000(
+    direction: NDArray[np.float64], epoch: datetime
+) -> NDArray[np.float64]:
+    """Rotate a surface direction into inertial space at the requested epoch."""
+    et = ephemeris_time(epoch)
+    with _SPICE_LOCK:
+        rotation = spiceypy.pxform("MOON_ME", "J2000", et)
+    return np.asarray(rotation @ direction, dtype=np.float64)

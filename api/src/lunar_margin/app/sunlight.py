@@ -1,4 +1,5 @@
 """GET /sunlight/sun-direction?time=: 한 시각에 달에서 태양을 향하는 방향 (계약: docs/api.md).
+GET /sunlight/sun-directions?start=&end=&step_minutes=: 한 구간의 표본 시각마다 그 방향.
 GET /sunlight/south-pole.png?x=&y=&z=: 태양 방향 하나에 대한 남극 햇빛 지도.
 GET /sunlight/south-pole/{level}/{tile_x}/{tile_y}.png?x=&y=&z=: 그 지도의 세밀한 창.
 GET /sunlight/south-pole-wide.png?x=&y=&z=: 같은 태양 방향의 넓은 지도 (60°S까지, 더 거친 격자).
@@ -30,12 +31,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from numpy.typing import NDArray
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
-from lunar_margin.app.analysis import get_settings
+from lunar_margin.app.analysis import SampledRange, get_settings
 from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.field import open_dem
 from lunar_margin.engine.dem import Dem, HeightField, LayeredHeights, RasterDem
-from lunar_margin.engine.ephemeris import load_kernels, sun_direction
+from lunar_margin.engine.ephemeris import load_kernels, sun_direction, sun_directions
 from lunar_margin.engine.sunlight import GridWindow, SunlightGrid, sunlit_fraction
 from lunar_margin.pipeline.geotiff import read_geotiff_bounds
 from lunar_margin.pipeline.horizons import resolve_dems
@@ -49,6 +50,8 @@ from lunar_margin.pipeline.png import encode_png
 
 Direction = tuple[float, float, float]
 SunFinder = Callable[[datetime], Direction]
+# (start, end, step_minutes) -> [start, end)의 표본 시각마다 단위 벡터, 모양 (N, 3)
+SunPathFinder = Callable[[datetime, datetime, int], NDArray[np.float64]]
 
 router = APIRouter(prefix="/sunlight", tags=["sunlight"])
 _CACHE = {"Cache-Control": "public, max-age=3600"}
@@ -396,18 +399,36 @@ class SunDirectionAt(BaseModel):
     z: float
 
 
+class SunDirections(BaseModel):
+    """[start, end)의 표본 시각마다, 달에서 태양을 향하는 MOON_ME 단위 벡터."""
+
+    start: str
+    end: str
+    step_minutes: int
+    directions: list[Direction]
+
+
 @lru_cache(maxsize=2)
-def _build_sun_finder(data_dir: Path) -> SunFinder:
+def _load_spice(data_dir: Path) -> None:
     """SPICE 커널을 처음 요청 때 한 번 로드한다. 없으면 503."""
     try:
         load_kernels(data_dir / "spice")
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail=f"{error}") from error
-    return sun_direction
 
 
 def get_sun_finder(settings: Annotated[Settings, Depends(get_settings)]) -> SunFinder:
-    return _build_sun_finder(settings.data_dir)
+    _load_spice(settings.data_dir)
+    return sun_direction
+
+
+def get_sun_path_finder(settings: Annotated[Settings, Depends(get_settings)]) -> SunPathFinder:
+    _load_spice(settings.data_dir)
+    return sun_directions
+
+
+def _utc(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @router.get("/sun-direction")
@@ -419,8 +440,23 @@ def sun_direction_at(
     # 같은 시각이면 언제나 같은 답이다: 받은 방향으로 요청하는 햇빛 지도도 같은 것이 된다
     x, y, z = (round(component, 6) + 0.0 for component in find(moment.time))
     response.headers.update(_CACHE)
-    return SunDirectionAt(
-        time=moment.time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), x=x, y=y, z=z
+    return SunDirectionAt(time=_utc(moment.time), x=x, y=y, z=z)
+
+
+@router.get("/sun-directions")
+def sun_directions_over(
+    span: Annotated[SampledRange, Query()],
+    find: Annotated[SunPathFinder, Depends(get_sun_path_finder)],
+    response: Response,
+) -> SunDirections:
+    # 한 시각씩 물은 /sun-direction과 같은 값이 되도록 같은 자리에서 반올림한다
+    directions = np.round(find(span.start, span.end, span.step_minutes), 6) + 0.0
+    response.headers.update(_CACHE)
+    return SunDirections(
+        start=_utc(span.start),
+        end=_utc(span.end),
+        step_minutes=span.step_minutes,
+        directions=directions.tolist(),
     )
 
 

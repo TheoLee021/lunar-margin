@@ -1,6 +1,13 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  fetchViewshed,
+  GRID_TARGET_COUNT,
+  visibleGridCount,
+} from '../api/viewshed'
+import { landingStart } from './liveAnalysis'
 import { MissionMetrics } from './MissionMetrics'
-import { MissionTimeline } from './MissionTimeline'
+import { ReviewTimeline } from './ReviewTimeline'
+import { RequirementMarginPanel } from './RequirementMarginPanel'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
 import type { ReactNode } from 'react'
 import {
@@ -9,7 +16,9 @@ import {
 } from './MissionMoonViewer'
 import type { CandidateSite, MissionSelection } from './types'
 import type { useDashboardRun } from './useDashboardRun'
-import { useSunDirection } from './useSunDirection'
+import { sunAt } from './sunPlayback'
+import { useSunPath } from './useSunPath'
+import type { Vector3 } from '../moon/sun'
 
 export function MissionWorkspace({
   selection,
@@ -31,10 +40,74 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
-  const moon = useRef<MissionMoonViewerHandle>(null)
-  const selected = sites.find((site) => site.id === selection.siteId)
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
+  const [override, setOverride] = useState<{
+    runId?: string
+    value: number
+  } | null>(null)
+  const demName = run?.config.dem
+  const searchHeight = run?.config.observer_height_m ?? 2
+  const height =
+    override && override.runId === run?.id ? override.value : searchHeight
+  const setHeight = (value: number) => setOverride({ runId: run?.id, value })
+  const heights = [...new Set([searchHeight, 2, 10, 40])]
+
+  const [sortByVisibility, setSortByVisibility] = useState(false)
+  const [comparison, setComparison] = useState<{
+    sites: readonly CandidateSite[]
+    height: number
+    counts: (number | null | 'error')[]
+  } | null>(null)
+  useEffect(() => {
+    if (!sites.length || height === searchHeight) return
+    const controller = new AbortController()
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(30000),
+    ])
+    void Promise.all(
+      sites.map(async (site) => {
+        try {
+          const map = await fetchViewshed(
+            site.latitude,
+            site.longitude,
+            height,
+            signal,
+            site.grid,
+            demName,
+          )
+          return visibleGridCount(map)
+        } catch {
+          return 'error' as const
+        }
+      }),
+    ).then((counts) => {
+      if (!controller.signal.aborted) setComparison({ sites, height, counts })
+    })
+    return () => controller.abort()
+  }, [sites, height, demName, searchHeight])
+  const counts =
+    comparison?.sites === sites && comparison.height === height
+      ? comparison.counts
+      : undefined
+  const rows = sites.map((site, index) => ({
+    site,
+    index,
+    count:
+      height === searchHeight
+        ? (run?.candidates.find((candidate) => candidate.id === site.id)?.score
+            .visible_grid_points ?? null)
+        : counts?.[index],
+  }))
+  if (sortByVisibility)
+    rows.sort(
+      (a, b) =>
+        (typeof b.count === 'number' ? b.count : -1) -
+        (typeof a.count === 'number' ? a.count : -1),
+    )
+  const moon = useRef<MissionMoonViewerHandle>(null)
+  const selected = sites.find((site) => site.id === selection.siteId)
   const selectedCandidate = run?.candidates.find(
     (candidate) => candidate.id === selected?.id,
   )
@@ -43,16 +116,67 @@ export function MissionWorkspace({
   searchUrl.searchParams.delete('planner')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
-  // The Sun at landing (00:00 UTC) lights the Moon whether or not a candidate is selected.
-  const sun = useSunDirection(selection.landing)
+  const sun = useSunPath(selection.landing, selection.duration)
+  const sunPath = sun.kind === 'ready' ? sun.path : null
+  const [photo, setPhoto] = useState(false)
+  // The review time the Moon is lit from, in days after landing. It belongs to one schedule and to
+  // the selected candidates: it survives going from one candidate to the next, so two can be
+  // compared at the same moment, and is back at landing once none is selected, when there is no
+  // timeline to show where it is.
+  const schedule = `${selection.landing}/${selection.duration}`
+  const [review, setReview] = useState({ schedule, days: 0 })
+  if (
+    review.schedule !== schedule ||
+    (selection.siteId === null && review.days !== 0)
+  )
+    setReview({ schedule, days: 0 })
+  // The review time is being dragged or played: each frame's Sun goes straight to the Moon, which
+  // takes the Sun below again, with its precise shadows, once the time has come to rest.
+  const [sunMoving, setSunMoving] = useState(false)
+  const onPreview = useCallback((direction: Vector3) => {
+    setSunMoving(true)
+    moon.current?.previewSun(direction)
+  }, [])
+  const onReview = useCallback(
+    (days: number) => {
+      setSunMoving(false)
+      setReview({ schedule, days })
+    },
+    [schedule],
+  )
+  const onLight = useCallback(() => setPhoto(false), [])
+  // The Sun lights the Moon whether or not a candidate is selected: at landing (00:00 UTC) until a
+  // review time is chosen.
+  const reviewDays = review.schedule === schedule ? review.days : 0
+  const sunDirection = useMemo(
+    () => (sunPath ? sunAt(sunPath, reviewDays) : null),
+    [sunPath, reviewDays],
+  )
+  const landingSun = analysis.kind === 'ready' ? analysis.data.sun : null
+  const shadowedAtLanding =
+    selected &&
+    landingSun?.lat === selected.latitude &&
+    landingSun.lon === selected.longitude &&
+    Date.parse(landingSun.series.times[0] ?? '') ===
+      Date.parse(landingStart(selection.landing)) &&
+    landingSun.series.visible[0] === false
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
+        reviewDays={reviewDays}
         ref={moon}
         selection={selection}
         sites={sites}
         onSelect={onSelect}
+        demName={demName}
+        heights={heights}
+        height={height}
+        setHeight={setHeight}
         sun={sun}
+        sunDirection={sunDirection}
+        sunMoving={sunMoving}
+        photo={photo}
+        onPhotoChange={setPhoto}
       />
       <header className="pointer-events-none absolute left-4 top-4 flex max-w-[60%] flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold uppercase tracking-wide">
@@ -121,6 +245,9 @@ export function MissionWorkspace({
                   <div>
                     일조·{run.config.rf ? 'RF 통신' : '지구 가시성'} 가중치{' '}
                     {run.config.weights.sun} : {run.config.weights.earth}
+                    {run.config.weights.visibility
+                      ? ` · 주변 가시권 가중치 ${run.config.weights.visibility}`
+                      : null}
                   </div>
                 </div>
               </section>
@@ -158,8 +285,48 @@ export function MissionWorkspace({
                   확인하세요.
                 </p>
               ) : null}
+              {sites.length > 0 && (
+                <div className="grid gap-1 text-xs">
+                  {run && (
+                    <p className="text-neutral-300">
+                      {run.config.weights.visibility
+                        ? `탐색 점수 · 가시권 가중치 ${Math.round(run.config.weights.visibility * 100)}% (탐색 높이 ${run.config.observer_height_m} m)`
+                        : '탐색 점수 · 가시권 미반영 (0%)'}
+                    </p>
+                  )}
+                  <label>
+                    후보 정렬{' '}
+                    <select
+                      className="bg-neutral-800"
+                      value={sortByVisibility ? 'visible' : 'score'}
+                      onChange={(event) =>
+                        setSortByVisibility(event.target.value === 'visible')
+                      }
+                    >
+                      <option value="score">탐색 점수순</option>
+                      <option value="visible">보이는 격자점 많은 순</option>
+                    </select>
+                  </label>
+                  <label>
+                    가시권 비교 높이{' '}
+                    <select
+                      className="bg-neutral-800"
+                      value={height}
+                      onChange={(event) =>
+                        setHeight(Number(event.target.value))
+                      }
+                    >
+                      {heights.map((h) => (
+                        <option key={h} value={h}>
+                          {h} m{h === searchHeight ? ' (탐색 높이)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
               <ol className="space-y-1">
-                {sites.map((site, index) => (
+                {rows.map(({ site, index, count }) => (
                   <li key={site.id}>
                     <button
                       type="button"
@@ -175,6 +342,15 @@ export function MissionWorkspace({
                       </span>
                       <span>
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
+                        <span className="block text-teal-300">
+                          {typeof count === 'number'
+                            ? `${height} m에서 보이는 점 ${count} / ${GRID_TARGET_COUNT}`
+                            : count === null
+                              ? '지형 자료 부족'
+                              : count === 'error'
+                                ? '가시권 계산 불가'
+                                : '가시권 계산 중…'}
+                        </span>
                       </span>
                       <span className="ml-auto font-mono">
                         {site.score == null ? '—' : site.score.toFixed(1)}
@@ -220,7 +396,22 @@ export function MissionWorkspace({
                 {Math.abs(selected.longitude).toFixed(4)}°
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
+              {shadowedAtLanding && (
+                <p
+                  role="alert"
+                  className="mb-3 rounded border border-amber-400/60 bg-amber-950/40 p-3 text-xs text-amber-200"
+                >
+                  <strong>착륙 일조 경고</strong> · {selection.landing} 00:00
+                  UTC에 이 지점에서는 태양 중심이 지형에 가려집니다.
+                </p>
+              )}
               <MissionMetrics result={analysis} />
+              {run && selectedCandidate ? (
+                <RequirementMarginPanel
+                  candidate={selectedCandidate}
+                  config={run.config}
+                />
+              ) : null}
               {selectedCandidate?.rf ? (
                 <section
                   aria-label="저장된 RF 통신 평가"
@@ -259,12 +450,17 @@ export function MissionWorkspace({
                       선택한 후보 기준
                     </span>
                   </div>
-                  <MissionTimeline
+                  <ReviewTimeline
                     key={`${analysis.data.sun.start}/${analysis.data.sun.end}/${analysis.data.sun.lat}/${analysis.data.sun.lon}`}
                     timeline={analysis.data.timeline}
                     duration={selection.duration}
-                    hour={0}
                     observerHeightM={analysis.data.sun.observer_height_m}
+                    sun={sun}
+                    photo={photo}
+                    reviewDays={reviewDays}
+                    onReview={onReview}
+                    onPreview={onPreview}
+                    onLight={onLight}
                   />
                 </section>
               ) : null}

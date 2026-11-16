@@ -9,7 +9,7 @@ import {
   type SurfaceOffset,
 } from './demoEquipment'
 import { skyFromAnalysis } from './equipmentSky'
-import type { CandidateSite, Schedule } from './types'
+import type { CandidateSite } from './types'
 
 export type EquipmentSkyState =
   | { kind: 'idle' }
@@ -22,22 +22,18 @@ export const EMPTY_SKY: EquipmentSky = { statics: {}, waypoints: [] }
 /** One sample is enough: the mission instant is fixed and only the place changes. */
 const STEP_MINUTES = 30
 
-/**
- * Asks the analysis API whether the Earth is up at every place a unit stands, including
- * each waypoint of a drive. One request per place, never per frame: a horizon is 360
- * rays over the DEM, so a route is sampled at its waypoints and interpolated between.
- */
+/** Samples both bodies at each fixed unit and route waypoint for the settled review time. */
 export function useEquipmentSky(
   site: CandidateSite | undefined,
-  schedule: Schedule,
+  start: string,
   company: Company,
+  attempt: number,
 ): EquipmentSkyState {
-  const { landing } = schedule
   const lat = site?.latitude
   const lon = site?.longitude
   // Keyed like useSiteAssessments: a result belongs to the inputs that asked for it,
   // so "loading" is derived during render instead of set from inside the effect.
-  const key = JSON.stringify([lat, lon, landing, company.id])
+  const key = JSON.stringify([lat, lon, start, company.id, attempt])
   const [stored, setStored] = useState<{
     key: string
     state: EquipmentSkyState
@@ -50,7 +46,6 @@ export function useEquipmentSky(
       controller.signal,
       AbortSignal.timeout(60_000),
     ])
-    const start = `${landing}T00:00:00Z`
     const end = new Date(Date.parse(start) + STEP_MINUTES * 60_000)
       .toISOString()
       .replace('.000Z', 'Z')
@@ -74,69 +69,56 @@ export function useEquipmentSky(
         observer_height_m: observerHeightM,
       }
       const [earth, sun] = await Promise.all([
-        fetchAnalysis('earth-visibility', params, signal).then(
-          skyFromAnalysis,
-          () => null,
-        ),
-        fetchAnalysis('illumination', params, signal).then(
-          skyFromAnalysis,
-          () => null,
-        ),
+        fetchAnalysis('earth-visibility', params, signal)
+          .then(skyFromAnalysis)
+          .catch(() => null),
+        fetchAnalysis('illumination', params, signal)
+          .then(skyFromAnalysis)
+          .catch(() => null),
       ])
       return { earth, sun }
     }
 
-    const statics = company.statics
-    const route = company.mobile?.path ?? []
-    const places = sampledPlaces(company)
+    const load = async () => {
+      const statics: Record<string, PlaceSky> = {}
+      const waypoints: PlaceSky[] = []
+      const places = sampledPlaces(company)
+      let next = 0
+      let missing = 0
+      let received = false
+      // Two positions at a time bound concurrent DEM work while keeping both bodies parallel.
+      const worker = async () => {
+        while (next < places.length && !controller.signal.aborted) {
+          const place = places[next++]!
+          const result = await sample(place.offset, place.observerHeightM)
+          if (!result.earth || !result.sun) missing++
+          if (result.earth || result.sun) received = true
+          if ('unitId' in place) statics[place.unitId] = result
+          else waypoints[place.waypoint] = result
+        }
+      }
+      await Promise.all([worker(), worker()])
+      if (!controller.signal.aborted)
+        setStored({
+          key,
+          state: received
+            ? { kind: 'ready', missing, sky: { statics, waypoints } }
+            : { kind: 'error' },
+        })
+    }
 
-    // Debounced like the other analysis hooks so scrubbing dates does not fire a burst.
     const timer = window.setTimeout(() => {
-      void Promise.all(
-        places.map((place) => sample(place.offset, place.observerHeightM)),
-      ).then(
-        (results) => {
-          if (controller.signal.aborted) return
-          // A place counts as missing only when neither body came back.
-          const missing = results.filter(
-            (sky) => sky.earth === null && sky.sun === null,
-          ).length
-          if (results.length > 0 && missing === results.length) {
-            setStored({ key, state: { kind: 'error' } })
-            return
-          }
-          setStored({
-            key,
-            state: {
-              kind: 'ready',
-              missing,
-              sky: {
-                statics: Object.fromEntries(
-                  statics.flatMap((spec, index) => {
-                    const measured = results[index]
-                    return measured ? [[spec.id, measured] as const] : []
-                  }),
-                ),
-                waypoints: route.flatMap((_, index) => {
-                  const measured = results[statics.length + index]
-                  return measured ? [measured] : []
-                }),
-              },
-            },
-          })
-        },
-        () => {
-          if (!controller.signal.aborted)
-            setStored({ key, state: { kind: 'error' } })
-        },
-      )
+      void load().catch(() => {
+        if (!controller.signal.aborted)
+          setStored({ key, state: { kind: 'error' } })
+      })
     }, 200)
 
     return () => {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [lat, lon, landing, company, key])
+  }, [lat, lon, start, company, key])
 
   if (lat === undefined || lon === undefined) return { kind: 'idle' }
   return stored?.key === key ? stored.state : { kind: 'loading' }

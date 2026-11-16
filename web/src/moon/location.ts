@@ -2,6 +2,8 @@
 export interface LunarLocation {
   lat: number
   lon: number
+  /** Height of the picked 3D tile surface above the lunar reference sphere. */
+  surfaceHeightM?: number
 }
 
 /** Cesium Cartographic shape (radians), kept structural so this module stays free of Cesium. */
@@ -79,16 +81,15 @@ export function offsetLocation(
   const bearing = Math.atan2(eastM, northM)
   const lat = origin.lat * RAD_PER_DEG
   const lon = origin.lon * RAD_PER_DEG
-  const sinLat =
-    Math.sin(lat) * Math.cos(angular) +
-    Math.cos(lat) * Math.sin(angular) * Math.cos(bearing)
-  const nextLat = Math.asin(Math.min(1, Math.max(-1, sinLat)))
-  const nextLon =
-    lon +
-    Math.atan2(
-      Math.sin(bearing) * Math.sin(angular) * Math.cos(lat),
-      Math.cos(angular) - Math.sin(lat) * sinLat,
-    )
+  // Rotate the local ENU displacement into the origin meridian frame.
+  // This form keeps the east component even when cos(latitude) vanishes.
+  const east = Math.sin(angular) * Math.sin(bearing)
+  const north = Math.sin(angular) * Math.cos(bearing)
+  const radial = Math.cos(angular)
+  const x = radial * Math.cos(lat) - north * Math.sin(lat)
+  const z = radial * Math.sin(lat) + north * Math.cos(lat)
+  const nextLat = Math.atan2(z, Math.hypot(x, east))
+  const nextLon = lon + Math.atan2(east, x)
   return {
     lat: nextLat * DEG_PER_RAD,
     lon: wrapLongitude(nextLon * DEG_PER_RAD),

@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, type ReactNode } from 'react'
 import { nearestIndex, niceTicks } from '../analysis/derive'
 import type { Timeline } from './types'
 import './mission-timeline.css'
@@ -13,15 +13,20 @@ const degrees = (value: number) =>
 export function MissionTimeline({
   timeline: tl,
   duration,
-  hour,
+  reviewed,
+  onReview,
   observerHeightM = 0,
+  children,
 }: {
   timeline: Timeline
   duration: number
-  hour: number
+  /** The sample under review: an index into the timeline. */
+  reviewed: number
+  onReview: (index: number) => void
   observerHeightM?: number
+  /** Controls shown under the review slider. */
+  children?: ReactNode
 }) {
-  const [inspection, setInspection] = useState<number | null>(null)
   const patternId = useId()
   const geometry = useMemo(() => {
     const values = [...tl.sunEl, ...tl.earthEl, ...tl.sunHz, ...tl.earthHz]
@@ -39,11 +44,7 @@ export function MissionTimeline({
   }, [tl])
   if (tl.t.length === 0)
     return <p className="hint">선택한 기간의 분석 표본이 없습니다.</p>
-  const current = Math.max(
-    0,
-    tl.t.findLastIndex((t) => t <= hour / 24),
-  )
-  const selected = Math.min(tl.t.length - 1, inspection ?? current)
+  const selected = Math.min(tl.t.length - 1, Math.max(0, reviewed))
   const width = 580,
     left = 43,
     plotWidth = 523,
@@ -105,7 +106,7 @@ export function MissionTimeline({
                 duration,
             ),
           )
-          setInspection(nearestIndex(tl.t, time))
+          onReview(nearestIndex(tl.t, time))
         }}
       >
         <defs>
@@ -282,8 +283,9 @@ export function MissionTimeline({
           step={1}
           value={selected}
           aria-label="타임라인 검토 시점"
-          onChange={(event) => setInspection(Number(event.target.value))}
+          onChange={(event) => onReview(Number(event.target.value))}
         />
+        {children}
       </div>
       <p className="hint">
         {tl.start.slice(0, 10)} → {tl.end.slice(0, 10)} UTC · {tl.stepMinutes}분

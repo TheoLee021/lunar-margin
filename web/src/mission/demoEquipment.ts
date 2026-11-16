@@ -269,21 +269,21 @@ export const COMPANIES: readonly Company[] = [
       spec: {
         id: 'trencher',
         label: '트렌처',
-        offset: { eastM: 300, northM: -260 },
+        offset: { eastM: -70, northM: 360 },
         observerHeightM: 2,
         shape: TRENCHER_SHAPE,
         symbol: 'trencher',
       },
       speedMS: 0.2,
       path: [
-        { eastM: 300, northM: -260 },
-        { eastM: 340, northM: -360 },
-        { eastM: 360, northM: -470 },
-        { eastM: 350, northM: -580 },
-        { eastM: 320, northM: -680 },
-        { eastM: 270, northM: -760 },
-        { eastM: 200, northM: -820 },
-        { eastM: 120, northM: -860 },
+        { eastM: -70, northM: 360 },
+        { eastM: -30, northM: 260 },
+        { eastM: -10, northM: 150 },
+        { eastM: -20, northM: 40 },
+        { eastM: -50, northM: -60 },
+        { eastM: -100, northM: -140 },
+        { eastM: -170, northM: -200 },
+        { eastM: -250, northM: -240 },
       ],
     },
   },
@@ -395,7 +395,7 @@ export const COMPANIES: readonly Company[] = [
       spec: {
         id: 'rover',
         label: '시추 로버',
-        offset: { eastM: 60, northM: 60 },
+        offset: { eastM: -62, northM: 125 },
         observerHeightM: 1.5,
         shape: box(1.5, 2.6, 2.2),
         model: roverModel(2.2),
@@ -403,14 +403,14 @@ export const COMPANIES: readonly Company[] = [
       },
       speedMS: 0.25,
       path: [
-        { eastM: 60, northM: 60 },
-        { eastM: 160, northM: -40 },
-        { eastM: 250, northM: -170 },
-        { eastM: 300, northM: -320 },
-        { eastM: 300, northM: -480 },
-        { eastM: 250, northM: -620 },
-        { eastM: 160, northM: -730 },
-        { eastM: 40, northM: -790 },
+        { eastM: -62, northM: 125 },
+        { eastM: -42, northM: 106 },
+        { eastM: -25, northM: 81 },
+        { eastM: -16, northM: 53 },
+        { eastM: -16, northM: 22 },
+        { eastM: -25, northM: -4 },
+        { eastM: -42, northM: -25 },
+        { eastM: -65, northM: -37 },
       ],
     },
   },
@@ -541,27 +541,24 @@ export function companyById(id: string): Company {
 }
 
 /** Every place that needs its own Earth verdict: the static units, then the route. */
-export function sampledPlaces(
-  company: Company,
-): readonly { offset: SurfaceOffset; observerHeightM: number }[] {
+export function sampledPlaces(company: Company) {
   const statics = company.statics.map((spec) => ({
+    unitId: spec.id,
     offset: spec.offset,
     observerHeightM: spec.observerHeightM,
   }))
-  const route = (company.mobile?.path ?? []).map((offset) => ({
+  const route = (company.mobile?.path ?? []).map((offset, waypoint) => ({
+    waypoint,
     offset,
     observerHeightM: company.mobile!.spec.observerHeightM,
   }))
   return [...statics, ...route]
 }
 
-const legLength = (from: SurfaceOffset, to: SurfaceOffset): number =>
-  Math.hypot(to.eastM - from.eastM, to.northM - from.northM)
-
 export function pathLength(path: readonly SurfaceOffset[]): number {
   return path.reduce(
     (total, point, index) =>
-      index === 0 ? 0 : total + legLength(path[index - 1]!, point),
+      index === 0 ? 0 : total + offsetDistanceM(path[index - 1]!, point),
     0,
   )
 }
@@ -606,7 +603,7 @@ export function traverseAt(
   for (let index = 1; index < path.length; index += 1) {
     const from = path[index - 1]!
     const to = path[index]!
-    const leg = legLength(from, to)
+    const leg = offsetDistanceM(from, to)
     if (remaining < leg) {
       const fraction = leg === 0 ? 0 : remaining / leg
       return {
@@ -657,6 +654,8 @@ export function buildEquipmentAssets(
     ...(spec.model ? { model: spec.model } : {}),
     ...(headingDeg === undefined ? {} : { headingDeg }),
     symbol: spec.symbol,
+    waypointSample: headingDeg !== undefined,
+    measured: measured !== undefined,
     earth: measured?.earth ?? null,
     sun: measured?.sun ?? null,
   })
@@ -666,12 +665,29 @@ export function buildEquipmentAssets(
   const { mobile } = company
   if (mobile) {
     const point = traverseAt(mobile.path, progress)
+    // Transport the route heading into the unit's local north/east frame.
+    const radians = Math.PI / 180
+    const here = offsetLocation(centre, point.offset.eastM, point.offset.northM)
+    const forward = offsetLocation(
+      centre,
+      point.offset.eastM + Math.sin(point.headingDeg * radians),
+      point.offset.northM + Math.cos(point.headingDeg * radians),
+    )
+    const dLon = (forward.lon - here.lon) * radians
+    const lat = here.lat * radians
+    const nextLat = forward.lat * radians
+    const localHeading =
+      Math.atan2(
+        Math.sin(dLon) * Math.cos(nextLat),
+        Math.cos(lat) * Math.sin(nextLat) -
+          Math.sin(lat) * Math.cos(nextLat) * Math.cos(dLon),
+      ) / radians
     drawn.push(
       place(
         mobile.spec,
         point.offset,
         sky.waypoints[point.waypoint],
-        point.headingDeg,
+        localHeading,
       ),
     )
   }

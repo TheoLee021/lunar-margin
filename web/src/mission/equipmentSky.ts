@@ -3,7 +3,7 @@ import { horizonAtAzimuth } from '../analysis/derive'
 import { parseSkyDirection, type SkyDirection } from '../moon/lineOfSight'
 
 /**
- * Where the Earth sits in the sky at the first sample of an analysis response,
+ * Where the body sits in the sky at the first sample of an analysis response,
  * with the API's own `visible` verdict. The mission instant is fixed for the demo,
  * so one sample per place is all a unit needs.
  */
@@ -19,6 +19,7 @@ export function skyFromAnalysis(analysis: Analysis): SkyDirection {
       azimuthDeg === undefined
         ? undefined
         : horizonAtAzimuth(analysis.horizon, azimuthDeg),
+    clearanceDeg: series.terrain_clearance_deg?.[0],
     visible: series.visible[0],
   })
 }

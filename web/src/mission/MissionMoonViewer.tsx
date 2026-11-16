@@ -1,4 +1,10 @@
 import {
+  fetchViewshed,
+  GRID_TARGET_COUNT,
+  visibleGridCount,
+  type Viewshed,
+} from '../api/viewshed'
+import {
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -8,7 +14,7 @@ import {
   type Ref,
 } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
-import { gridCellCorners } from '../moon/location'
+import { gridCellCorners, type LunarLocation } from '../moon/location'
 import type { MoonMarker } from '../moon/markerLayer'
 import {
   COMPANIES,
@@ -21,9 +27,10 @@ import {
   type Company,
   type EquipmentSky,
 } from './demoEquipment'
+import type { Vector3 } from '../moon/sun'
 import type { CandidateSite, MissionSelection } from './types'
+import type { SunPathResult } from './useSunPath'
 import { EMPTY_SKY, useEquipmentSky } from './useEquipmentSky'
-import type { SunDirectionResult } from './useSunDirection'
 
 /**
  * The camera rides behind the moving unit while it drives. A 2.4 m machine is three
@@ -37,6 +44,8 @@ const FOLLOW_BEHIND_DEG = 180
 
 export interface MissionMoonViewerHandle {
   focusSite(siteId: string): void
+  /** Lights the Moon from a Sun that is still moving (`sunMoving`), one call per frame. */
+  previewSun(direction: Vector3): void
 }
 
 /**
@@ -58,25 +67,50 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
+  demName,
+  heights,
+  height,
+  setHeight,
   sun,
   operatorId: givenOperatorId,
+  sunDirection,
+  reviewDays,
+  sunMoving,
+  photo,
+  onPhotoChange,
 }: {
+  demName?: string
+  heights: readonly number[]
+  height: number
+  setHeight: (height: number) => void
   ref?: Ref<MissionMoonViewerHandle>
   selection: MissionSelection
   sites: readonly CandidateSite[]
-  onSelect: (siteId: string) => void
+  onSelect: (siteId: string | null) => void
+  /** The Sun over the mission, for the state of the sunlight button. */
+  sun: SunPathResult
   /** The Sun at the shown time: its Moon-to-Sun direction (MOON_ME) once it has loaded. */
-  sun: SunDirectionResult
+  sunDirection: Vector3 | null
+  /**
+   * The shown time is being dragged or played: the Sun of each frame comes through `previewSun`,
+   * and `sunDirection` is taken again, with its precise shadows, once this is over.
+   */
+  reviewDays: number
+  sunMoving: boolean
+  /** Show the photo instead of the sunlight. */
+  photo: boolean
+  onPhotoChange: (photo: boolean) => void
   /** The account's operator once there is one. Supplying it hides the picker. */
   operatorId?: string
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
-  const [photo, setPhoto] = useState(false)
-  const sunDirection = sun.kind === 'ready' ? sun.direction : null
   const lit = sunDirection !== null && !photo
   useEffect(() => {
+    if (lit && sunMoving) return
     viewer.current?.setSunDirection(lit ? sunDirection : null)
-  }, [lit, sunDirection])
+  }, [lit, sunMoving, sunDirection])
+  const [picked, setPicked] = useState<LunarLocation | null>(null)
+  const observer = selection.siteId === null ? picked : null
   const markers = useMemo<readonly MoonMarker[]>(
     () =>
       sites.map((site, index) => ({
@@ -88,15 +122,54 @@ export function MissionMoonViewer({
     [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
-  const focusSite = (site: CandidateSite) =>
+  const [showSightlines, setShowSightlines] = useState(true)
+  const [detail, setDetail] = useState(false)
+  const [attempt, retry] = useState(0)
+  const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
+  const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
+  const center = selected?.grid
+  const key = JSON.stringify([lat, lon, height, center, attempt, demName])
+  const [result, setResult] = useState<{
+    key: string
+    distanceKm?: number
+    map: Viewshed | null
+  } | null>(null)
+  useEffect(() => {
+    if (lat === undefined || lon === undefined) return
+    const controller = new AbortController()
+    void fetchViewshed(
+      lat,
+      lon,
+      height,
+      AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+      center,
+      demName,
+    )
+      .then((map) => {
+        if (!controller.signal.aborted)
+          setResult({ key, map, distanceKm: maxVisibleDistanceKm(map.cells) })
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResult({ key, map: null })
+      })
+    return () => controller.abort()
+  }, [key, lat, lon, height, center, demName])
+  const current = result?.key === key ? result : null
+  const focusSite = (site: CandidateSite) => {
+    setPicked(null)
+    setDetail(true)
     viewer.current?.flyTo(
       { lat: site.latitude, lon: site.longitude },
-      site.grid ? site.grid.spacing_m * 20 : undefined,
+      detail ? 18000 : site.grid ? site.grid.spacing_m * 20 : undefined,
     )
+  }
   useImperativeHandle(ref, () => ({
     focusSite(siteId) {
       const site = sites.find((candidate) => candidate.id === siteId)
       if (site) focusSite(site)
+    },
+    previewSun(direction) {
+      viewer.current?.previewSunDirection(direction)
     },
   }))
 
@@ -116,7 +189,20 @@ export function MissionMoonViewer({
   const operator = companyById(operatorId)
   /** The map carries no operator controls of its own; `?operator=` brings them back. */
   const showControls = givenOperatorId === undefined && asked !== null
-  const sky = useEquipmentSky(selected, selection, operator)
+  const [skyAttempt, retrySky] = useState(0)
+  const instant = new Date(
+    Date.parse(selection.landing + 'T00:00:00Z') +
+      Math.round(reviewDays * 86400) * 1000,
+  )
+    .toISOString()
+    .replace('.000Z', 'Z')
+  const sky = useEquipmentSky(
+    sunMoving ? undefined : selected,
+    instant,
+    operator,
+    skyAttempt,
+  )
+  const measured = sky.kind === 'ready' ? sky.sky : EMPTY_SKY
   const { mobile } = operator
 
   // The drive redraws every frame, so its state lives in a ref and goes straight to
@@ -144,12 +230,12 @@ export function MissionMoonViewer({
     drive.current = {
       site: selected,
       operator,
-      sky: sky.kind === 'ready' ? sky.sky : EMPTY_SKY,
+      sky: measured,
       progress: 0,
     }
     if (!selected) viewer.current?.setAssets([])
     draw()
-  }, [selected, operator, sky, draw])
+  }, [selected, operator, measured, draw])
 
   useEffect(
     () => () => {
@@ -188,13 +274,14 @@ export function MissionMoonViewer({
   const status =
     sky.kind === 'loading' ? (
       <span role="status">
-        {operator.name} 장비 {unitCount}대 · 지점별 지구 가시성 계산 중…
+        {operator.name} 장비 {unitCount}대 · 지점별 지구·태양 가시성 계산 중…
       </span>
     ) : sky.kind === 'error' ? (
       <span role="alert" className="text-red-300">
-        장비 지점 가시성을 불러오지 못했습니다. 다른 후보를 고르면 다시
-        계산합니다.
+        장비 지점 가시성을 불러오지 못했습니다.
       </span>
+    ) : sunMoving && selected ? (
+      '재생 중 · 정지하면 장비 가시성을 계산합니다.'
     ) : sky.kind === 'idle' ? (
       '후보를 선택하면 장비를 배치합니다.'
     ) : showControls ? (
@@ -211,7 +298,7 @@ export function MissionMoonViewer({
       </>
     ) : sky.missing > 0 ? (
       <span role="alert" className="text-red-300">
-        {sky.missing}개 지점의 지구 가시성을 계산하지 못했습니다.
+        {sky.missing}개 지점의 지구·태양 가시성을 계산하지 못했습니다.
       </span>
     ) : null
   return (
@@ -219,8 +306,16 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
+          showSightlines={showSightlines}
+          viewshed={detail ? current?.map : null}
           markers={markers}
           selectedMarkerId={selection.siteId}
+          onPick={(location) => {
+            onSelect(null)
+            setPicked(location)
+            viewer.current?.flyTo(location, 18000)
+            setDetail(true)
+          }}
           onMarkerSelect={(siteId) => {
             const site = sites.find((candidate) => candidate.id === siteId)
             if (!site) return
@@ -259,47 +354,58 @@ export function MissionMoonViewer({
             aria-pressed={lit}
             title={
               sun.kind === 'loading'
-                ? '착륙 시각의 태양 방향을 불러오는 중입니다'
+                ? '미션 기간의 태양 방향을 불러오는 중입니다'
                 : sun.kind === 'error'
-                  ? '착륙 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
-                  : '착륙 시각의 태양으로 조명과 지형 그림자를 그립니다'
+                  ? '미션 기간의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
+                  : '검토 시점(선택 전에는 착륙 시각)의 태양으로 조명과 지형 그림자를 그립니다'
             }
             onClick={() => {
               if (sun.kind === 'error') sun.retry()
-              else setPhoto((value) => !value)
+              else onPhotoChange(!photo)
             }}
           >
             {sun.kind === 'error'
               ? '햇빛 다시 시도'
               : lit
                 ? '사진으로 보기'
-                : '착륙 시각 햇빛'}
+                : '햇빛 보기'}
           </button>
           <button
             type="button"
             className="hud-button"
-            aria-pressed={sights}
-            title="각 장비에서 지구를 향하는 화살표를 그립니다"
-            onClick={() => setSights((shown) => !shown)}
-          >
-            {sights ? '지구 방향 끄기' : '지구 방향 켜기'}
-          </button>
-          <button
-            type="button"
-            className="hud-button"
-            onClick={() => viewer.current?.flyToOverview()}
+            onClick={() => {
+              setPicked(null)
+              setDetail(false)
+              viewer.current?.flyToOverview()
+            }}
           >
             위에서 보기
           </button>
           <button
             type="button"
             className="hud-button"
-            disabled={!selected}
+            disabled={!selected && !observer}
             onClick={() => {
-              if (selected) focusSite(selected)
+              setDetail(true)
+              const location =
+                observer ??
+                (selected && {
+                  lat: selected.latitude,
+                  lon: selected.longitude,
+                })
+              if (location) viewer.current?.flyTo(location, 18000)
             }}
           >
             선택 지점 3D로 보기
+          </button>
+          <button
+            type="button"
+            className="hud-button"
+            aria-pressed={sights}
+            title="지구 방향과 현재 표시된 지형과의 교차를 표시합니다. 색상은 분석 지평선 기준입니다."
+            onClick={() => setSights((shown) => !shown)}
+          >
+            {sights ? '지구 방향 끄기' : '지구 방향 켜기'}
           </button>
           {showControls ? (
             <button
@@ -320,9 +426,95 @@ export function MissionMoonViewer({
         {status ? (
           <p className="hud-panel max-w-72 px-2 py-1 text-right text-[10px] leading-snug text-neutral-400">
             {status}
+            {(sky.kind === 'error' ||
+              (sky.kind === 'ready' && sky.missing > 0)) && (
+              <button
+                className="hud-button"
+                onClick={() => retrySky((n) => n + 1)}
+              >
+                장비 분석 다시 시도
+              </button>
+            )}
           </p>
         ) : null}
       </div>
+      {detail && lat !== undefined && lon !== undefined && (
+        <div
+          role="status"
+          className="pointer-events-auto absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/85 px-3 py-2 text-xs text-white"
+        >
+          {observer ? '지도 관측점' : selected?.name} · 주변 가시권 · 5 km ·
+          <label>
+            관측 높이{' '}
+            <select
+              aria-label="관측 높이"
+              className="rounded bg-neutral-800 px-1"
+              value={height}
+              onChange={(event) => setHeight(Number(event.target.value))}
+            >
+              {heights.map((h) => (
+                <option key={h} value={h}>
+                  {h} m
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ml-3 inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={showSightlines}
+              onChange={(event) => setShowSightlines(event.target.checked)}
+            />
+            가시선 표시
+          </label>
+          <div>
+            {!current ? (
+              '지형 가시권 계산 중…'
+            ) : current.map ? (
+              <>
+                <div>
+                  {lat.toFixed(4)}°, {lon.toFixed(4)}°
+                </div>
+                <strong>
+                  반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
+                </strong>
+                <div>
+                  {current.map.targets.length === GRID_TARGET_COUNT
+                    ? `보이는 격자점 ${visibleGridCount(current.map)} / ${GRID_TARGET_COUNT}`
+                    : `지형 자료 부족 · ${GRID_TARGET_COUNT}개 중 ${current.map.targets.length}개 경로 확인`}
+                </div>
+                <span className="text-amber-400">⊙ 관측점</span>　
+                <span className="text-green-400">● 보임</span>　
+                <span className="text-red-400">● 가려짐</span>
+                <div>
+                  격자점 800 m 간격 · 주황점은 첫 차폐 지점 · 빨간 선은 차폐
+                  구간
+                </div>
+              </>
+            ) : (
+              <button type="button" onClick={() => retry((n) => n + 1)}>
+                {lat > -80
+                  ? '남위 80° 이남의 지점을 선택하세요'
+                  : '계산 실패 · 다시 시도'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
+}
+
+// Each character represents one 80 m cell in the south-polar projection.
+function maxVisibleDistanceKm(cells: string): number {
+  const side = Math.sqrt(cells.length)
+  const center = (side - 1) / 2
+  let maxSquared = 0
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i] !== '2') continue
+    const dx = (i % side) - center
+    const dy = Math.floor(i / side) - center
+    maxSquared = Math.max(maxSquared, dx * dx + dy * dy)
+  }
+  return Math.sqrt(maxSquared) * 0.08
 }

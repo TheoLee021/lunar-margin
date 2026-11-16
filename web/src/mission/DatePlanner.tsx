@@ -1,3 +1,5 @@
+import { PlannerTouchdown } from './PlannerTouchdown'
+import { useFlightPlan } from '../flight/flightPlan'
 import { useEffect, useRef, useState } from 'react'
 import { dayOf, iso, short } from './missionDates'
 import { MissionCharts } from './MissionCharts'
@@ -15,6 +17,8 @@ import { isTransitPossible } from '../api/pricing'
 import './date-planner.css'
 
 type Props = {
+  site?: { latitude: number; longitude: number }
+  selectedSiteId: string | null
   schedule: Schedule
   onViewOrbit: (schedule: Schedule) => void
   onApply: (schedule: Schedule) => void
@@ -22,12 +26,17 @@ type Props = {
 }
 export function DatePlanner({
   schedule,
+  site,
+  selectedSiteId,
   onApply,
   onViewOrbit,
   onClose,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const [draft, setDraft] = useState(schedule)
+  const samePeriod =
+    draft.landing === schedule.landing && draft.duration === schedule.duration
+  const plan = useFlightPlan(draft, samePeriod ? site : null)
   const [anchors, setAnchors] = useState({
     departure: schedule.departure,
     landing: schedule.landing,
@@ -62,6 +71,7 @@ export function DatePlanner({
   }, [launchRevision])
   const availability = (departure: string) =>
     departureAvailability(launchData, launchError, draft.launchId, departure)
+  const transitPossible = isTransitPossible(draft.departure, draft.landing)
   const departureUnavailable =
     departureStatus?.departure === draft.departure &&
     departureStatus.launchId === (draft.launchId ?? null) &&
@@ -69,7 +79,8 @@ export function DatePlanner({
   const canApply =
     !departureUnavailable &&
     availability(draft.departure) === 'scheduled' &&
-    isTransitPossible(draft.departure, draft.landing)
+    transitPossible
+
   const validDraft = ScheduleSchema.safeParse(draft).success
   const score = validDraft ? demoDateScore(draft) : null
   const [formError, setFormError] = useState('')
@@ -117,7 +128,10 @@ export function DatePlanner({
           <h2 id="plannerTitle">
             미션 날짜 <span className="tag">UTC</span>
           </h2>
-          <p className="hint">출발일과 착륙일을 비교하세요.</p>
+          <p className="hint">
+            선택한 날짜의 00:00 UTC에 달 궤도에 진입하며, 예상 표면 착륙 시각은
+            하강 궤도로 계산합니다.
+          </p>
         </div>
         <button
           type="button"
@@ -257,6 +271,21 @@ export function DatePlanner({
         </div>
       </div>
       <footer className="planner-footer">
+        {validDraft &&
+          (samePeriod && selectedSiteId && !site ? (
+            <p role="status">착륙 후보 좌표 확인 중</p>
+          ) : (
+            <PlannerTouchdown
+              key={JSON.stringify(plan.request)}
+              request={plan.request}
+            />
+          ))}
+        {validDraft && !transitPossible ? (
+          <p role="status">
+            전이는 3~150일이어야 합니다. 현재{' '}
+            {dayOf(draft.landing) - dayOf(draft.departure)}일입니다.
+          </p>
+        ) : null}
         <div>
           <span aria-live="polite">
             {short(dayOf(draft.departure))} → {short(dayOf(draft.landing))}

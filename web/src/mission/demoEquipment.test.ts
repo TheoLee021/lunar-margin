@@ -247,3 +247,15 @@ describe('buildEquipmentAssets', () => {
     expect(assets[1]?.earth).toBeNull()
   })
 })
+
+it('keeps the full mobile route inside its power cable radius', () => {
+  for (const operator of COMPANIES) {
+    if (!operator.mobile || operator.placement.kind !== 'cable') continue
+    const { powerUnitId, cableLengthM } = operator.placement
+    const supply = operator.statics.find((unit) => unit.id === powerUnitId)!
+    for (const point of operator.mobile.path)
+      expect(offsetDistanceM(point, supply.offset)).toBeLessThanOrEqual(
+        cableLengthM,
+      )
+  }
+})

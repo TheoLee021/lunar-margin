@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
 
     reservation_database_url: SecretStr | None = None
-    reservation_admin_token: SecretStr | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -9,6 +9,9 @@ from pydantic import BaseModel
 from lunar_margin.app.analysis import router as analysis_router
 from lunar_margin.app.calendar_start import router as calendar_start_router
 from lunar_margin.app.candidates import router as candidates_router
+from lunar_margin.app.descent_reference import router as descent_reference_router
+from lunar_margin.app.doi_pdi_reference import router as doi_pdi_reference_router
+from lunar_margin.app.flight_preview import router as flight_preview_router
 from lunar_margin.app.launch_schedule import router as launch_schedule_router
 from lunar_margin.app.pricing import router as pricing_router
 from lunar_margin.app.provider_pricing import router as provider_pricing_router
@@ -17,6 +20,7 @@ from lunar_margin.app.settings import Settings
 from lunar_margin.app.sunlight import router as sunlight_router
 from lunar_margin.app.tiles import router as tiles_router
 from lunar_margin.app.trajectory import router as trajectory_router
+from lunar_margin.app.viewshed import router as viewshed_router
 from lunar_margin.pipeline.table_prefetch import start_prefetch
 
 
@@ -42,13 +46,17 @@ def create_app(settings: Settings) -> FastAPI:
     )
 
     app.include_router(analysis_router)
+    app.include_router(viewshed_router)
     app.include_router(candidates_router)
     app.include_router(pricing_router)
     app.include_router(provider_pricing_router)
     app.include_router(launch_schedule_router)
     app.include_router(calendar_start_router)
     app.include_router(reservations_router)
+    app.include_router(flight_preview_router)
     app.include_router(trajectory_router)
+    app.include_router(doi_pdi_reference_router)
+    app.include_router(descent_reference_router)
     app.include_router(tiles_router)
     app.include_router(sunlight_router)
 
