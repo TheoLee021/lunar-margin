@@ -11,9 +11,10 @@ export const COMPARISON_COLORS = [
 export interface ComparisonAxis {
   key: string
   label: string
-  unit: '%' | '시간' | '°' | 'm'
+  unit: '%' | '시간' | '°' | 'm' | 'dB'
   higherIsBetter: boolean
   reference: number
+  minimum?: number
   referenceLabel: string
 }
 
@@ -59,7 +60,10 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
       hours,
       `0–${hours}시간 · 전체 임무 기간`,
     ),
-    axis('earth', '지구 가시율', '%', true, 100, '0–100% · 지구 중심 LOS'),
+    {
+      ...axis('rf', 'RF 링크 마진', 'dB', true, 30, '−30~+30 dB · 표시 범위'),
+      minimum: -30,
+    },
     axis(
       'blackout',
       '최장 지구 차폐',
@@ -93,6 +97,7 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
 
 type Site = {
   sun: Pick<Candidate['sun'], 'fraction' | 'longest_dark_hours'>
+  rf?: Pick<NonNullable<Candidate['rf']>, 'min_link_margin_db'> | null
   earth: Pick<Candidate['earth'], 'fraction' | 'longest_blackout_hours'>
   terrain?: Pick<
     NonNullable<Candidate['terrain']>,
@@ -109,7 +114,7 @@ export function comparisonValues(site: Site, axes: readonly ComparisonAxis[]) {
   const raw = [
     percent(site.sun.fraction),
     site.sun.longest_dark_hours,
-    percent(site.earth.fraction),
+    site.rf?.min_link_margin_db,
     site.earth.longest_blackout_hours,
     terrain?.slope_p95_deg,
     terrain?.roughness_p95_m,
@@ -118,6 +123,7 @@ export function comparisonValues(site: Site, axes: readonly ComparisonAxis[]) {
     const rawValue = raw[index]
     const value =
       rawValue != null && Number.isFinite(rawValue) ? rawValue : null
+    const minimum = axis.minimum ?? 0
     return {
       value,
       radius:
@@ -128,7 +134,7 @@ export function comparisonValues(site: Site, axes: readonly ComparisonAxis[]) {
               Math.max(
                 0,
                 axis.higherIsBetter
-                  ? value / axis.reference
+                  ? (value - minimum) / (axis.reference - minimum)
                   : 1 - value / axis.reference,
               ),
             ),

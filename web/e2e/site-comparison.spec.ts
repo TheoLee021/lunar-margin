@@ -33,6 +33,15 @@ function addComparisonMetrics(
           windows_per_24h: 1,
           mean_elevation_deg: 4,
         },
+        rf: {
+          fraction: (252 - index * 6) / 336,
+          evaluation_hours: 336,
+          available_hours: 252 - index * 6,
+          longest_blackout_hours: 12,
+          min_link_margin_db: 15 - index,
+          required_ebn0_db: 1,
+          rx_required_dbw: -144,
+        },
         terrain: {
           coverage_fraction: terrainCoverage,
           slope_p95_deg: 2 + index,
@@ -87,6 +96,9 @@ test('checked candidates compare saved values without selecting a map site and r
       .getByRole('row')
       .filter({ hasText: '일조율' }),
   ).toContainText('80.0%')
+  await expect(
+    dialog.getByRole('row').filter({ hasText: 'RF 링크 마진' }),
+  ).toContainText('15.0 dB')
   await expect(
     dialog
       .getByRole('table', { name: '후보 조건별 여유' })

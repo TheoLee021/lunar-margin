@@ -25,6 +25,12 @@ export const RunSummarySchema = z.object({
   window: WindowSchema,
   selected: z.number(),
   sampled_total: z.number(),
+  max_terrain_slope_degrees: z
+    .number()
+    .positive()
+    .max(90)
+    .nullable()
+    .optional(),
 })
 export type RunSummary = z.infer<typeof RunSummarySchema>
 

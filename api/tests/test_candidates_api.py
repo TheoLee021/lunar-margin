@@ -67,6 +67,21 @@ def test_run_detail_follows_the_contract(served: Path) -> None:
     assert first["data_quality"]["stage"] == "fine"
 
 
+def test_unrestricted_run_reports_terrain_for_comparison(
+    served: Path, data_dir: Path, tmp_path: Path
+) -> None:
+    (tmp_path / "candidates").symlink_to(served / "candidates", target_is_directory=True)
+    (tmp_path / "dem").symlink_to((data_dir / "dem").resolve(), target_is_directory=True)
+    body = client_for(tmp_path).get("/candidates/runs/demo").json()
+    assert body["config"]["thresholds"]["max_terrain_slope_degrees"] is None
+    for candidate in body["candidates"]:
+        terrain = candidate["terrain"]
+        assert terrain is not None
+        assert terrain["coverage_fraction"] == 1
+        assert terrain["slope_p95_deg"] > 0
+        assert terrain["roughness_p95_m"] > 0
+
+
 def test_layer_is_served_as_a_png_of_the_map_size(served: Path) -> None:
     from png_decode import decode_png
 

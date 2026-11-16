@@ -34,6 +34,8 @@ export function DatePlanner({
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const [draft, setDraft] = useState(schedule)
+  const [slope, setSlope] = useState(schedule.maxSlope?.toString() ?? '')
+  const maxSlope = slope === '' ? null : Number(slope)
   const samePeriod =
     draft.landing === schedule.landing && draft.duration === schedule.duration
   const plan = useFlightPlan(draft, samePeriod ? site : null)
@@ -77,6 +79,7 @@ export function DatePlanner({
     departureStatus.launchId === (draft.launchId ?? null) &&
     departureStatus.unavailable
   const canApply =
+    (maxSlope === null || (maxSlope > 0 && maxSlope <= 90)) &&
     !departureUnavailable &&
     availability(draft.departure) === 'scheduled' &&
     transitPossible
@@ -235,6 +238,8 @@ export function DatePlanner({
               landings={landings}
               draft={draft}
               availability={availability}
+              slope={slope}
+              onSlopeChange={setSlope}
               onDepartureStatus={setDepartureStatus}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
@@ -309,7 +314,7 @@ export function DatePlanner({
               const result = ScheduleSchema.safeParse(draft)
               if (result.success && canApply) {
                 setFormError('')
-                onApply(result.data)
+                onApply({ ...result.data, maxSlope })
               } else
                 setFormError(
                   '착륙일은 출발일 이후여야 하며 임무 기간은 7·14·28일이어야 합니다.',

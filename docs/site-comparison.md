@@ -17,7 +17,7 @@ the checks; **비교 선택 모두 해제** clears them.
 | ------------------------- | ----------------- | ------------------------------------------------ |
 | Sun visibility            | Higher            | 0–100%                                           |
 | Longest darkness          | Lower             | 0–full surface interval in hours                 |
-| Earth visibility          | Higher            | 0–100%                                           |
+| Minimum RF link margin    | Higher            | −30 to +30 dB                                           |
 | Longest Earth occultation | Lower             | 0–full surface interval in hours                 |
 | Regional slope P95        | Lower             | 0–positive saved slope limit; otherwise 15°      |
 | Regional roughness P95    | Lower             | 0–positive saved roughness limit; otherwise 20 m |
@@ -37,9 +37,9 @@ saved-limit margin calculation: value minus minimum, or maximum minus value.
 Positive margins are inside the limit; percentage differences use percentage
 points. These are nominal differences, not quantified uncertainty bounds.
 
-Earth axes always show Earth-center geometric LOS, not a verified RF link. For
+RF link margin uses the minimum modeled link margin across the mission interval and is unavailable when RF was not evaluated. Longest Earth occultation uses Earth-center geometric LOS. For
 RF searches, the separate requirement table shows the saved nominal RF conditions
-and explicitly distinguishes them from the radar. No new eligibility verdict,
+alongside the radar. No new eligibility verdict,
 aggregate score, science value, safety certification or success probability is
 calculated. Radar area has no decision meaning.
 

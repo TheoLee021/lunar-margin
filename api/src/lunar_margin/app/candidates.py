@@ -12,7 +12,7 @@ import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi import Path as PathParam
@@ -24,6 +24,7 @@ from lunar_margin.app.settings import Settings
 from lunar_margin.engine.candidates.config import SearchConfig
 from lunar_margin.engine.candidates.mission import MissionRequest
 from lunar_margin.engine.dem import PolarDem
+from lunar_margin.engine.site_characteristics import characterize_region
 from lunar_margin.engine.viewshed import visible_grid_fraction
 from lunar_margin.pipeline.candidate_schema import (
     CandidateRecord,
@@ -33,6 +34,7 @@ from lunar_margin.pipeline.candidate_schema import (
     Source,
     Summary,
     SummaryFile,
+    TerrainMetrics,
     WindowSource,
 )
 from lunar_margin.pipeline.candidate_status import RunStatus, read_status, write_status
@@ -53,6 +55,7 @@ class RunListItem(BaseModel):
     window: WindowSource
     selected: int
     sampled_total: int
+    max_terrain_slope_degrees: float | None = None
 
 
 class RunList(BaseModel):
@@ -269,12 +272,19 @@ def list_runs(settings: SettingsDep) -> RunList:
                 document, summary, _ = _load(run_dir)
             except OSError, ValueError, ValidationError:
                 continue  # 깨진 실행은 목록에서 건너뛴다 (상세 조회에서는 오류로 알린다)
+            limits = document.config.get("thresholds")
+            slope = (
+                cast(dict[str, object], limits).get("max_terrain_slope_degrees")
+                if isinstance(limits, dict)
+                else None
+            )
             items.append(
                 RunListItem(
                     id=run_dir.name,
                     generated_at=summary.run.generated_at,
                     dem=document.source.dem.name,
                     window=document.source.window,
+                    max_terrain_slope_degrees=slope if isinstance(slope, (int, float)) else None,
                     selected=summary.counts.get("selected", 0),
                     sampled_total=summary.counts.get("sampled_total", 0),
                 )
@@ -283,11 +293,14 @@ def list_runs(settings: SettingsDep) -> RunList:
     return RunList(runs=items)
 
 
-def _fill_visible_points(document: CandidatesDocument, data_dir: Path) -> None:
+def _fill_display_metrics(document: CandidatesDocument, data_dir: Path) -> None:
     missing = [c for c in document.candidates if c.score.visible_grid_points is None]
+    # Unrestricted searches need terrain only for the candidates used by the comparison.
+    top = sorted(document.candidates, key=lambda c: c.rank)[:5]
+    missing_terrain = [c for c in top if c.terrain is None or c.terrain.roughness_p95_m is None]
     source = DEM_SOURCES.get(document.source.dem.name)
     height = document.config.get("observer_height_m", 0)
-    if not missing or source is None or not isinstance(height, (int, float)):
+    if source is None or not (missing or missing_terrain):
         return
     img, label = source
     try:
@@ -295,6 +308,16 @@ def _fill_visible_points(document: CandidatesDocument, data_dir: Path) -> None:
             data_dir / "dem" / img.filename, data_dir / "dem" / label.filename
         )
     except OSError, ValueError:
+        return
+    for candidate in missing_terrain:
+        terrain = characterize_region(dem, candidate.lat_deg, candidate.lon_deg)
+        candidate.terrain = TerrainMetrics(
+            coverage_fraction=terrain.coverage_fraction,
+            slope_p95_deg=terrain.slope_p95_deg,
+            roughness_p95_m=terrain.roughness_p95_m,
+            dem_pixel_m=terrain.sample_step_m,
+        )
+    if not isinstance(height, (int, float)):
         return
     for candidate in missing:
         fraction = visible_grid_fraction(dem, candidate.x_m, candidate.y_m, height)
@@ -330,7 +353,7 @@ def get_run(run_id: RunId, settings: SettingsDep) -> RunDetail:
                 "completed_at": status.completed_at,
             }
         )
-    _fill_visible_points(document, settings.data_dir)
+    _fill_display_metrics(document, settings.data_dir)
     return RunDetail(
         id=run_id,
         mission=mission,
