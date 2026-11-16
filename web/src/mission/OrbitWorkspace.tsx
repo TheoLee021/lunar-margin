@@ -1,3 +1,4 @@
+import { useDashboardRun } from './useDashboardRun'
 import { useState } from 'react'
 import { TransferOrbit } from './TransferOrbit'
 import { ScheduleSchema } from './scheduleSchema'
@@ -6,17 +7,33 @@ import './date-planner.css'
 import './orbit-workspace.css'
 
 type Props = {
+  siteId: string | null
   schedule: Schedule
   onScheduleChange: (schedule: Schedule) => void
   onBack: () => void
 }
 export default function OrbitWorkspace({
   schedule,
+  siteId,
   onScheduleChange,
   onBack,
 }: Props) {
   const [draft, setDraft] = useState(schedule)
   const parsed = ScheduleSchema.safeParse(draft)
+  const { result } = useDashboardRun(schedule)
+  const candidate =
+    result.kind === 'ready'
+      ? result.run.candidates.find((c) => c.id === siteId)
+      : null
+  const flight = new URLSearchParams(window.location.search)
+  flight.set('departure', schedule.departure)
+  flight.set('arrival', schedule.landing)
+  flight.delete('lat')
+  flight.delete('lon')
+  if (candidate) {
+    flight.set('lat', String(candidate.lat_deg))
+    flight.set('lon', String(candidate.lon_deg))
+  }
   function change(field: 'departure' | 'landing', value: string) {
     const next = { ...draft, [field]: value }
     setDraft(next)
@@ -47,7 +64,7 @@ export default function OrbitWorkspace({
           </label>
           <span aria-hidden="true">→</span>
           <label>
-            달 도착일 · UTC
+            달 궤도 진입일 · UTC
             <input
               type="date"
               value={draft.landing}
@@ -61,7 +78,20 @@ export default function OrbitWorkspace({
           </p>
         </section>
         {parsed.success ? (
-          <TransferOrbit schedule={parsed.data} />
+          <>
+            {siteId && !candidate ? (
+              <p role="status">
+                {result.kind === 'loading'
+                  ? '착륙 후보 좌표를 불러오는 중…'
+                  : '선택한 착륙지 좌표를 불러올 수 없습니다. 날짜 계획에서 후보를 다시 선택하세요.'}
+              </p>
+            ) : (
+              <a className="hud-button" href={`/flight?${flight}`}>
+                착륙까지 보기 ↗
+              </a>
+            )}
+            <TransferOrbit schedule={parsed.data} />
+          </>
         ) : (
           <p role="alert" className="orbit-date-error">
             유효한 출발일과 그 이후의 도착일을 선택하세요. 돌아가면 마지막
