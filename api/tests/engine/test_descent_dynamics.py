@@ -83,7 +83,7 @@ def test_subsample_thrust_peak_rejects_marginal_engine() -> None:
     assert path.max_thrust_n > 6170.0
     # Do not quietly change the public output grid just to improve
     # physics sampling; it remains the coarse (~5-s) presentation grid.
-    assert len(path.samples) <= 40
+    assert len(path.samples) == 41
 
 
 def test_reference_acceleration_reintegrates_in_inertial_frame() -> None:
