@@ -65,9 +65,7 @@ export default function CandidateOverview({
       }}
     >
       <header className="co-bar">
-        <strong>
-          LUNAR <b>MARGIN</b>
-        </strong>
+        <strong>LUNAR MARGIN</strong>
         <span>Landing site selection</span>
         <button type="button" className="co-close hud-button" onClick={onClose}>
           Close ×
