@@ -1,3 +1,4 @@
+import { utc } from './flightPlan'
 import { FlightPlots } from './FlightPlots'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
@@ -18,11 +19,6 @@ const labels = {
   DOI_COAST: '하강 기동 → 동력하강 시작점',
   POWERED_DESCENT: '동력하강 → 표면 착륙',
 } as const
-
-function utc(value: string) {
-  if (!Number.isFinite(Date.parse(value))) return '유효한 날짜를 선택하세요'
-  return new Date(value).toISOString().slice(0, 19).replace('T', ' ') + ' UTC'
-}
 
 export default function FlightWorkspace({
   active,

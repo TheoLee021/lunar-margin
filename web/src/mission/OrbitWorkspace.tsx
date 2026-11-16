@@ -1,4 +1,4 @@
-import { approachFromUrl } from '../flight/approach'
+import { useFlightPlan } from '../flight/flightPlan'
 import { useDashboardRun } from './useDashboardRun'
 import { lazy, Suspense, useState } from 'react'
 import type { FlightRequest } from '../flight/flightApi'
@@ -35,13 +35,14 @@ export default function OrbitWorkspace({
     result.kind === 'ready'
       ? result.run.candidates.find((c) => c.id === siteId)
       : null
-  const flight = new URLSearchParams(window.location.search)
-  flight.set('departure', schedule.departure)
-  flight.set('arrival', schedule.landing)
-  if (candidate) {
-    flight.set('lat', String(candidate.lat_deg))
-    flight.set('lon', String(candidate.lon_deg))
-  }
+  const plan = useFlightPlan(
+    schedule,
+    candidate
+      ? { latitude: candidate.lat_deg, longitude: candidate.lon_deg }
+      : null,
+  )
+  const example =
+    !candidate && !new URLSearchParams(window.location.search).has('lat')
   function change(field: 'departure' | 'landing', value: string) {
     const next = { ...draft, [field]: value }
     setDraft(next)
@@ -72,7 +73,7 @@ export default function OrbitWorkspace({
           </label>
           <span aria-hidden="true">→</span>
           <label>
-            달 궤도 진입일 · UTC
+            달 도착일 · UTC (궤도 진입)
             <input
               type="date"
               value={draft.landing}
@@ -95,15 +96,11 @@ export default function OrbitWorkspace({
               </p>
             ) : (
               <OrbitPanels
-                key={JSON.stringify([
-                  schedule,
-                  siteId,
-                  flight.get('lat'),
-                  flight.get('lon'),
-                ])}
+                key={JSON.stringify([schedule, siteId])}
                 schedule={parsed.data}
-                approach={approachFromUrl(flight)}
-                example={!flight.has('lat')}
+                request={plan.request}
+                setRequest={plan.apply}
+                example={example}
                 mode={mode}
                 onMode={setMode}
               />
@@ -122,28 +119,21 @@ export default function OrbitWorkspace({
 
 function OrbitPanels({
   schedule,
-  approach,
+  request,
+  setRequest,
   example,
   mode,
   onMode,
 }: {
   schedule: Schedule
-  approach: ReturnType<typeof approachFromUrl>
+  request: FlightRequest
+  setRequest: (request: FlightRequest) => void
   example: boolean
   mode: Mode
   onMode: (mode: Mode) => void
 }) {
   const [visitedBoth, setVisitedBoth] = useState(false)
-  const [request, setRequest] = useState<FlightRequest>(() => ({
-    departure: schedule.departure,
-    arrival: schedule.landing,
-    ...approach,
-    alignmentToleranceM: 5000,
-    wetMassKg: 1200,
-    dryMassKg: 450,
-    maxThrustN: 15000,
-    ispS: 310,
-  }))
+  const [initial] = useState(request)
   return (
     <>
       <div
@@ -187,8 +177,8 @@ function OrbitPanels({
               setRequest={setRequest}
               example={
                 example &&
-                request.latitude === approach.latitude &&
-                request.longitude === approach.longitude
+                request.latitude === initial.latitude &&
+                request.longitude === initial.longitude
               }
             />
           </Suspense>
