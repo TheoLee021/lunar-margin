@@ -162,14 +162,21 @@ def reference_doi_pdi(
     errors = np.array([misalignment(float(phase)) for phase in phases])
     index = int(np.argmin(errors))
     best_phase = float(phases[index])
+    # Both endpoint intervals can contain a minimum, even when their coarse
+    # samples tie. The rotating target also makes the two endpoints distinct.
+    brackets = {(0, 1), (len(phases) - 2, len(phases) - 1)}
     if 0 < index < len(phases) - 1:
+        brackets.add((index - 1, index + 1))
+    best_error = errors[index]
+    for left, right in sorted(brackets):
         refined = minimize_scalar(
             misalignment,
-            bounds=(float(phases[index - 1]), float(phases[index + 1])),
+            bounds=(float(phases[left]), float(phases[right])),
             method="bounded",
             options={"xatol": 1e-9},
         )
-        if refined.success and refined.fun < errors[index]:
+        if refined.success and refined.fun < best_error:
+            best_error = refined.fun
             best_phase = float(refined.x)
 
     burn_r, after_doi_v, pdi_r, pdi_v, pdi_epoch = orbit_at(best_phase)

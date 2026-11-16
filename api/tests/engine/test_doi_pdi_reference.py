@@ -66,3 +66,12 @@ def test_rejects_unsupported_or_nonphysical_handoff() -> None:
         reference_doi_pdi(invalid, EPOCH, -89.0, 30.0, identity)
     with pytest.raises(ValueError):
         reference_doi_pdi(initial_state(), EPOCH, -79.0, 30.0, identity)
+
+
+@pytest.mark.parametrize("longitude", [0.0, 180.0])
+def test_alignment_inside_first_or_last_grid_interval(longitude: float) -> None:
+    radius = R_M + 100000
+    state = np.array([0.0, 0.0, radius, np.sqrt(MU_M / radius), 0.0, 0.0])
+    result = reference_doi_pdi(state, EPOCH, -89.0, longitude, identity)
+    assert result.status == "REFERENCE_ALIGNED"
+    assert result.approach_error_m < 1

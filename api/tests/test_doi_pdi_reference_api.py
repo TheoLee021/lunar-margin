@@ -37,7 +37,7 @@ def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) ->
         del data_dir
         called.append((start, end))
         return SimpleNamespace(
-            loi_handoff=SimpleNamespace(epoch_utc=EPOCH, post_loi_j2000_km_kmps=_loi_state())
+            loi_handoff=SimpleNamespace(epoch_utc=end, post_loi_j2000_km_kmps=_loi_state())
         )
 
     monkeypatch.setattr(endpoint, "calculate_transfer", transfer)
@@ -53,7 +53,7 @@ def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) ->
             "/trajectory/doi-pdi-reference",
             json={
                 "departure": "2027-01-06T00:00:00Z",
-                "arrival": "2027-01-10T00:00:00Z",
+                "arrival": "2027-01-10T09:00:00+09:00",
                 "target_lat_deg": -89.0,
                 "target_lon_deg": 30.0,
             },
@@ -61,6 +61,7 @@ def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) ->
     assert response.status_code == 200, response.text
     data = response.json()
     assert called
+    assert data["loi"]["epoch_utc"] == "2027-01-10T00:00:00Z"
     assert data["status"] == "REFERENCE_ALIGNED"
     assert data["model"] == "TWO_BODY_REFERENCE_NO_MISSION_FEASIBILITY"
     assert data["pdi"]["epoch_utc"]
@@ -81,3 +82,18 @@ def test_reference_endpoint_rejects_invalid_date_window() -> None:
             },
         )
     assert response.status_code == 422
+
+
+def test_bridge_uses_shared_transfer_capacity() -> None:
+    app = create_app(Settings(horizon_table_download_on_start=False))
+    with endpoint.transfer_slot(), endpoint.transfer_slot(), TestClient(app) as client:
+        response = client.post(
+            "/trajectory/doi-pdi-reference",
+            json={
+                "departure": "2027-01-06T00:00:00Z",
+                "arrival": "2027-01-10T00:00:00Z",
+                "target_lat_deg": -89.0,
+                "target_lon_deg": 30.0,
+            },
+        )
+        assert response.status_code == 429
