@@ -82,6 +82,12 @@ def sun_direction(moment: datetime) -> tuple[float, float, float]:
     return (float(x / norm), float(y / norm), float(z / norm))
 
 
+def sun_directions(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.float64]:
+    """[start, end)를 step_minutes 간격으로 나눈 시각마다의 sun_direction. 모양 (N, 3)."""
+    vectors = body_vectors("SUN", utc_range(start, end, step_minutes))
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+
 def topocentric_azel(
     vectors_km: NDArray[np.float64],
     lat_deg: float,
