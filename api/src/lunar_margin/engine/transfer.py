@@ -7,7 +7,7 @@ No launch-site/ascent, Sun gravity, oblateness, finite burns or landing model.
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from time import monotonic
 
@@ -22,6 +22,7 @@ from lunar_margin.engine.ephemeris import (
     ephemeris_time,
     inertial_moon_state_to_moon_me,
     load_kernels,
+    moon_fixed_direction_to_j2000,
     moon_states,
 )
 
@@ -134,7 +135,49 @@ def _lambert(r1: Vec, r2: Vec, duration: float, normal: Vec) -> Vec:
     return np.asarray((r2 - (1 - y / a) * r1) / (coefficient * math.sqrt(y / MU_E)))
 
 
-def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -> TransferResult:
+@dataclass(frozen=True)
+class LandingApproach:
+    latitude: float
+    longitude: float
+    duration_s: float
+    downrange_m: float = 240_000.0
+
+    def capture_direction(self, up: Vec, incoming: Vec, radius_km: float, arrival: datetime) -> Vec:
+        """Fit a circular capture plane through perilune and the future surface target."""
+        lat, lon = math.radians(self.latitude), math.radians(self.longitude)
+        fixed = np.array(
+            [math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)]
+        )
+        motion = math.sqrt(MU_M / radius_km**3)
+        semimajor = (radius_km + R_M + 15.0) / 2
+        coast_s = math.pi * math.sqrt(semimajor**3 / MU_M)
+        epoch = arrival
+        for _ in range(12):
+            target = moon_fixed_direction_to_j2000(fixed, epoch)
+            tangent = target - float(np.dot(target, up)) * up
+            length = float(np.linalg.norm(tangent))
+            if length < 1e-10:
+                tangent = incoming.copy()
+            else:
+                tangent /= length
+            if np.dot(tangent, incoming) < 0:
+                tangent = -tangent
+            angle = math.atan2(float(np.dot(target, tangent)), float(np.dot(target, up)))
+            burn_phase = (angle - self.downrange_m / (R_M * 1000) - math.pi) % math.tau
+            updated = arrival + timedelta(seconds=burn_phase / motion + coast_s + self.duration_s)
+            if abs((updated - epoch).total_seconds()) < 0.001:
+                return tangent
+            epoch = updated
+        raise ValueError("Site-targeted capture geometry did not converge")
+
+
+def calculate_transfer(
+    departure: datetime,
+    arrival: datetime,
+    data_dir: Path,
+    *,
+    landing_approach: LandingApproach | None = None,
+) -> TransferResult:
     """Fit a direct transfer to exact UTC endpoints or raise ValueError; no fixture fallback."""
     if departure.tzinfo is None or arrival.tzinfo is None:
         raise ValueError("Dates must include a timezone")
@@ -331,6 +374,10 @@ def calculate_transfer(departure: datetime, arrival: datetime, data_dir: Path) -
     up = relative_r / np.linalg.norm(relative_r)
     direction = np.asarray(relative_v - np.dot(relative_v, up) * up, dtype=np.float64)
     direction = np.asarray(direction / float(np.linalg.norm(direction)), dtype=np.float64)
+    if landing_approach is not None:
+        direction = landing_approach.capture_direction(
+            up, direction, float(np.linalg.norm(relative_r)), arrival
+        )
     captured_velocity = (
         end_velocity + math.sqrt(MU_M / float(np.linalg.norm(relative_r))) * direction
     )

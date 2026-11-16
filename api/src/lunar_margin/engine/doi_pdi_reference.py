@@ -91,6 +91,8 @@ def reference_doi_pdi(
     pdi_altitude_m: float = 15_000.0,
     tolerance_m: float = 5_000.0,
     phase_grid_count: int = 72,
+    downrange_m: float = 0.0,
+    descent_duration_s: float = 0.0,
 ) -> DoiPdiReference:
     """Search a parking-orbit burn PHASE for one site-aligned PDI reference.
 
@@ -113,6 +115,10 @@ def reference_doi_pdi(
         and 0 < pdi_altitude_m < 100_000
         and math.isfinite(tolerance_m)
         and 0 < tolerance_m <= 100_000
+        and math.isfinite(downrange_m)
+        and 0 <= downrange_m < math.pi * R_M
+        and math.isfinite(descent_duration_s)
+        and descent_duration_s >= 0
         and 24 <= phase_grid_count <= 360
     ):
         raise ValueError("invalid site, DOI/PDI altitude, tolerance or phase grid")
@@ -153,7 +159,11 @@ def reference_doi_pdi(
 
     def misalignment(phase: float) -> float:
         _, _, pdi_r, pdi_v, pdi_epoch = orbit_at(phase)
-        fixed = np.asarray(frame_transform(np.r_[pdi_r, pdi_v], pdi_epoch), dtype=np.float64)
+        # Compare the downrange endpoint with the rotating landing target at touchdown.
+        ahead = downrange_m / R_M
+        endpoint = math.cos(ahead) * _unit(pdi_r) + math.sin(ahead) * _unit(pdi_v)
+        epoch = pdi_epoch + timedelta(seconds=descent_duration_s)
+        fixed = np.asarray(frame_transform(np.r_[endpoint, np.zeros(3)], epoch), dtype=np.float64)
         if fixed.shape != (6,) or not np.isfinite(fixed).all():
             raise ValueError("frame transform returned invalid 6D state")
         return R_M * _angle(fixed[:3], target)
@@ -186,7 +196,10 @@ def reference_doi_pdi(
     closest_distance = misalignment(best_phase)
     pdi_fixed = np.asarray(frame_transform(np.r_[pdi_r, pdi_v], pdi_epoch), dtype=np.float64)
     fixed_plane_normal = np.asarray(
-        frame_transform(np.r_[h_hat, np.zeros(3)], pdi_epoch), dtype=np.float64
+        frame_transform(
+            np.r_[h_hat, np.zeros(3)], pdi_epoch + timedelta(seconds=descent_duration_s)
+        ),
+        dtype=np.float64,
     )[:3]
     plane_offset_m = R_M * math.asin(
         min(1.0, abs(float(np.dot(_unit(fixed_plane_normal), target))))

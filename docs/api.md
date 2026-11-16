@@ -873,3 +873,11 @@ RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 �
 
 선택 매개변수 `observer_height_m`는 지면 위 관측 높이(m, 기본 2, 0~100)이다.
 응답에 적용 높이를 포함하며 가시권, 목표점 차폐, 수평선 교차에 동일하게 적용한다.
+
+### POST /trajectory/flight-preview
+
+출발·달 궤도 진입 UTC와 목표 위경도(`latitude`, `longitude`)를 받아 궤도와 하강을 연결한다. `arrival`은 LOI 시각이다. 정렬된 PDI가 있으면 같은 위치·속도를 하강 엔진에 전달한다. `estimated_touchdown_utc`는 하강 기준 경로가 추력·연료·지형 조건을 통과한 경우의 PDI UTC + 평가된 하강 기간이다. 정렬 실패 또는 하강 조건 실패 시 null이다. 하강 기간과 착륙선 제원은 시나리오 입력이다.
+
+착륙 목표가 있는 예측은 동일한 전이·근월점에서 순간 원궤도화 기동의 방향을 변경한다. 착륙 시각에 회전한 목표와 진입 위치를 포함하는 궤도면을 구하고, 접선 방향 두 개 중 진입 속도와 더 가까운 쪽을 선택한다. `GET /trajectory/transfer`에도 선택적으로 `latitude`, `longitude`, `duration_s`를 전달하면 같은 LOI를 계산한다. 좌표 생략 시 기존 접선 원궤도화가 유지된다.
+
+하강 접근 거리는 `planned_downrange_m`(기본 240 km)이다. 연결된 비행의 `orbit.approach_error_m`는 PDI에서 궤도 진행 방향으로 이 거리만큼 앞선 지점과 착륙 시각의 목표 사이의 지표 거리다. 단독 DOI/PDI API는 기존 PDI 직하점 오차를 유지한다. `capture_delta_v_mps`는 궤도면 변경을 포함한 진입 전후 속도 벡터 차이의 크기다. 입력 질량은 PDI 시점 제원이므로 LOI·DOI 연료 공급 능력은 별도 검증 대상이다.
