@@ -1,14 +1,6 @@
 import { z } from 'zod'
 
 const vector3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()])
-const vector6 = z.tuple([
-  z.number().finite(),
-  z.number().finite(),
-  z.number().finite(),
-  z.number().finite(),
-  z.number().finite(),
-  z.number().finite(),
-])
 const phase = z.object({
   epoch_utc: z.iso.datetime({ offset: true }),
   phase: z.string(),
