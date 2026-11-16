@@ -1,4 +1,5 @@
 """Verify integrated route never synthesizes a PDI or hides a failed profile."""
+
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -64,9 +65,7 @@ def prepare(monkeypatch: pytest.MonkeyPatch, aligned: bool) -> None:
     def transfer(start: datetime, end: datetime, directory: Path) -> SimpleNamespace:
         del start, end, directory
         return SimpleNamespace(
-            loi_handoff=SimpleNamespace(
-                epoch_utc=EPOCH, post_loi_j2000_km_kmps=[0.0] * 6
-            )
+            loi_handoff=SimpleNamespace(epoch_utc=EPOCH, post_loi_j2000_km_kmps=[0.0] * 6)
         )
 
     def bridge(
