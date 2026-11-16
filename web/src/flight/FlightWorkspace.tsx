@@ -101,11 +101,7 @@ export default function FlightWorkspace() {
     }
   }
 
-  const numberField = (
-    label: string,
-    key: NumericKey,
-    step: string,
-  ) => (
+  const numberField = (label: string, key: NumericKey, step: string) => (
     <label className="flex flex-col gap-1 text-[11px] text-neutral-300">
       {label}
       <input
