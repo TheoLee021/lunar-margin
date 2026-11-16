@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { layerUrl, type Candidate, type RunDetail } from '../api/candidates'
 import { formatPrice } from '../api/pricing'
-import { fractionText, funnelSteps, scoreText, xyToImage } from './derive'
+import {
+  degText,
+  fractionText,
+  funnelSteps,
+  scoreText,
+  xyToImage,
+} from './derive'
 import { ReservationPanel } from './ReservationPanel'
 import { Distribution } from './Distribution'
 import { useRun } from './useRuns'
@@ -360,7 +366,12 @@ function Board({ run }: { run: RunDetail }) {
               </h2>
               <small>By science score</small>
             </div>
-            <div className="co-table">
+            <div
+              className="co-table"
+              role="region"
+              aria-label="Ranked sites"
+              tabIndex={0}
+            >
               <table>
                 <thead>
                   <tr>
@@ -372,6 +383,10 @@ function Board({ run }: { run: RunDetail }) {
                       'Price¹',
                       'Score',
                       'Availability',
+                      'Longest RF blackout',
+                      'Local slope (P95)',
+                      'Local roughness (P95)',
+                      `Visible grid points (5 km · ${run.config.observer_height_m} m height)`,
                     ].map((h) => (
                       <th key={h}>{h}</th>
                     ))}
@@ -416,6 +431,22 @@ function Board({ run }: { run: RunDetail }) {
                               : availability.state.status === 'loading'
                                 ? 'Checking…'
                                 : 'Unknown'}
+                        </td>
+                        <td>
+                          {c.rf?.longest_blackout_hours == null
+                            ? '—'
+                            : `${c.rf.longest_blackout_hours} h`}
+                        </td>
+                        <td>{degText(c.terrain?.slope_p95_deg ?? null)}</td>
+                        <td>
+                          {c.terrain?.roughness_p95_m == null
+                            ? '—'
+                            : `${c.terrain.roughness_p95_m.toFixed(2)} m`}
+                        </td>
+                        <td>
+                          {c.score.visible_grid_points == null
+                            ? '—'
+                            : `${c.score.visible_grid_points} / 120`}
                         </td>
                       </tr>
                     )
