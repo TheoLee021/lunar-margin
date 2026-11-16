@@ -52,12 +52,16 @@ export function PriceGrid({
   landings,
   draft,
   availability,
+  slope,
+  onSlopeChange,
   onSelect,
   onDepartureStatus,
 }: {
   departures: number[]
   landings: number[]
   draft: Schedule
+  slope: string
+  onSlopeChange: (value: string) => void
   availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
   onDepartureStatus: (status: DepartureStatus) => void
@@ -102,6 +106,7 @@ export function PriceGrid({
         if (!run.mission)
           throw new Error('임무 조건이 저장된 탐색 실행을 선택하세요.')
         setMission(run.mission)
+        onSlopeChange(run.mission.max_terrain_slope_degrees?.toString() ?? '')
         setDarkness(run.mission.max_continuous_darkness_hours?.toString() ?? '')
         setBlackout(
           run.mission.max_communication_blackout_hours?.toString() ?? '',
@@ -117,13 +122,15 @@ export function PriceGrid({
           })
       })
     return () => controller.abort()
-  }, [source])
+  }, [source, onSlopeChange])
   const optional = (value: string) =>
     value.trim() === '' ? null : Number(value)
   const massNumber = Number(mass),
+    slopeLimit = optional(slope),
     dark = optional(darkness),
     black = optional(blackout)
   const valid =
+    (slopeLimit === null || (slopeLimit > 0 && slopeLimit <= 90)) &&
     massNumber > 0 &&
     massNumber <= 1_000_000 &&
     Number.isFinite(massNumber) &&
@@ -150,6 +157,7 @@ export function PriceGrid({
             mission_duration_days: draft.duration,
             max_continuous_darkness_hours: dark,
             max_communication_blackout_hours: black,
+            max_terrain_slope_degrees: slopeLimit,
           },
         }
       : null
@@ -188,6 +196,7 @@ export function PriceGrid({
     url.searchParams.set('arrival', iso(landing))
     url.searchParams.set('duration', String(draft.duration))
     url.searchParams.set('run', runId)
+    url.searchParams.set('max_slope', String(slopeLimit ?? 'none'))
     url.searchParams.set('mass_kg', String(massNumber))
     url.searchParams.set('delivery', delivery)
     if (launchId) url.searchParams.set('launch_id', launchId)
@@ -231,6 +240,7 @@ export function PriceGrid({
               setSourceState({ id: '', loading: true, error: '' })
               if (!e.target.value) {
                 setMission(DEFAULT_MISSION)
+                onSlopeChange('')
                 setDarkness('24')
                 setBlackout('6')
               }
@@ -265,6 +275,18 @@ export function PriceGrid({
             placeholder="조건 없음"
             value={blackout}
             onChange={(e) => setBlackout(e.target.value)}
+          />
+        </label>
+        <label>
+          최대 허용 경사 · ° (지역 P95)
+          <input
+            type="number"
+            min="0"
+            max="90"
+            step="any"
+            placeholder="제한 없음"
+            value={slope}
+            onChange={(e) => onSlopeChange(e.target.value)}
           />
         </label>
         <div className="price-actions">
@@ -314,8 +336,8 @@ export function PriceGrid({
       ) : null}
       {!valid ? (
         <p role="alert">
-          질량은 0 초과~1,000,000kg, 어둠·두절 한도는 0 이상의 숫자로
-          입력하세요.
+          경사는 0° 초과~90° 또는 빈칸, 질량은 0 초과~1,000,000kg, 어둠·두절
+          한도는 0 이상의 숫자로 입력하세요.
         </p>
       ) : null}
       {calendar.loading ? (

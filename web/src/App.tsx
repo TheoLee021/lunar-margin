@@ -40,6 +40,11 @@ function currentView(): View {
 function initialSelection(): MissionSelection {
   const params = new URLSearchParams(window.location.search)
   const schedule = ScheduleSchema.safeParse({
+    maxSlope: params.has('max_slope')
+      ? params.get('max_slope') === 'none'
+        ? null
+        : Number(params.get('max_slope'))
+      : undefined,
     launchId: params.get('launch_id'),
     departure: params.get('departure'),
     landing: params.get('arrival'),
@@ -67,6 +72,9 @@ function locationFor(
   url.searchParams.set('departure', selection.departure)
   url.searchParams.set('arrival', selection.landing)
   url.searchParams.set('duration', String(selection.duration))
+  if (selection.maxSlope !== undefined)
+    url.searchParams.set('max_slope', String(selection.maxSlope ?? 'none'))
+  else url.searchParams.delete('max_slope')
   if (selection.launchId) url.searchParams.set('launch_id', selection.launchId)
   else url.searchParams.delete('launch_id')
   if (selection.siteId) url.searchParams.set('site', selection.siteId)

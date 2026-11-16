@@ -433,7 +433,8 @@ LOI 상태 경계(후속 DOI/PDI 연결을 위한 6차원 handoff):
 지역 유효 표본은 경사와 400 m 거칠기 창 모두 유효해야 한다.
 
 - 초과 사유: `terrain_slope_above_max`. 결측/불완전 사유: `terrain_incomplete`.
-- 새 결과의 `config.thresholds.max_terrain_slope_degrees`가 실제 적용 한도다.
+- 결과 목록의 `max_terrain_slope_degrees`는 저장된 탐색의 적용 한도다. 날짜 계획에 적용한 한도와 일치하는 결과만 대시보드에 표시한다.
+- 결과 상세 조회는 순위 상위 5개 후보의 지역 지형 통계가 없으면 저장된 탐색의 주 DEM에서 계산한다. 제한 없는 탐색과 이전 탐색에도 적용하며, 저장된 순위와 적격 판정은 유지한다. DEM이 없거나 표본이 불완전하면 비교 화면에 결측으로 표시한다.
 - 후보의 nullable `terrain`: `slope_p95_deg`, `coverage_fraction`,
   `assessment_radius_m`(250), `slope_baseline_m`(160), `roughness_window_m`(400),
   `dem_pixel_m`, `landing_safety_status`(`UNVERIFIED`). 비활성화/과거 실행은 null 또는 생략.

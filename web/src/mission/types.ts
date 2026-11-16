@@ -2,6 +2,7 @@ import type { PolarGridCell } from '../moon/location'
 
 /** The single selection shared by the map and mission panels. All dates are UTC. */
 export type MissionSelection = {
+  maxSlope?: number | null
   launchId?: string | null
   departure: string
   landing: string
@@ -23,7 +24,7 @@ export type CandidateSite = {
 
 export type Schedule = Pick<
   MissionSelection,
-  'departure' | 'landing' | 'duration' | 'launchId'
+  'departure' | 'landing' | 'duration' | 'launchId' | 'maxSlope'
 >
 export type Timeline = {
   t: number[]

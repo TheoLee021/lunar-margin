@@ -15,8 +15,9 @@ export function useDashboardRun(schedule: Schedule) {
     new URLSearchParams(window.location.search).get('pricing_run')
   const landing = schedule.landing,
     duration = schedule.duration
+  const maxSlope = schedule.maxSlope
   const [revision, setRevision] = useState(0)
-  const key = JSON.stringify([landing, duration, preferred, revision])
+  const key = JSON.stringify([landing, duration, preferred, revision, maxSlope])
   const [stored, setStored] = useState<{ key: string; result: Result } | null>(
     null,
   )
@@ -30,6 +31,8 @@ export function useDashboardRun(schedule: Schedule) {
         const matching = runs.filter(
           (run) =>
             !run.id.startsWith('dev-') &&
+            (maxSlope === undefined ||
+              (run.max_terrain_slope_degrees ?? null) === maxSlope) &&
             Date.parse(run.window.start) === start &&
             Date.parse(run.window.end) === end,
         )
@@ -63,7 +66,7 @@ export function useDashboardRun(schedule: Schedule) {
     }
     void load()
     return () => controller.abort()
-  }, [landing, duration, preferred, revision, key])
+  }, [landing, duration, preferred, revision, key, maxSlope])
   return {
     result:
       stored?.key === key ? stored.result : ({ kind: 'loading' } as const),

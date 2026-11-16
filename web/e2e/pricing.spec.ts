@@ -50,12 +50,31 @@ test('missing landing dates launch one batch and display all five results', asyn
       },
     })
   })
+  const calendarForSlope = (limit: number | null) =>
+    page.waitForRequest(
+      (request) =>
+        request.url().endsWith('/pricing/providers/calendar') &&
+        request.postDataJSON().mission.max_terrain_slope_degrees === limit,
+    )
+  const unrestricted = calendarForSlope(null)
   await page.goto('/?planner=1')
+  await unrestricted
+  const slope = page.getByLabel('최대 허용 경사', { exact: false })
+  await expect(slope).toHaveValue('')
+  const limited = calendarForSlope(12.5)
+  await slope.fill('12.5')
+  await limited
   const dialog = page.getByRole('dialog')
   await expect(
     dialog.getByRole('table').getByText('미계산').first(),
   ).toBeVisible()
+  const starting = page.waitForRequest((request) =>
+    request.url().endsWith('/pricing/calculate'),
+  )
   await dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }).click()
+  expect(
+    (await starting).postDataJSON().mission.max_terrain_slope_degrees,
+  ).toBe(12.5)
   await expect(
     dialog.getByRole('button', { name: '미계산 날짜 탐색 · 500m' }),
   ).toBeDisabled()
@@ -68,6 +87,13 @@ test('missing landing dates launch one batch and display all five results', asyn
   ])
   expect(batchCalls).toBe(1)
   await expect(dialog.getByRole('table').getByText('미계산')).toHaveCount(0)
+  await dialog.getByRole('button', { name: '일정 적용 ↗' }).click()
+  await expect(page).toHaveURL(/max_slope=12\.5/)
+  await page.reload()
+  await page.getByRole('button', { name: '미션 날짜 비교 열기' }).click()
+  await expect(page.getByLabel('최대 허용 경사', { exact: false })).toHaveValue(
+    '12.5',
+  )
 })
 
 test('date prices open the saved candidate run without recalculating', async ({
