@@ -126,3 +126,14 @@ def test_arrival_approach_is_tangent_to_the_lunar_capture_orbit(
     assert np.polyfit(times, np.linalg.norm(positions, axis=1), 2)[0] > 0
     assert result.transfer[-1].seconds == flight_days * 86400
     assert result.arrival == arrival
+
+
+def test_loi_arrival_at_utc_after_leap_second(data_dir: Path) -> None:
+    departure = datetime(2016, 12, 29, tzinfo=UTC)
+    arrival = datetime(2017, 1, 2, tzinfo=UTC)
+    result = calculate_transfer(departure, arrival, data_dir)
+    moon, _ = spiceypy.spkpos(
+        "MOON", spiceypy.str2et("2017-01-02T00:00:00"), "J2000", "NONE", "EARTH"
+    )
+    assert np.linalg.norm(moon - result.transfer[-1].moon_km) < 0.001
+    assert result.transfer[-1].seconds == 345601
