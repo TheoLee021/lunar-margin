@@ -23,6 +23,7 @@ import { SiteComparisonPanel } from './SiteComparisonPanel'
 import { toggleComparison, COMPARISON_COLORS } from './siteCompare'
 
 export function MissionWorkspace({
+  onOverview,
   selection,
   analysis,
   candidates,
@@ -32,6 +33,7 @@ export function MissionWorkspace({
   apiStatus,
   children,
 }: {
+  onOverview: (runId: string) => void
   analysis: MissionAnalysisResult
   candidates: ReturnType<typeof useDashboardRun>
   sites: readonly CandidateSite[]
@@ -428,12 +430,22 @@ export function MissionWorkspace({
               >
                 결과 새로고침
               </button>
-              <a
-                className="hud-button"
-                href={`${searchUrl.pathname}${searchUrl.search}`}
-              >
-                {run ? '이 결과의 후보지 탐색 보기' : '후보지 탐색하기'}
-              </a>
+              {run ? (
+                <button
+                  type="button"
+                  className="hud-button"
+                  onClick={() => onOverview(run.id)}
+                >
+                  후보지 선정
+                </button>
+              ) : (
+                <a
+                  className="hud-button"
+                  href={`${searchUrl.pathname}${searchUrl.search}`}
+                >
+                  후보지 탐색하기
+                </a>
+              )}
             </section>
           </aside>
           {selected ? (

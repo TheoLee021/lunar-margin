@@ -1,50 +1,11 @@
 import type { RunDetail } from '../api/candidates'
 import { allThresholdsNull, funnelSteps, reasonLabel } from './derive'
-import { Distribution } from './Distribution'
+import { MetricDistributions } from './MetricDistributions'
 
 interface Props {
   summary: RunDetail['summary']
   config: RunDetail['config']
 }
-
-const DISTRIBUTIONS = [
-  {
-    key: 'rf_fraction',
-    title: 'RF 통신 가능 비율',
-    hint: 'LOS와 목표 링크마진을 모두 만족한 시간 비율',
-    unit: 'fraction',
-  },
-  {
-    key: 'rf_longest_blackout_h',
-    title: 'RF 최장 두절',
-    hint: 'LOS 차폐와 마진 부족을 합한 최장 연속 두절',
-    unit: 'hours',
-  },
-  {
-    key: 'sun_fraction',
-    title: '일조율',
-    hint: '지점별 평균 일조율',
-    unit: 'fraction',
-  },
-  {
-    key: 'earth_fraction',
-    title: '지구 가시율',
-    hint: '지점별 평균 지구 가시율',
-    unit: 'fraction',
-  },
-  {
-    key: 'sun_longest_dark_h',
-    title: '최장 연속 암흑',
-    hint: '기간 중 가장 길었던 암흑(최악값)',
-    unit: 'hours',
-  },
-  {
-    key: 'earth_longest_blackout_h',
-    title: '최장 지구 LOS 차폐',
-    hint: '지구 중심 방향이 지형에 가린 최장 시간',
-    unit: 'hours',
-  },
-] as const
 
 /** 점이 단계마다 몇 개 남는지(퍼널), 탈락 사유, 지표 분포. */
 export function FunnelPanel({ summary, config }: Props) {
@@ -140,17 +101,10 @@ export function FunnelPanel({ summary, config }: Props) {
             적격으로 처리됐습니다. 아래 분포를 보고 정한 뒤 다시 실행하세요.
           </p>
         ) : null}
-        {DISTRIBUTIONS.filter(
-          (item) => !item.key.startsWith('rf_') || config.rf != null,
-        ).map((item) => (
-          <Distribution
-            key={item.key}
-            title={item.title}
-            hint={item.hint}
-            values={summary.distributions[item.key] ?? {}}
-            unit={item.unit}
-          />
-        ))}
+        <MetricDistributions
+          values={summary.distributions}
+          includeRF={config.rf != null}
+        />
       </section>
     </div>
   )
