@@ -20,9 +20,11 @@ export function ReservationPanel({
   mission,
   selected,
   onChanged,
+  embedded = false,
 }: {
   mission: MissionRequest | null
   selected: CandidateAvailability | null
+  embedded?: boolean
   onChanged: () => void
 }) {
   const [company, setCompany] = useState('')
@@ -90,11 +92,14 @@ export function ReservationPanel({
     })
   }
 
+  const Container = embedded ? 'section' : 'details'
   return (
-    <details className="rounded-xl border border-white/10 bg-[#101419]/95 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-neutral-100">
-        예약 관리
-      </summary>
+    <Container className="rounded-xl border border-white/10 bg-[#101419]/95 p-4">
+      {!embedded && (
+        <summary className="cursor-pointer text-sm font-semibold text-neutral-100">
+          예약 관리
+        </summary>
+      )}
       <p className="mt-3 text-xs leading-5 text-neutral-400">
         공개 데모로 누구나 예약을 확정하거나 취소할 수 있습니다. 같은 500 × 500m
         격자의 겹치는 기간은 중복 예약할 수 없습니다.
@@ -163,16 +168,18 @@ export function ReservationPanel({
         </button>
       </form>
       <div className="mt-4 flex flex-col gap-3">
-        <button
-          className={`${buttonClass} self-start`}
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void operate(() => load(0))
-          }}
-        >
-          예약 이력 조회
-        </button>
+        {!embedded && (
+          <button
+            className={`${buttonClass} self-start`}
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void operate(() => load(0))
+            }}
+          >
+            예약 이력 조회
+          </button>
+        )}
         {busy ? (
           <p role="status" className="text-xs text-neutral-400">
             예약 요청 처리 중…
@@ -239,6 +246,6 @@ export function ReservationPanel({
           </button>
         ) : null}
       </div>
-    </details>
+    </Container>
   )
 }

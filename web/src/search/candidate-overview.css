@@ -1,6 +1,6 @@
 .co {
   min-height: 100svh;
-  background: #0b1114;
+  background: rgb(11 17 20 / 62%);
   color: #deebe9;
   padding: 0 clamp(14px, 2.6vw, 48px) 30px;
   font-family: var(--f-body), sans-serif;
@@ -68,7 +68,7 @@
 .co-card {
   border: 1px solid #334448;
   border-radius: 10px;
-  background: #111b1f;
+  background: rgb(17 27 31 / 62%);
   overflow: hidden;
 }
 .co-right,
@@ -115,7 +115,7 @@
   color: #ebfaf5;
 }
 .co-field {
-  background: #060e12;
+  background: rgb(6 14 18 / 45%);
   padding: 14px;
   display: grid;
   place-items: center;
@@ -337,7 +337,7 @@
   box-shadow: 0 16px 80px #0008;
 }
 .co-panel::backdrop {
-  background: rgba(4, 9, 12, 0.42);
+  background: rgba(4, 9, 12, 0.16);
 }
 .co-bar {
   position: sticky;
@@ -372,4 +372,32 @@
     width: 96vw;
     max-height: 94dvh;
   }
+}
+
+.co button.co-available {
+  color: #98f2b8;
+  background: #173c2c;
+  border: 1px solid #427655;
+  border-radius: 5px;
+  padding: 2px 7px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.co button.co-available:hover {
+  background: #215538;
+}
+.co-reservation {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, 92vw);
+  max-height: 86dvh;
+  overflow: auto;
+  border: 1px solid #526660;
+  border-radius: 12px;
+  background: #121e21;
+  color: #edf5f0;
+}
+.co-reservation::backdrop {
+  background: rgb(0 0 0 / 48%);
 }

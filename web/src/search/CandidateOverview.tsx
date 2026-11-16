@@ -8,6 +8,7 @@ import {
   scoreText,
   xyToImage,
 } from './derive'
+import { ReservationPanel } from './ReservationPanel'
 import { Distribution } from './Distribution'
 import { useRun } from './useRuns'
 import { useAvailability } from './useAvailability'
@@ -71,6 +72,24 @@ function Board({ run }: { run: RunDetail }) {
   const [metric, setMetric] = useState<'sun' | 'earth'>('sun')
   const [failed, setFailed] = useState<string[]>([])
   const [reasons, setReasons] = useState(false)
+  const reservationDialog = useRef<HTMLDialogElement>(null)
+  const [reservationOpen, setReservationOpen] = useState(false)
+  function reserveButton(candidateId: string) {
+    return (
+      <button
+        type="button"
+        className="co-available"
+        aria-haspopup="dialog"
+        onClick={() => {
+          setPicked(candidateId)
+          setReservationOpen(true)
+          reservationDialog.current?.showModal()
+        }}
+      >
+        예약 가능
+      </button>
+    )
+  }
   const active = sites.find((c) => c.id === picked)
   const availability = useAvailability(run.id)
   const period =
@@ -122,6 +141,34 @@ function Board({ run }: { run: RunDetail }) {
   })
   return (
     <>
+      <dialog
+        className="co-reservation"
+        aria-label="후보지 예약"
+        ref={reservationDialog}
+        onClose={() => setReservationOpen(false)}
+        onCancel={(event) => event.stopPropagation()}
+      >
+        {reservationOpen && (
+          <>
+            <header className="co-head">
+              <h2>후보지 예약 · {picked}</h2>
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => reservationDialog.current?.close()}
+              >
+                닫기 ×
+              </button>
+            </header>
+            <ReservationPanel
+              embedded
+              mission={run.mission ?? null}
+              selected={booking ?? null}
+              onChanged={availability.reload}
+            />
+          </>
+        )}
+      </dialog>
       <div className="co-title">
         <div>
           <small>남극 착륙지 분석</small>
@@ -237,7 +284,7 @@ function Board({ run }: { run: RunDetail }) {
                     : availability.state.status === 'error'
                       ? availability.state.message
                       : booking?.status === 'available'
-                        ? '예약 가능'
+                        ? reserveButton(picked!)
                         : booking?.status === 'reserved'
                           ? '예약됨'
                           : '예약 정보 미확인'}
@@ -320,7 +367,7 @@ function Board({ run }: { run: RunDetail }) {
                         <td>{scoreText(c.score.total)}</td>
                         <td>
                           {status === 'available'
-                            ? '가능'
+                            ? reserveButton(c.id)
                             : status === 'reserved'
                               ? '예약됨'
                               : availability.state.status === 'loading'
