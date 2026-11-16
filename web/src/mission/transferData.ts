@@ -68,6 +68,25 @@ export function relativePosition(sample: OrbitSample): Vector {
   return sample.spacecraft_km.map((v, i) => v - sample.moon_km[i]!) as Vector
 }
 
+// Unfold the incoming plane around the common LOI radius. Its transverse
+// axis points in the incoming direction of travel, as the capture axis does after LOI.
+export function incomingFrame(
+  data: Pick<TransferData, 'capture_plane_x' | 'capture_plane_y' | 'transfer'>,
+) {
+  const radial = data.capture_plane_x
+  const before = relativePosition(data.transfer.at(-2)!)
+  const along = before.reduce((sum, v, i) => sum + v * radial[i]!, 0)
+  const tangent = radial.map((v, i) => along * v - before[i]!) as Vector
+  const length = Math.hypot(...tangent)
+  return {
+    plane_x: radial,
+    plane_y:
+      length > 1e-8
+        ? (tangent.map((v) => v / length) as Vector)
+        : data.capture_plane_y,
+  }
+}
+
 // One common scale preserves the calculated geometry in both projections.
 export function fitProjection(
   points: Point[],

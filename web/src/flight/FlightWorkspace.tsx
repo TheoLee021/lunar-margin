@@ -1,3 +1,4 @@
+import { FlightPlots } from './FlightPlots'
 import { approachFromUrl, defaultApproach } from './approach'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
@@ -50,20 +51,26 @@ export default function FlightWorkspace() {
   const [draft, setDraft] = useState(request)
   const [data, setData] = useState<FlightPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [is3D, setIs3D] = useState(false)
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
   const moon = useRef<MoonViewerHandle>(null)
   useEffect(() => {
     const controller = new AbortController()
-    requestFlightPreview(request, controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setData(result)
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted)
-          setError(reason instanceof Error ? reason.message : '계산 실패')
-      })
-    return () => controller.abort()
+    const timer = window.setTimeout(() => {
+      void requestFlightPreview(request, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) setData(result)
+        })
+        .catch((reason: unknown) => {
+          if (!controller.signal.aborted)
+            setError(reason instanceof Error ? reason.message : '계산 실패')
+        })
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
   }, [request])
   const [showExample, setShowExample] = useState(false)
   const [example, setExample] = useState<FlightPoint[]>([])
@@ -281,30 +288,56 @@ export default function FlightWorkspace() {
         )}
       </section>
       <section
-        className="relative min-h-[60svh] md:h-svh"
-        aria-label="달 궤도 3D 재생"
+        className="flex min-h-[60svh] flex-col md:h-svh md:overflow-auto"
+        aria-label="달 궤도 재생"
       >
-        <MoonViewer
-          ref={moon}
-          markers={markers}
-          flightPoints={points}
-          flightFrame={frame}
-        />
+        <div className="flex gap-2 p-3" role="group" aria-label="표시 방식">
+          <button
+            className="hud-button"
+            aria-pressed={!is3D}
+            onClick={() => setIs3D(false)}
+          >
+            2D 궤도 · 착륙
+          </button>
+          <button
+            className="hud-button"
+            aria-pressed={is3D}
+            onClick={() => setIs3D(true)}
+          >
+            3D 지형
+          </button>
+        </div>
+        {is3D ? (
+          <div className="relative min-h-[45svh] flex-1">
+            <MoonViewer
+              ref={moon}
+              markers={markers}
+              flightPoints={points}
+              flightFrame={frame}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center">
+            <FlightPlots points={points} frame={frame} />
+          </div>
+        )}
         {current && (
-          <div className="hud-panel absolute inset-x-4 bottom-4 space-y-2 p-3 text-sm">
+          <div className="hud-panel mx-4 mb-4 space-y-2 p-3 text-sm">
             <div className="flex justify-between">
               <span>{labels[current.phase]}</span>
-              <button
-                className="hud-button"
-                onClick={() =>
-                  moon.current?.flyTo(
-                    { lat: request.latitude, lon: request.longitude },
-                    450000,
-                  )
-                }
-              >
-                목표 위치 보기
-              </button>
+              {is3D && (
+                <button
+                  className="hud-button"
+                  onClick={() =>
+                    moon.current?.flyTo(
+                      { lat: request.latitude, lon: request.longitude },
+                      450000,
+                    )
+                  }
+                >
+                  목표 위치 보기
+                </button>
+              )}
             </div>
             <input
               className="w-full"

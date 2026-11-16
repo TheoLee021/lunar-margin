@@ -8,6 +8,7 @@ import {
   type Entity,
   type Viewer,
 } from 'cesium'
+import { trackVertices } from '../flight/trackGeometry'
 import type { FlightPoint } from '../flight/flightData'
 
 export interface FlightLayer {
@@ -39,9 +40,9 @@ export function createFlightLayer(viewer: Viewer): FlightLayer {
         'DOI_COAST',
         'POWERED_DESCENT',
       ] as const) {
-        const locations = points
-          .filter((point) => point.phase === phase)
-          .map((point) => cartesian(point.moonMe))
+        const locations = trackVertices(
+          points.filter((point) => point.phase === phase),
+        ).map(cartesian)
         if (locations.length < 2) continue
         const material =
           phase === 'POWERED_DESCENT'
@@ -56,7 +57,6 @@ export function createFlightLayer(viewer: Viewer): FlightLayer {
               arcType: ArcType.NONE,
               width: phase === 'POWERED_DESCENT' ? 4 : 2.5,
               material,
-              depthFailMaterial: material,
             },
           }),
         )
@@ -73,7 +73,6 @@ export function createFlightLayer(viewer: Viewer): FlightLayer {
           color: Color.YELLOW,
           outlineColor: Color.BLACK,
           outlineWidth: 2,
-          disableDepthTestDistance: Infinity,
         },
       })
       entities.push(cursor)

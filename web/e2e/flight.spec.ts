@@ -9,11 +9,18 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
     /2027-01-10 02:32:\d\d UTC/,
     { timeout: 30000 },
   )
+  await expect(
+    page.getByRole('img', {
+      name: '동력하강 시작부터 표면 착륙까지 경과 시간과 지상고',
+    }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '3D 지형' }).click()
   await expect(page.getByTestId('moon-viewer')).toHaveAttribute(
     'data-state',
     'ready',
     { timeout: 30000 },
   )
+  await page.getByRole('button', { name: '2D 궤도 · 착륙' }).click()
   const slider = page.getByRole('slider', { name: '비행 시점' })
   await slider.focus()
   await slider.press('End')
