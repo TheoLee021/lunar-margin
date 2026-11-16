@@ -24,6 +24,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - name: Inspect flight-view Prettier formatting (temporary)
+        run: |
+          npx prettier src/flight/FlightWorkspace.tsx > /tmp/flight-formatted.tsx
+          diff -u src/flight/FlightWorkspace.tsx /tmp/flight-formatted.tsx || true
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run test
