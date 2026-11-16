@@ -14,11 +14,13 @@ export function MissionTimeline({
   timeline: tl,
   duration,
   hour,
+  onHourChange,
   observerHeightM = 0,
 }: {
   timeline: Timeline
   duration: number
   hour: number
+  onHourChange?: (hour: number) => void
   observerHeightM?: number
 }) {
   const [inspection, setInspection] = useState<number | null>(null)
@@ -43,7 +45,7 @@ export function MissionTimeline({
     0,
     tl.t.findLastIndex((t) => t <= hour / 24),
   )
-  const selected = Math.min(tl.t.length - 1, inspection ?? current)
+  const selected = Math.min(tl.t.length - 1, onHourChange ? current : (inspection ?? current))
   const width = 580,
     left = 43,
     plotWidth = 523,
@@ -105,7 +107,9 @@ export function MissionTimeline({
                 duration,
             ),
           )
-          setInspection(nearestIndex(tl.t, time))
+          const index = nearestIndex(tl.t, time)
+          if (onHourChange) onHourChange(tl.t[index]! * 24)
+          else setInspection(index)
         }}
       >
         <defs>
@@ -282,7 +286,11 @@ export function MissionTimeline({
           step={1}
           value={selected}
           aria-label="타임라인 검토 시점"
-          onChange={(event) => setInspection(Number(event.target.value))}
+          onChange={(event) => {
+            const index = Number(event.target.value)
+            if (onHourChange) onHourChange(tl.t[index]! * 24)
+            else setInspection(index)
+          }}
         />
       </div>
       <p className="hint">
