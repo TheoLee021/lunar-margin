@@ -185,9 +185,7 @@ def reference_doi_pdi(
         min(1.0, abs(float(np.dot(_unit(fixed_plane_normal), target))))
     )
     status: Status = (
-        "REFERENCE_ALIGNED"
-        if closest_distance <= tolerance_m
-        else "NO_ALIGNED_REFERENCE"
+        "REFERENCE_ALIGNED" if closest_distance <= tolerance_m else "NO_ALIGNED_REFERENCE"
     )
 
     def phase_state(
@@ -242,9 +240,7 @@ def reference_doi_pdi(
         cos_f = (cos_e - ecc) / (1 - ecc * cos_e)
         sin_f = math.sqrt(1 - ecc**2) * sin_e / (1 - ecc * cos_e)
         point_r = radius_e * (cos_f * p_hat + sin_f * q_hat)
-        point_v = math.sqrt(MU_M / semilatus) * (
-            -sin_f * p_hat + (ecc + cos_f) * q_hat
-        )
+        point_v = math.sqrt(MU_M / semilatus) * (-sin_f * p_hat + (ecc + cos_f) * q_hat)
         elapsed_s = (float(e_anom) - ecc * sin_e - math.pi) / ellipse_motion
         sample_epoch = doi_epoch + timedelta(seconds=elapsed_s)
         add_sample(sample_epoch, "DOI_COAST", point_r, point_v)
