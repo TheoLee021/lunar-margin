@@ -33,7 +33,11 @@ export function createFlightLayer(viewer: Viewer): FlightLayer {
     setPath(points) {
       clear()
       samples = points
-      for (const phase of ['PARKING_COAST', 'DOI_COAST', 'POWERED_DESCENT'] as const) {
+      for (const phase of [
+        'PARKING_COAST',
+        'DOI_COAST',
+        'POWERED_DESCENT',
+      ] as const) {
         const locations = points
           .filter((point) => point.phase === phase)
           .map((point) => cartesian(point.moonMe))
