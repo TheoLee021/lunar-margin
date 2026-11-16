@@ -7,6 +7,7 @@ import {
   useState,
   type Ref,
 } from 'react'
+import type { MoonAsset } from './assetLayer'
 import type { LunarLocation } from './location'
 import type { MoonMarker } from './markerLayer'
 import type { MoonScene } from './scene'
@@ -14,11 +15,35 @@ import { parseSunDirection, type Vector3 } from './sun'
 
 /** Imperative API for panels. Calls made before the Moon has loaded are applied once it is ready. */
 export interface MoonViewerHandle {
-  flyTo(location: LunarLocation, rangeM?: number): void
+  /**
+   * `pitchDeg` is the camera's tilt, negative looking down, and `headingDeg` the
+   * compass direction it faces. Both default to the whole-site view from above.
+   */
+  flyTo(
+    location: LunarLocation,
+    rangeM?: number,
+    pitchDeg?: number,
+    headingDeg?: number,
+  ): void
   /** Back to the start view straight above the south pole. No-op until the Moon has loaded. */
   flyToOverview(): void
   /** Moon-to-Sun unit vector in MOON_ME (`[x, y, z]`), or null for photo-only shading. Throws on invalid input. */
   setSunDirection(direction: unknown): void
+  /**
+   * Surface equipment with the Earth verdict on each unit. Imperative because a drive
+   * redraws every frame, which React state must not do.
+   */
+  setAssets(assets: readonly MoonAsset[]): void
+  /** Show or hide the arrows from each unit toward the Earth. */
+  setSightsVisible(visible: boolean): void
+  /** Hold the camera on a moving point. `releaseFollow` hands control back. */
+  follow(
+    location: LunarLocation,
+    rangeM: number,
+    pitchDeg: number,
+    headingDeg: number,
+  ): void
+  releaseFollow(): void
   /**
    * The light of a Sun that is still moving, such as a time being played. Nothing is asked of the
    * backend until `setSunDirection` gives the Sun it comes to rest at. Throws on invalid input.
@@ -67,8 +92,15 @@ export default function MoonViewer({
   const compassRef = useRef<HTMLSpanElement>(null)
   const sceneRef = useRef<MoonScene | null>(null)
   const pending = useRef<{
-    fly?: { location: LunarLocation; rangeM?: number }
+    fly?: {
+      location: LunarLocation
+      rangeM?: number
+      pitchDeg?: number
+      headingDeg?: number
+    }
     sun?: Vector3 | null
+    assets?: readonly MoonAsset[]
+    sights?: boolean
   }>({})
   const callbacks = useRef({ onPick, onMarkerSelect })
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
@@ -106,12 +138,27 @@ export default function MoonViewer({
   useImperativeHandle(
     ref,
     () => ({
-      flyTo(location, rangeM) {
-        if (sceneRef.current) sceneRef.current.flyTo(location, rangeM)
-        else pending.current.fly = { location, rangeM }
+      flyTo(location, rangeM, pitchDeg, headingDeg) {
+        if (sceneRef.current)
+          sceneRef.current.flyTo(location, rangeM, pitchDeg, headingDeg)
+        else pending.current.fly = { location, rangeM, pitchDeg, headingDeg }
       },
       flyToOverview() {
         sceneRef.current?.flyToOverview()
+      },
+      setAssets(assets) {
+        if (sceneRef.current) sceneRef.current.setAssets(assets)
+        else pending.current.assets = assets
+      },
+      setSightsVisible(visible) {
+        if (sceneRef.current) sceneRef.current.setSightsVisible(visible)
+        else pending.current.sights = visible
+      },
+      follow(location, rangeM, pitchDeg, headingDeg) {
+        sceneRef.current?.follow(location, rangeM, pitchDeg, headingDeg)
+      },
+      releaseFollow() {
+        sceneRef.current?.releaseFollow()
       },
       setSunDirection(direction) {
         if (sceneRef.current) sceneRef.current.setSunDirection(direction)
@@ -154,10 +201,13 @@ export default function MoonViewer({
         }
         scene = created
         sceneRef.current = created
-        const { fly, sun } = pending.current
+        const { fly, sun, assets, sights } = pending.current
         pending.current = {}
         if (sun !== undefined) created.setSunDirection(sun)
-        if (fly) created.flyTo(fly.location, fly.rangeM)
+        if (assets) created.setAssets(assets)
+        if (sights !== undefined) created.setSightsVisible(sights)
+        if (fly)
+          created.flyTo(fly.location, fly.rangeM, fly.pitchDeg, fly.headingDeg)
         setState({ kind: 'ready' })
       })
       .catch((error: unknown) => {
