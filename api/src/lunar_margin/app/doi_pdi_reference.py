@@ -28,7 +28,7 @@ class LandingReferenceRequest(BaseModel):
     alignment_tolerance_m: float = Field(default=5_000.0, gt=0, le=100_000, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def check_interval(self) -> "LandingReferenceRequest":
+    def check_interval(self) -> LandingReferenceRequest:
         seconds = (self.arrival - self.departure).total_seconds()
         if not 86400 <= seconds <= 864000:
             raise ValueError("transfer time must be 1 to 10 days")
