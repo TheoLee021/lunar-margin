@@ -21,6 +21,9 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
   await page.getByRole('button', { name: '선택 지점 3D로 보기' }).click()
   const a = await first
   await expect(page.getByText('● 보임')).toBeVisible()
+  await rail.getByLabel('가시권 비교 높이').selectOption('40')
+  await expect(rail.getByText(/40 m에서 보이는 점/).first()).toBeVisible()
+  await expect(page.getByLabel('관측 높이', { exact: true })).toHaveValue('40')
   const second = mask(-89.02)
   await rail.getByRole('button', { name: /후보 2/ }).click()
   expect((await second).cells).not.toBe(a.cells)

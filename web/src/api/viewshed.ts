@@ -28,12 +28,13 @@ export async function fetchViewshed(
   height: number,
   signal: AbortSignal,
   center?: { x_m: number; y_m: number },
+  demName = '80s_80m',
 ) {
   const grid = center
     ? `&center_x_m=${center.x_m}&center_y_m=${center.y_m}`
     : ''
   const result = await getJson(
-    `/analysis/viewshed?lat=${lat}&lon=${lon}&observer_height_m=${height}${grid}`,
+    `/analysis/viewshed?lat=${lat}&lon=${lon}&observer_height_m=${height}${grid}&dem_name=${encodeURIComponent(demName)}`,
     schema,
     { signal },
   )

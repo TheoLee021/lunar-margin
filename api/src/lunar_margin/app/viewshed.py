@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from lunar_margin.app.analysis import get_dem
-from lunar_margin.engine.dem import PolarDem
+from lunar_margin.app.analysis import get_settings, load_analysis_dem
+from lunar_margin.app.settings import Settings
 from lunar_margin.engine.viewshed import grid_sightlines, horizontal_rays, local_viewshed
 
 router = APIRouter()
@@ -26,11 +26,13 @@ class Viewshed(BaseModel):
 def viewshed(
     lat: Annotated[float, Query(ge=-90, le=-80)],
     lon: Annotated[float, Query(ge=-180, le=360)],
-    dem: Annotated[PolarDem, Depends(get_dem)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    dem_name: str = "80s_80m",
     observer_height_m: Annotated[float, Query(ge=0, le=100)] = 2,
     center_x_m: float | None = None,
     center_y_m: float | None = None,
 ) -> Viewshed:
+    dem = load_analysis_dem(settings.data_dir, dem_name)
     cx, cy = dem.lonlat_to_xy(lat, lon)
     if center_x_m is not None or center_y_m is not None:
         if (

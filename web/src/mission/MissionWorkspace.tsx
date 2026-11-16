@@ -38,6 +38,7 @@ export function MissionWorkspace({
     runId?: string
     value: number
   } | null>(null)
+  const demName = run?.config.dem
   const searchHeight = run?.config.observer_height_m ?? 2
   const height =
     override && override.runId === run?.id ? override.value : searchHeight
@@ -66,6 +67,7 @@ export function MissionWorkspace({
             height,
             signal,
             site.grid,
+            demName,
           )
           return [visibleGridCount(map), map.targets.length] as const
         } catch {
@@ -76,7 +78,7 @@ export function MissionWorkspace({
       if (!controller.signal.aborted) setComparison({ sites, height, counts })
     })
     return () => controller.abort()
-  }, [sites, height])
+  }, [sites, height, demName])
   const counts =
     comparison?.sites === sites && comparison.height === height
       ? comparison.counts
@@ -107,6 +109,7 @@ export function MissionWorkspace({
         selection={selection}
         sites={sites}
         onSelect={onSelect}
+        demName={demName}
         heights={heights}
         height={height}
         setHeight={setHeight}

@@ -23,11 +23,13 @@ export function MissionMoonViewer({
   selection,
   sites,
   onSelect,
+  demName,
   heights,
   height,
   setHeight,
   sun,
 }: {
+  demName?: string
   heights: readonly number[]
   height: number
   setHeight: (height: number) => void
@@ -63,7 +65,7 @@ export function MissionMoonViewer({
   const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
   const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
   const center = selected?.grid
-  const key = JSON.stringify([lat, lon, height, center, attempt])
+  const key = JSON.stringify([lat, lon, height, center, attempt, demName])
   const [result, setResult] = useState<{
     key: string
     distanceKm?: number
@@ -82,6 +84,7 @@ export function MissionMoonViewer({
       height,
       AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
       center,
+      demName,
     )
       .then((map) => {
         if (!controller.signal.aborted)
@@ -91,7 +94,7 @@ export function MissionMoonViewer({
         if (!controller.signal.aborted) setResult({ key, map: null })
       })
     return () => controller.abort()
-  }, [key, lat, lon, height, center])
+  }, [key, lat, lon, height, center, demName])
   const current = result?.key === key ? result : null
   const focusSite = (site: CandidateSite) =>
     viewer.current?.flyTo(
