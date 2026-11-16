@@ -191,6 +191,7 @@ export function MissionMoonViewer({
           <label>
             관측 높이{' '}
             <select
+              aria-label="관측 높이"
               className="rounded bg-neutral-800 px-1"
               value={height}
               onChange={(event) => setHeight(Number(event.target.value))}
