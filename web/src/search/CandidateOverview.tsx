@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { layerUrl, type Candidate, type RunDetail } from '../api/candidates'
 import { formatPrice } from '../api/pricing'
 import {
@@ -16,19 +16,36 @@ import './candidate-overview.css'
 
 export default function CandidateOverview({
   runId,
-  backUrl,
+  onClose,
 }: {
   runId: string
-  backUrl: string
+  onClose: () => void
 }) {
   const { state, reload } = useRun(runId)
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const element = dialog.current!
+    element.showModal()
+    return () => element.close()
+  }, [])
   return (
-    <main className="co">
+    <dialog
+      ref={dialog}
+      aria-label="후보지 선정"
+      className="co co-panel"
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+    >
       <header className="co-bar">
-        <a href={backUrl}>
+        <strong>
           LUNAR <b>MARGIN</b>
-        </a>
+        </strong>
         <span>후보지 선정</span>
+        <button type="button" className="co-close hud-button" onClick={onClose}>
+          닫기 ×
+        </button>
       </header>
       {state.status === 'ok' ? (
         <Board run={state.data} />
@@ -44,7 +61,7 @@ export default function CandidateOverview({
           )}
         </p>
       )}
-    </main>
+    </dialog>
   )
 }
 
@@ -56,6 +73,11 @@ function Board({ run }: { run: RunDetail }) {
   const [reasons, setReasons] = useState(false)
   const active = sites.find((c) => c.id === picked)
   const availability = useAvailability(run.id)
+  const period =
+    availability.state.status === 'ready' ? availability.state.data : null
+  const booking = period?.candidates.find(
+    (item) => item.candidate_id === picked,
+  )
   const prices = useCandidatePrices(run.id)
   const map = run.map
   const layers = (
@@ -198,6 +220,45 @@ function Board({ run }: { run: RunDetail }) {
                 {active.lat_deg.toFixed(3)}° 위도　{active.lon_deg.toFixed(2)}°E
                 경도
               </p>
+              <div className="co-booking">
+                <div>
+                  <h4>예약 정보</h4>
+                  <button
+                    type="button"
+                    onClick={availability.reload}
+                    disabled={availability.state.status === 'loading'}
+                  >
+                    새로고침
+                  </button>
+                </div>
+                <div role="status">
+                  {availability.state.status === 'loading'
+                    ? '예약 조회 중…'
+                    : availability.state.status === 'error'
+                      ? availability.state.message
+                      : booking?.status === 'available'
+                        ? '예약 가능'
+                        : booking?.status === 'reserved'
+                          ? '예약됨'
+                          : '예약 정보 미확인'}
+                </div>
+                {period && (
+                  <p>
+                    조회 기간 {period.starts_at.slice(0, 10)} →{' '}
+                    {period.ends_at.slice(0, 10)} UTC · 종료일 제외
+                  </p>
+                )}
+                {booking?.conflicts.map((item) => (
+                  <p key={item.id}>
+                    <b>
+                      {item.company} · {item.mission_name}
+                    </b>
+                    <br />
+                    {item.starts_at.slice(0, 10)} → {item.ends_at.slice(0, 10)}{' '}
+                    UTC
+                  </p>
+                ))}
+              </div>
             </div>
           )}
         </section>

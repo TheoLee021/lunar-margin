@@ -1,5 +1,4 @@
 import type { Schedule } from '../mission/types'
-import CandidateOverview from './CandidateOverview'
 import SearchView from './SearchView'
 import '../mission/orbit-workspace.css'
 
@@ -9,15 +8,6 @@ type Props = {
 }
 
 export default function SearchWorkspace({ schedule, onBack }: Props) {
-  const params = new URLSearchParams(window.location.search)
-  const runId = params.get('run')
-  if (runId && params.get('overview') === '1') {
-    const overviewUrl = new URL(window.location.href)
-    overviewUrl.searchParams.delete('overview')
-    return (
-      <CandidateOverview key={runId} runId={runId} backUrl={overviewUrl.href} />
-    )
-  }
   return (
     <main className="orbit-workspace">
       <div className="orbit-page-content">

@@ -16,6 +16,7 @@ const DatePlanner = lazy(() =>
 )
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
+const CandidateOverview = lazy(() => import('./search/CandidateOverview'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
 const INITIAL_SELECTION: MissionSelection = {
   departure: '2027-01-06',
@@ -27,7 +28,13 @@ type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
+function overviewRun() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('overview') === '1' ? params.get('run') : null
+}
+
 function currentView(): View {
+  if (overviewRun()) return 'mission'
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
   if (window.location.pathname.replace(/\/+$/, '') === '/flight')
     return 'flight'
@@ -85,6 +92,7 @@ function locationFor(
 }
 
 export default function App() {
+  const [panelRun, setPanelRun] = useState(overviewRun)
   const [view, setView] = useState<View>(currentView)
   const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
@@ -93,6 +101,7 @@ export default function App() {
   )
   useEffect(() => {
     const pop = () => {
+      setPanelRun(overviewRun())
       setView(currentView())
       setPlanner(
         new URLSearchParams(window.location.search).get('planner') === '1',
@@ -109,6 +118,21 @@ export default function App() {
       locationFor(view, selection, planner),
     )
   }, [view, selection, planner])
+  function toggleOverview(runId: string | null) {
+    const url = new URL(
+      locationFor('mission', selection, false),
+      window.location.origin,
+    )
+    if (runId) {
+      url.searchParams.set('run', runId)
+      url.searchParams.set('overview', '1')
+    } else {
+      url.searchParams.delete('overview')
+    }
+    window.history.pushState(null, '', url)
+    setPanelRun(runId)
+    setPlanner(false)
+  }
   function navigate(
     nextView: View,
     openPlanner = false,
@@ -173,6 +197,7 @@ export default function App() {
           />
         ) : (
           <MissionApp
+            onOverview={toggleOverview}
             selection={selection}
             onSelect={(siteId) =>
               setSelection((current) => ({ ...current, siteId }))
@@ -201,6 +226,15 @@ export default function App() {
           />
         )}
       </Suspense>
+      {view === 'mission' && panelRun && (
+        <Suspense fallback={null}>
+          <CandidateOverview
+            key={panelRun}
+            runId={panelRun}
+            onClose={() => toggleOverview(null)}
+          />
+        </Suspense>
+      )}
       {view === 'mission' ? (
         <div className="fixed bottom-10 left-32 z-20 flex gap-2">
           <a
@@ -235,6 +269,7 @@ export default function App() {
 }
 
 function MissionApp({
+  onOverview,
   selection,
   onSelect,
   planner,
@@ -242,6 +277,7 @@ function MissionApp({
   onApply,
   onViewOrbit,
 }: {
+  onOverview: (runId: string) => void
   selection: MissionSelection
   onSelect: (siteId: string | null) => void
   planner: boolean
@@ -310,6 +346,7 @@ function MissionApp({
   )
   return (
     <MissionWorkspace
+      onOverview={onOverview}
       selection={selection}
       analysis={live}
       candidates={candidates}
