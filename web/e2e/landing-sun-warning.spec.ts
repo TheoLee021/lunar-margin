@@ -19,6 +19,7 @@ test('only a candidate shadowed at landing midnight gets the landing warning', a
   await expect(timeline).toHaveValue('353')
   await expect(warning).toContainText('2027-01-10 00:00 UTC')
   await rail.getByRole('button', { name: /후보 2/ }).click()
-  await expect(timeline).toHaveValue('0')
+  // The review time stays when the candidate changes; the warning is about landing midnight alone.
+  await expect(timeline).toHaveValue('353')
   await expect(warning).toHaveCount(0)
 })
