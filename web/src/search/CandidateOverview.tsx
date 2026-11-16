@@ -9,7 +9,7 @@ import {
   xyToImage,
 } from './derive'
 import { ReservationPanel } from './ReservationPanel'
-import { Distribution } from './Distribution'
+import { MetricDistributions } from './MetricDistributions'
 import { useRun } from './useRuns'
 import { useAvailability } from './useAvailability'
 import { useCandidatePrices } from './useCandidatePrices'
@@ -467,36 +467,11 @@ function Board({ run }: { run: RunDetail }) {
               <div className="co-head">
                 <h2>Metric distributions</h2>
               </div>
-              <div className="co-pad">
-                {(
-                  [
-                    {
-                      key: 'sun_fraction',
-                      title: 'Sunlight',
-                      unit: 'fraction',
-                    },
-                    {
-                      key: 'earth_fraction',
-                      title: 'Earth visibility',
-                      unit: 'fraction',
-                    },
-                    {
-                      key: 'sun_longest_dark_h',
-                      title: 'Longest period of darkness',
-                      unit: 'hours',
-                    },
-                  ] as const
-                ).map((d) => (
-                  <Distribution
-                    english
-                    key={d.key}
-                    title={d.title}
-                    hint=""
-                    values={run.summary.distributions[d.key] ?? {}}
-                    unit={d.unit}
-                  />
-                ))}
-              </div>
+              <MetricDistributions
+                english
+                values={run.summary.distributions}
+                includeRF={run.config.rf != null}
+              />
             </section>
             <section className="co-card">
               <div className="co-head">
