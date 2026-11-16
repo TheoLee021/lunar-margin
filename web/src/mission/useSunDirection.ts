@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchSunDirection } from '../api/sunlight'
 import type { Vector3 } from '../moon/sun'
-import { landingStart } from './liveAnalysis'
 
 export type SunDirectionState =
   | { kind: 'loading' }
@@ -10,13 +9,12 @@ export type SunDirectionState =
 export type SunDirectionResult = SunDirectionState & { retry: () => void }
 
 /**
- * The Sun at landing, as the Moon-to-Sun direction (MOON_ME). It follows from the landing time
- * alone, so the Moon can be lit before any candidate is selected, and stays the same Sun, hence the
- * same sunlight map, when the selected candidate changes.
+ * Moon-to-Sun direction (MOON_ME) at a chosen UTC instant. A different inspection
+ * time changes the terrain lighting but does not change candidate ranking or eligibility.
  */
-export function useSunDirection(landing: string): SunDirectionResult {
+export function useSunDirection(instant: string): SunDirectionResult {
   const [attempt, setAttempt] = useState(0)
-  const key = JSON.stringify([landing, attempt])
+  const key = JSON.stringify([instant, attempt])
   const [stored, setStored] = useState<{
     key: string
     state: SunDirectionState
@@ -27,7 +25,7 @@ export function useSunDirection(landing: string): SunDirectionResult {
     // Debounce date scrubbing like useMissionAnalysis.
     const timer = window.setTimeout(() => {
       void fetchSunDirection(
-        landingStart(landing),
+        instant,
         AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
       )
         .then(
@@ -42,7 +40,7 @@ export function useSunDirection(landing: string): SunDirectionResult {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [landing, key])
+  }, [instant, key])
   const state: SunDirectionState =
     stored?.key === key ? stored.state : { kind: 'loading' }
   return { ...state, retry }
