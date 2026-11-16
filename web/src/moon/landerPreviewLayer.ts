@@ -31,7 +31,11 @@ export function createLanderPreviewLayer(viewer: Viewer): LanderPreviewLayer {
   const draw = (anchor: Cartesian3) => {
     const local = Transforms.eastNorthUpToFixedFrame(anchor, Ellipsoid.MOON)
     const at = (east: number, north: number, up: number) =>
-      Matrix4.multiplyByPoint(local, new Cartesian3(east, north, up), new Cartesian3())
+      Matrix4.multiplyByPoint(
+        local,
+        new Cartesian3(east, north, up),
+        new Cartesian3(),
+      )
     const addBox = (
       east: number,
       north: number,
@@ -87,7 +91,12 @@ export function createLanderPreviewLayer(viewer: Viewer): LanderPreviewLayer {
       const request = ++generation
       clear()
       if (!site || !viewer.scene.clampToHeightSupported) return
-      const approximate = Cartesian3.fromDegrees(site.lon, site.lat, 0, Ellipsoid.MOON)
+      const approximate = Cartesian3.fromDegrees(
+        site.lon,
+        site.lat,
+        0,
+        Ellipsoid.MOON,
+      )
       void viewer.scene
         .clampToHeightMostDetailed([approximate])
         .then(([ground]) => {
