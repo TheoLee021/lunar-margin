@@ -17,16 +17,19 @@ import {
   Ion,
   KeyboardEventModifier,
   Math as CesiumMath,
+  Matrix4,
   PixelFormat,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   TextureMagnificationFilter,
   TextureMinificationFilter,
   TextureUniform,
+  Transforms,
   UniformType,
   Viewer,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import { createAssetLayer, type MoonAsset } from './assetLayer'
 import { shouldFreeCameraAxis } from './camera'
 import { createFlightLayer } from './flightLayer'
 import type { FlightPoint } from '../flight/flightData'
@@ -630,11 +633,37 @@ export interface MoonScene {
   setFlightPath(points: readonly FlightPoint[]): void
   setFlightFrame(index: number): void
   setViewshed(map: Viewshed | null): void
-  flyTo(location: LunarLocation, rangeM?: number): void
+  /**
+   * `pitchDeg` is the camera's tilt, negative looking down, and `headingDeg` the
+   * compass direction it faces. Both default to the whole-site view from above.
+   */
+  flyTo(
+    location: LunarLocation,
+    rangeM?: number,
+    pitchDeg?: number,
+    headingDeg?: number,
+  ): void
   /** Back to the start view: straight above the south pole. */
   flyToOverview(): void
   setMarkers(markers: readonly MoonMarker[]): void
   setSelectedMarker(id: string | null): void
+  /** Surface equipment, drawn with the Earth verdict on each unit. */
+  setAssets(assets: readonly MoonAsset[]): void
+  /** Show or hide the arrows from each unit toward the Earth. */
+  setSightsVisible(visible: boolean): void
+  /**
+   * Ride along with something that moves. The camera stays in the moving point's own
+   * frame, so dragging and zooming still work; once the viewer has been still for a
+   * few seconds it settles back to `rangeM`, `pitchDeg` and `headingDeg`.
+   * Call `releaseFollow` to hand control back entirely.
+   */
+  follow(
+    location: LunarLocation,
+    rangeM: number,
+    pitchDeg: number,
+    headingDeg: number,
+  ): void
+  releaseFollow(): void
   /** Moon-to-Sun unit vector in MOON_ME, or null for flat (photo-only) shading. */
   setSunDirection(direction: unknown): void
   /**
@@ -867,8 +896,11 @@ export async function createMoonScene(
         error instanceof Error ? error.message : String(error),
       )
     })
+  let tileset: Cesium3DTileset
   try {
-    const tileset = await Cesium3DTileset.fromIonAssetId(CESIUM_MOON_ASSET_ID)
+    tileset = await Cesium3DTileset.fromIonAssetId(CESIUM_MOON_ASSET_ID, {
+      enablePick: true,
+    })
     options.signal.throwIfAborted()
     tileset.customShader = moonShader
     // Back faces fill the holes of the tiles: see HOLE_GREY.
@@ -966,6 +998,18 @@ export async function createMoonScene(
   }
 
   const markers = createMarkerLayer(viewer)
+  const assets = createAssetLayer(viewer, tileset)
+
+  // How long the camera leaves a viewer's own framing alone before resuming the chase.
+  const HANDS_OFF_MS = 3000
+  let following = false
+  let lastInputAt = 0
+  const noteInput = () => {
+    lastInputAt = performance.now()
+  }
+  const inputCanvas = scene.canvas
+  inputCanvas.addEventListener('wheel', noteInput, { passive: true })
+  inputCanvas.addEventListener('pointerdown', noteInput, { passive: true })
   let flight = 0
   const handler = new ScreenSpaceEventHandler(scene.canvas)
   handler.setInputAction(
@@ -1125,7 +1169,7 @@ export async function createMoonScene(
         new Cartesian3(map.center_x_m, map.center_y_m, 1),
       )
     },
-    flyTo(location, rangeM = SITE_RANGE_M) {
+    flyTo(location, rangeM = SITE_RANGE_M, pitchDeg, headingDeg = 0) {
       const request = ++flight
       const position = Cartesian3.fromDegrees(
         location.lon,
@@ -1135,7 +1179,15 @@ export async function createMoonScene(
       )
       const arrive = (surface: Cartesian3) => {
         if (viewer.isDestroyed() || request !== flight) return
-        flyAround(surface, 0, OBLIQUE_PITCH, rangeM, 2)
+        flyAround(
+          surface,
+          CesiumMath.toRadians(headingDeg),
+          pitchDeg === undefined
+            ? OBLIQUE_PITCH
+            : CesiumMath.toRadians(pitchDeg),
+          rangeM,
+          2,
+        )
       }
       if (location.surfaceHeightM !== undefined) arrive(position)
       else if (scene.clampToHeightSupported) {
@@ -1151,6 +1203,52 @@ export async function createMoonScene(
     },
     setMarkers(next) {
       markers.setMarkers(next)
+    },
+    setAssets(next) {
+      assets.setAssets(next)
+    },
+    setSightsVisible(visible) {
+      assets.setSightsVisible(visible)
+    },
+    follow(location, rangeM, pitchDeg, headingDeg) {
+      if (!following) {
+        flight++
+        camera.cancelFlight()
+        following = true
+      }
+      // Aim at the terrain, not the reference sphere: the two are kilometres apart
+      // at the pole, and the equipment stands on the terrain.
+      const surface = tileset.getHeight(
+        Cartographic.fromDegrees(location.lon, location.lat),
+        scene,
+      )
+      const target = Cartesian3.fromDegrees(
+        location.lon,
+        location.lat,
+        surface ?? 0,
+        Ellipsoid.MOON,
+      )
+      if (performance.now() - lastInputAt < HANDS_OFF_MS) {
+        // Hands on the controls: carry the frame along with the target and leave
+        // the distance and angle exactly as the viewer set them.
+        camera.lookAtTransform(
+          Transforms.eastNorthUpToFixedFrame(target, Ellipsoid.MOON),
+        )
+        return
+      }
+      camera.lookAt(
+        target,
+        new HeadingPitchRange(
+          CesiumMath.toRadians(headingDeg),
+          CesiumMath.toRadians(pitchDeg),
+          rangeM,
+        ),
+      )
+    },
+    releaseFollow() {
+      if (!following) return
+      following = false
+      camera.lookAtTransform(Matrix4.IDENTITY)
     },
     setSelectedMarker(id) {
       markers.setSelected(id)
@@ -1208,6 +1306,9 @@ export async function createMoonScene(
       )
     },
     destroy() {
+      inputCanvas.removeEventListener('wheel', noteInput)
+      inputCanvas.removeEventListener('pointerdown', noteInput)
+      assets.destroy()
       flightLayer.destroy()
       markers.destroy()
       removePreRender()
