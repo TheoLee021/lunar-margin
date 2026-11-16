@@ -84,7 +84,7 @@ test('date search recovers from a dropped request and busy solver, then shares t
     return route.continue()
   })
   await page.goto(
-    '/?planner=compare&departure=2027-01-06&arrival=2027-01-11&duration=14&lat=-85.194602&lon=36.634114',
+    '/explore?planner=compare&departure=2027-01-06&arrival=2027-01-11&duration=14&lat=-85.194602&lon=36.634114',
   )
   await expect(page.getByTestId('planner-touchdown')).toHaveText(
     '2027-01-11 02:31:08 UTC',

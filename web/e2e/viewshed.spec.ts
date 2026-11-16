@@ -9,7 +9,7 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
   test.setTimeout(90_000)
   await mockScheduledDepartures(page)
   await mockDashboardRuns(page, request)
-  await page.goto('/')
+  await page.goto('/explore')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   const mask = (lat: number) =>
     page

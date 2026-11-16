@@ -31,7 +31,7 @@
 .co h2 em {
   color: #f3cd74;
 }
-.co-bar span {
+.co-bar > span {
   border-left: 1px solid #57666a;
   padding-left: 16px;
   font-size: 13px;

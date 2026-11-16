@@ -29,6 +29,7 @@ export function MissionWorkspace({
   candidates,
   sites,
   onSelect,
+  nav,
   summary,
   apiStatus,
   children,
@@ -39,6 +40,8 @@ export function MissionWorkspace({
   sites: readonly CandidateSite[]
   selection: MissionSelection
   onSelect: (id: string | null) => void
+  /** The stage links, unless a dialog that covers the page is showing them. */
+  nav: ReactNode
   summary: ReactNode
   apiStatus: ReactNode
   children?: ReactNode
@@ -135,8 +138,11 @@ export function MissionWorkspace({
     (candidate) => candidate.id === selected?.id,
   )
   const searchUrl = new URL(window.location.href)
+  // The search view lives at the root; this page is at /explore.
+  searchUrl.pathname = '/'
   searchUrl.searchParams.set('view', 'search')
   searchUrl.searchParams.delete('planner')
+  searchUrl.searchParams.delete('compare')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
   const sun = useSunPath(selection.landing, selection.duration)
@@ -545,6 +551,8 @@ export function MissionWorkspace({
       <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
         {apiStatus}
       </div>
+      {/* Under the title: the top right belongs to the 3D toolbar. */}
+      {nav ? <div className="absolute top-14 left-4 z-20">{nav}</div> : null}
       {children}
       {run && checked.key === comparisonKey && checked.open ? (
         <SiteComparisonPanel

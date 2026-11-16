@@ -54,7 +54,7 @@ test('missing landing dates launch one batch and display all five results', asyn
     request.url().endsWith('/pricing/calculate'),
   )
   await page.goto(
-    '/?planner=compare&departure=2027-01-06&arrival=2027-01-10&duration=14&max_slope=12.5',
+    '/explore?planner=compare&departure=2027-01-06&arrival=2027-01-10&duration=14&max_slope=12.5',
   )
   const dialog = page.getByRole('dialog')
   await expect(dialog.locator('input[type="date"], select')).toHaveCount(0)
@@ -135,7 +135,7 @@ test('date prices open the saved candidate run without recalculating', async ({
       }),
     })
   })
-  await page.goto('/?planner=1')
+  await page.goto('/explore?planner=1')
   const dialog = page.getByRole('dialog')
   const grid = dialog.getByRole('table', {
     name: '출발일과 착륙일별 평균 가격',
@@ -395,7 +395,7 @@ test('a busy search waits and automatically starts the missing dates when the wo
       },
     })
   })
-  await page.goto('/?planner=1')
+  await page.goto('/explore?planner=1')
   const dialog = page.getByRole('dialog')
   await expect(
     dialog

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { layerUrl, type Candidate, type RunDetail } from '../api/candidates'
 import { formatPrice } from '../api/pricing'
 import {
@@ -41,9 +41,12 @@ const overviewLabels: Readonly<Record<string, string>> = {
 
 export default function CandidateOverview({
   runId,
+  nav,
   onClose,
 }: {
   runId: string
+  /** The stage links: the dialog covers the ones on the page. */
+  nav?: ReactNode
   onClose: () => void
 }) {
   const { state, reload } = useRun(runId)
@@ -67,9 +70,16 @@ export default function CandidateOverview({
       <header className="co-bar">
         <strong>LUNAR MARGIN</strong>
         <span>Landing site selection</span>
-        <button type="button" className="co-close hud-button" onClick={onClose}>
+        {/* After the close button in the document, so opening the dialog still focuses that. */}
+        <button
+          type="button"
+          className="co-close hud-button"
+          style={nav ? { order: 1, marginLeft: 0 } : undefined}
+          onClick={onClose}
+        >
           Close ×
         </button>
+        {nav ? <div style={{ marginLeft: 'auto' }}>{nav}</div> : null}
       </header>
       {state.status === 'ok' ? (
         <Board run={state.data} />

@@ -69,7 +69,7 @@ test('checked candidates compare saved values without selecting a map site and r
   page.on('request', (sent) => {
     if (/\/api\/analysis\//.test(sent.url())) analyses++
   })
-  await page.goto('/')
+  await page.goto('/explore')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   await rail.getByRole('checkbox', { name: '후보 1 비교' }).check()
   await rail.getByRole('checkbox', { name: '후보 3 비교' }).check()
@@ -166,7 +166,7 @@ test('all five candidates and their actual metrics fit a mobile comparison dialo
   await page.setViewportSize({ width: 390, height: 844 })
   const runs = await mockDashboardRuns(page, request)
   addComparisonMetrics(runs)
-  await page.goto('/')
+  await page.goto('/explore')
   const rail = page.getByRole('complementary', { name: '미션 조건' })
   for (let rank = 1; rank <= 5; rank++)
     await rail.getByRole('checkbox', { name: `후보 ${rank} 비교` }).check()
@@ -221,7 +221,7 @@ test('partial terrain coverage hides both terrain values and their margins', asy
 }) => {
   const runs = await mockDashboardRuns(page, request)
   addComparisonMetrics(runs, 0.9)
-  await page.goto('/')
+  await page.goto('/explore')
   await page.getByRole('checkbox', { name: '후보 1 비교' }).check()
   await page.getByRole('button', { name: '선택 후보 비교 (1/5)' }).click()
   const dialog = page.getByRole('dialog', { name: 'TOP 5 후보 비교' })

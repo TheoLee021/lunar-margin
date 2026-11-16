@@ -730,6 +730,15 @@ tariff_basis: public_tariff|common_model, tariff_source, assumptions}`다. 미�
 단일 회사이므로 격자별 최솟값도 그 회사 가격이다. `eligible_provider_ids`는 알려진
 6사 ID만 담으며 ULA 등은 빈 배열이다. 이 경우 `selection.company_name`으로 회사를 구분한다.
 
+### 선택적 일조율 하한
+
+`POST /candidates/search`, `/search/dev` 및 날짜별 탐색의 임무 입력은 `min_sunlight_fraction`을 받는다:
+null 또는 0~1. 임무 기간 중 직사광이 드는 시간 비율(`sun.fraction`)의 하한이며 경계값을 포함한다.
+생략하거나 null이면 하한 없음. 넘지 못한 지점은 다른 필수 적격 조건과 같이 후보에서 빠지고
+`config.thresholds.min_sun_fraction`에 적용한 값이 기록된다.
+
+하한이 없는 입력의 `run_id`는 이 필드가 생기기 전과 같아서, 저장된 탐색 결과를 그대로 쓴다.
+
 ### Optional regional roughness filtering
 
 `POST /candidates/search`, `/search/dev` and calendar mission inputs accept

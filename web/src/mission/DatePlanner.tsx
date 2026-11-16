@@ -4,11 +4,12 @@ import { usePricingSettings } from './usePricingSettings'
 import { TransferOrbit } from './TransferOrbit'
 import { PlannerTouchdown } from './PlannerTouchdown'
 import { useFlightPlan } from '../flight/flightPlan'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayOf, iso, short } from './missionDates'
 import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
+import type { Requirements } from './requirements'
 import { ScheduleSchema } from './scheduleSchema'
 import { PriceGrid } from './PriceGrid'
 import {
@@ -20,6 +21,9 @@ import { isTransitPossible } from '../api/pricing'
 import './date-planner.css'
 
 type Props = {
+  /** The stage links: the dialog covers the ones on the page. */
+  nav?: ReactNode
+  requirements?: Requirements
   site?: { latitude: number; longitude: number }
   selectedSiteId: string | null
   schedule: Schedule
@@ -28,6 +32,8 @@ type Props = {
   onClose: () => void
 }
 export function DatePlanner({
+  nav,
+  requirements,
   schedule,
   site,
   selectedSiteId,
@@ -38,7 +44,22 @@ export function DatePlanner({
   const ref = useRef<HTMLDialogElement>(null)
   const [draft, setDraft] = useState(schedule)
   const [slope, setSlope] = useState(schedule.maxSlope?.toString() ?? '')
-  const settings = usePricingSettings(slope, setSlope)
+  const settings = usePricingSettings(slope, setSlope, requirements)
+  // Limits of the search that the grid has no column for. They still decide which cells qualify.
+  const percent = (fraction: number) => `${+(fraction * 100).toFixed(2)}%`
+  const searchLimits = [
+    ...(settings.mission.min_sunlight_fraction == null
+      ? []
+      : [`sunlight ≥ ${percent(settings.mission.min_sunlight_fraction)}`]),
+    ...(settings.mission.min_communication_fraction == null
+      ? []
+      : [
+          `communication ≥ ${percent(settings.mission.min_communication_fraction)}`,
+        ]),
+    ...(settings.mission.max_terrain_roughness_m == null
+      ? []
+      : [`regional roughness ≤ ${settings.mission.max_terrain_roughness_m} m`]),
+  ]
   const maxSlope = slope === '' ? null : Number(slope)
   const samePeriod =
     draft.landing === schedule.landing && draft.duration === schedule.duration
@@ -169,14 +190,16 @@ export function DatePlanner({
             Date grid and flight trajectory <span className="tag">UTC</span>
           </h2>
         </div>
+        {/* After the close button in the document, so opening the dialog still focuses that. */}
         <button
           type="button"
-          className="close-planner"
+          className="close-planner order-last"
           onClick={onClose}
           aria-label="Close date planner"
         >
           ✕
         </button>
+        {nav ? <div className="mr-3 ml-auto shrink-0">{nav}</div> : null}
       </header>
       <div className="planner-layout date-comparison-body">
         <div className="planner-primary">
@@ -195,6 +218,11 @@ export function DatePlanner({
                 setDraft((s) => ({ ...s, departure, landing }))
               }
             />
+            {searchLimits.length > 0 ? (
+              <p className="hint">
+                Also applied from the search: {searchLimits.join(' · ')}
+              </p>
+            ) : null}
             {settings.sourceError || !settings.valid ? (
               <p role="alert">Unable to use the supplied pricing conditions.</p>
             ) : null}

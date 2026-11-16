@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { fetchRun, type MissionRequest } from '../api/candidates'
 import { DeliverySchema } from '../api/pricing'
+import {
+  DEFAULT_REQUIREMENTS,
+  requirementLimits,
+  type Requirements,
+} from './requirements'
 const DEFAULT_MISSION: MissionRequest = {
   landing_date: '2027-01-10',
   mission_duration_days: 14,
@@ -14,14 +19,23 @@ const DEFAULT_MISSION: MissionRequest = {
 export function usePricingSettings(
   slope: string,
   onSlopeChange: (value: string) => void,
+  /** The limits of the search screen. A saved run named in the URL replaces them. */
+  requirements: Requirements = DEFAULT_REQUIREMENTS,
 ) {
   const params = new URLSearchParams(window.location.search)
   const massNumber = Number(params.get('mass_kg') ?? 24)
   const delivery =
     DeliverySchema.safeParse(params.get('delivery')).data ?? 'surface'
-  const [mission, setMission] = useState(DEFAULT_MISSION)
-  const [darkness, setDarkness] = useState('24')
-  const [blackout, setBlackout] = useState('6')
+  const [mission, setMission] = useState<MissionRequest>(() => ({
+    ...DEFAULT_MISSION,
+    ...requirementLimits(requirements),
+  }))
+  const [darkness, setDarkness] = useState(
+    requirements.maxDarknessHours?.toString() ?? '',
+  )
+  const [blackout, setBlackout] = useState(
+    requirements.maxBlackoutHours?.toString() ?? '',
+  )
   const [source] = useState(
     () => new URLSearchParams(window.location.search).get('pricing_run') ?? '',
   )
