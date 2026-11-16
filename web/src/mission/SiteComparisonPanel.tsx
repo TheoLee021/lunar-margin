@@ -212,8 +212,9 @@ export function SiteComparisonPanel({
           </svg>
           <p className="text-xs text-neutral-400">
             2~3개를 비교하면 읽기 쉽습니다. 결측은 —, 지형 자료가 불완전하면
-            도형을 연결하지 않습니다. 지구 가시성은 지구 중심 LOS이며 RF 통신
-            성립을 뜻하지 않습니다.
+            도형을 연결하지 않습니다. RF 통신율은 평가 시간 중 명목 RF 링크가
+            가능한 시간의 비율입니다. 최장 지구 차폐는 지형이 지구 중심을 가린
+            연속 시간입니다.
           </p>
           <div
             role="region"
@@ -344,7 +345,7 @@ export function SiteComparisonPanel({
           <p className="mt-2 text-xs text-neutral-400">
             양수 여유는 한도 안쪽, 음수는 초과입니다. 비율의 차이는 %p입니다.{' '}
             {config.rf
-              ? 'RF 탐색의 통신 조건 여유는 명목 RF 지표이며, 위 레이더의 지구 LOS와 다릅니다. '
+              ? 'RF 탐색의 통신 조건 여유는 명목 RF 링크 기준입니다. '
               : ''}
             새로운 순위나 적격 판정을 계산하지 않습니다.
           </p>

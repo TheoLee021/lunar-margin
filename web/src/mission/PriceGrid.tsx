@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  fetchRun,
-  fetchRuns,
-  type MissionRequest,
-  type RunSummary,
-} from '../api/candidates'
+import { fetchRun, type MissionRequest } from '../api/candidates'
 import { formatPrice, isTransitPossible, type Delivery } from '../api/pricing'
 import type { departureAvailability } from '../api/launchSchedule'
 import type { ProviderCalendarInput } from '../api/providerPricing'
@@ -71,7 +66,6 @@ export function PriceGrid({
   const [mission, setMission] = useState(DEFAULT_MISSION)
   const [darkness, setDarkness] = useState('24')
   const [blackout, setBlackout] = useState('6')
-  const [runs, setRuns] = useState<RunSummary[]>([])
   const [source, setSource] = useState(
     () => new URLSearchParams(window.location.search).get('pricing_run') ?? '',
   )
@@ -80,23 +74,6 @@ export function PriceGrid({
     loading: false,
     error: '',
   })
-  const [listError, setListError] = useState('')
-  const [listRevision, setListRevision] = useState(0)
-  useEffect(() => {
-    const controller = new AbortController()
-    fetchRuns({ signal: controller.signal })
-      .then((result) => {
-        if (!controller.signal.aborted) {
-          setRuns(result.runs)
-          setListError('')
-        }
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted)
-          setListError(error instanceof Error ? error.message : String(error))
-      })
-    return () => controller.abort()
-  }, [listRevision])
   useEffect(() => {
     if (!source) return
     const controller = new AbortController()
@@ -231,29 +208,16 @@ export function PriceGrid({
           </select>
         </label>
         <label>
-          추천 모델의 임무 조건
-          <select
-            aria-label="가격 비교에 사용할 탐색 조건"
-            value={source}
-            onChange={(e) => {
-              setSource(e.target.value)
-              setSourceState({ id: '', loading: true, error: '' })
-              if (!e.target.value) {
-                setMission(DEFAULT_MISSION)
-                onSlopeChange('')
-                setDarkness('24')
-                setBlackout('6')
-              }
-            }}
-          >
-            <option value="">새 임무 조건</option>
-            {runs.map((run) => (
-              <option key={run.id} value={run.id}>
-                {run.id.startsWith('dev-') ? '개발용 조건' : '정밀 탐색'} ·{' '}
-                {run.window.start.slice(0, 10)} · {run.id}
-              </option>
-            ))}
-          </select>
+          최대 허용 경사 · ° (지역 P95)
+          <input
+            type="number"
+            min="0"
+            max="90"
+            step="any"
+            placeholder="제한 없음"
+            value={slope}
+            onChange={(e) => onSlopeChange(e.target.value)}
+          />
         </label>
         <label>
           최장 연속 어둠 ≤ 시간
@@ -277,18 +241,6 @@ export function PriceGrid({
             onChange={(e) => setBlackout(e.target.value)}
           />
         </label>
-        <label>
-          최대 허용 경사 · ° (지역 P95)
-          <input
-            type="number"
-            min="0"
-            max="90"
-            step="any"
-            placeholder="제한 없음"
-            value={slope}
-            onChange={(e) => onSlopeChange(e.target.value)}
-          />
-        </label>
         <div className="price-actions">
           <button
             type="button"
@@ -308,13 +260,7 @@ export function PriceGrid({
               화면 업데이트 중단
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                calendar.reload()
-                setListRevision((v) => v + 1)
-              }}
-            >
+            <button type="button" onClick={calendar.reload}>
               새로고침
             </button>
           )}
@@ -324,13 +270,16 @@ export function PriceGrid({
         <p role="status">탐색 조건을 불러오는 중…</p>
       ) : null}
       {sourceState.error ? (
-        <p role="alert">{sourceState.error} 다른 탐색 실행을 선택하세요.</p>
-      ) : null}
-      {listError ? (
         <p role="alert">
-          탐색 목록: {listError}{' '}
-          <button type="button" onClick={() => setListRevision((v) => v + 1)}>
-            목록 다시 시도
+          {sourceState.error}{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setSource('')
+              setSourceState({ id: '', loading: false, error: '' })
+            }}
+          >
+            새 임무 조건 사용
           </button>
         </p>
       ) : null}

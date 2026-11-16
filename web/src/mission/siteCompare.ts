@@ -59,7 +59,7 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
       hours,
       `0–${hours}시간 · 전체 임무 기간`,
     ),
-    axis('earth', '지구 가시율', '%', true, 100, '0–100% · 지구 중심 LOS'),
+    axis('rf', 'RF 통신율', '%', true, 100, '0–100% · 명목 RF 링크'),
     axis(
       'blackout',
       '최장 지구 차폐',
@@ -93,6 +93,7 @@ export function comparisonAxes(config: Config): ComparisonAxis[] {
 
 type Site = {
   sun: Pick<Candidate['sun'], 'fraction' | 'longest_dark_hours'>
+  rf?: Pick<NonNullable<Candidate['rf']>, 'fraction'> | null
   earth: Pick<Candidate['earth'], 'fraction' | 'longest_blackout_hours'>
   terrain?: Pick<
     NonNullable<Candidate['terrain']>,
@@ -109,7 +110,7 @@ export function comparisonValues(site: Site, axes: readonly ComparisonAxis[]) {
   const raw = [
     percent(site.sun.fraction),
     site.sun.longest_dark_hours,
-    percent(site.earth.fraction),
+    percent(site.rf?.fraction ?? null),
     site.earth.longest_blackout_hours,
     terrain?.slope_p95_deg,
     terrain?.roughness_p95_m,
