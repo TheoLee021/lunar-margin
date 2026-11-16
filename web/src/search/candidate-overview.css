@@ -287,6 +287,27 @@
 .co a:focus-visible {
   outline: 2px solid #ffda77;
 }
+@media (min-width: 961px) {
+  .co-layout {
+    align-items: stretch;
+  }
+  .co-right {
+    grid-template-rows: auto 1fr;
+  }
+  .co-stats > .co-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .co-stats [role='region'] {
+    flex: 1 1 0;
+    min-height: 12rem;
+    max-height: none;
+  }
+  .co-stats .co-pad {
+    flex: 1;
+    align-content: space-between;
+  }
+}
 @media (max-width: 960px) {
   .co-layout {
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
