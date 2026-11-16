@@ -60,13 +60,18 @@ def utc_range(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.f
     return et0 + step_s * np.arange(count, dtype=np.float64)
 
 
-def body_vectors(body: Literal["SUN", "EARTH"], et: NDArray[np.float64]) -> NDArray[np.float64]:
-    """달 중심에서 본 천체의 위치 벡터(km, MOON_ME 프레임, LT+S 보정). 모양 (N, 3).
+def body_vectors(
+    body: Literal["SUN", "EARTH"],
+    et: NDArray[np.float64],
+    *,
+    correction: Literal["LT+S", "NONE"] = "LT+S",
+) -> NDArray[np.float64]:
+    """달 중심에서 본 천체의 위치 벡터(km, MOON_ME 프레임, 기본 LT+S 보정). 모양 (N, 3).
 
     지점과 무관하므로 한 번만 계산해 여러 지점에 재사용할 수 있다.
     """
     with _SPICE_LOCK:
-        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", "LT+S", "MOON")
+        positions, _ = spiceypy.spkpos(body, et.tolist(), "MOON_ME", correction, "MOON")
     return np.asarray(positions, dtype=np.float64)
 
 

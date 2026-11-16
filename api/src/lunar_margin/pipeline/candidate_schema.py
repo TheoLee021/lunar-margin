@@ -47,6 +47,7 @@ class Score(_Model):
     total: float | None
     sun_component: float | None
     earth_component: float | None
+    visible_grid_points: int | None = None
     components_used: int
 
 

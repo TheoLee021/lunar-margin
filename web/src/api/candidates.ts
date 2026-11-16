@@ -90,6 +90,7 @@ export const CandidateSchema = z.object({
     total: NullableNumber,
     sun_component: NullableNumber,
     earth_component: NullableNumber,
+    visible_grid_points: z.number().nullable().optional(),
     components_used: z.number(),
   }),
   region_id: z.number(),
@@ -142,7 +143,11 @@ const ConfigSchema = z.looseObject({
   min_separation_m: z.number(),
   top_k: z.number(),
   thresholds: ThresholdsSchema,
-  weights: z.object({ sun: z.number(), earth: z.number() }),
+  weights: z.object({
+    visibility: z.number().optional(),
+    sun: z.number(),
+    earth: z.number(),
+  }),
   window: WindowSchema,
   dem: z.string(),
   observer_height_m: z.number().default(0),
@@ -152,7 +157,12 @@ export type SearchConfig = z.infer<typeof ConfigSchema>
 const DistributionSchema = z.record(z.string(), z.number())
 
 // 사용자 임무 입력. docs/api.md 의 "POST /candidates/search" 요청 본문과 같다.
-export const PrioritySchema = z.enum(['balanced', 'solar', 'earth'])
+export const PrioritySchema = z.enum([
+  'balanced',
+  'solar',
+  'earth',
+  'visibility',
+])
 export type Priority = z.infer<typeof PrioritySchema>
 
 export const MissionRequestSchema = z.object({

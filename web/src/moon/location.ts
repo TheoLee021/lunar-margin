@@ -2,6 +2,8 @@
 export interface LunarLocation {
   lat: number
   lon: number
+  /** Height of the picked 3D tile surface above the lunar reference sphere. */
+  surfaceHeightM?: number
 }
 
 /** Cesium Cartographic shape (radians), kept structural so this module stays free of Cesium. */
