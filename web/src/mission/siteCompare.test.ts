@@ -16,7 +16,7 @@ describe('saved candidate comparison', () => {
     const values = comparisonValues(
       {
         sun: { fraction: 0.8, longest_dark_hours: 84 },
-        rf: { fraction: 0.6 },
+        rf: { min_link_margin_db: -6 },
         earth: { fraction: 0.9, longest_blackout_hours: 168 },
         terrain: {
           coverage_fraction: 1,
@@ -27,10 +27,10 @@ describe('saved candidate comparison', () => {
       axes,
     )
     expect(values.map((value) => value.radius)).toEqual([
-      0.8, 0.75, 0.6, 0.5, 0.75, 0.25,
+      0.8, 0.75, 0.4, 0.5, 0.75, 0.25,
     ])
     expect(values.map((value) => value.value)).toEqual([
-      80, 84, 60, 168, 2.5, 3,
+      80, 84, -6, 168, 2.5, 3,
     ])
   })
 

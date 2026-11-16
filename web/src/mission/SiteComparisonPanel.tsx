@@ -24,7 +24,7 @@ const xy = (index: number, radius: number) =>
 const amount = (value: number | null, unit: string) =>
   value === null
     ? '—'
-    : `${value.toFixed(unit === 'm' ? 2 : 1)}${unit === '시간' ? ' 시간' : unit}`
+    : `${value.toFixed(unit === 'm' ? 2 : 1)}${unit === '시간' || unit === 'dB' ? ' ' + unit : unit}`
 const marginText = (row: RequirementMargin) =>
   row.margin === null
     ? '—'
@@ -212,8 +212,8 @@ export function SiteComparisonPanel({
           </svg>
           <p className="text-xs text-neutral-400">
             2~3개를 비교하면 읽기 쉽습니다. 결측은 —, 지형 자료가 불완전하면
-            도형을 연결하지 않습니다. RF 통신율은 평가 시간 중 명목 RF 링크가
-            가능한 시간의 비율입니다. 최장 지구 차폐는 지형이 지구 중심을 가린
+            도형을 연결하지 않습니다. RF 링크 마진은 임무 기간에 계산한 명목
+            링크 마진의 최솟값입니다. 최장 지구 차폐는 지형이 지구 중심을 가린
             연속 시간입니다.
           </p>
           <div
