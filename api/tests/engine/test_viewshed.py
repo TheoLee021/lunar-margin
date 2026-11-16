@@ -59,3 +59,13 @@ def test_narrow_crest_between_regular_probes_blocks_distant_target() -> None:
             assert 398 < dem.lonlat_to_xy(hit[1], hit[0])[0] < 400
             return
     raise AssertionError("Missing eastern grid target")
+
+
+def test_surface_height_horizontal_rays_leave_flat_ground_and_hit_ridge() -> None:
+    terrain = np.zeros((131, 131), dtype=np.float32)
+    terrain[:, 70] = 0.1
+    label = PolarGridLabel(131, 131, 80, 65, 65, 1737.4, 0, -90)
+    _, rays = horizontal_rays(PolarDem(terrain, label), -90, 0, observer_height_m=0)
+    assert rays[18] == (5000, False)
+    distance, hit = rays[6]
+    assert hit and 320 < distance < 321

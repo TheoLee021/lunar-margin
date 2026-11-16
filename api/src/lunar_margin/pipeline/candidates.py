@@ -166,6 +166,37 @@ def field_settings(config: SearchConfig, azimuth_step_deg: float) -> FieldSettin
     )
 
 
+def score_search_field(
+    config: SearchConfig,
+    sites: SitePoints,
+    field: MetricField,
+    filtered: FilterResult,
+    visibility_dem: PolarDem | None,
+    *,
+    coarse: bool = False,
+) -> RankScores:
+    visibility = None
+    if visibility_dem is not None and config.weights.visibility:
+        considered = filtered.status == Status.ELIGIBLE
+        if coarse and not considered.any():
+            considered = field.computed
+        visibility = np.full(len(sites), np.nan)
+        for index in np.flatnonzero(considered):
+            visibility[index] = visible_grid_fraction(
+                visibility_dem,
+                float(sites.x_m[index]),
+                float(sites.y_m[index]),
+                config.observer_height_m,
+            )
+    return score_sites(
+        field,
+        config.weights,
+        visibility=visibility,
+        rf=config.rf is not None,
+        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+    )
+
+
 def promotion_mask(
     field: MetricField,
     filtered: FilterResult,
@@ -253,21 +284,6 @@ def run_search(
     dem = open_dem(dem_pairs)
     visibility_dem = PolarDem.from_files(*dem_pairs[0]) if config.weights.visibility else None
 
-    def visibility_for(
-        sites: SitePoints, considered: NDArray[np.bool_]
-    ) -> NDArray[np.float64] | None:
-        if visibility_dem is None:
-            return None
-        values = np.full(len(sites), np.nan)
-        for index in np.flatnonzero(considered):
-            values[index] = visible_grid_fraction(
-                visibility_dem,
-                float(sites.x_m[index]),
-                float(sites.y_m[index]),
-                config.observer_height_m,
-            )
-        return values
-
     workers = config.workers or os.cpu_count() or 1
 
     def reporter(stage: str) -> Callable[[int, int], None] | None:
@@ -330,15 +346,8 @@ def run_search(
             config.thresholds,
             exclude_incomplete_horizon=config.exclude_incomplete_horizon,
         )
-        coarse_eligible = coarse_filter.status == Status.ELIGIBLE
-        coarse_scores = score_sites(
-            coarse_field,
-            config.weights,
-            visibility=visibility_for(
-                coarse, coarse_eligible if coarse_eligible.any() else coarse_field.computed
-            ),
-            rf=config.rf is not None,
-            duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+        coarse_scores = score_search_field(
+            config, coarse, coarse_field, coarse_filter, visibility_dem, coarse=True
         )
         promoted = promotion_mask(
             coarse_field, coarse_filter, coarse_scores, config.thresholds, config.refine_fraction
@@ -374,13 +383,7 @@ def run_search(
     fine_filter = evaluate(
         fine_field, config.thresholds, exclude_incomplete_horizon=config.exclude_incomplete_horizon
     )
-    fine_scores = score_sites(
-        fine_field,
-        config.weights,
-        visibility=visibility_for(fine, fine_filter.status == Status.ELIGIBLE),
-        rf=config.rf is not None,
-        duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
-    )
+    fine_scores = score_search_field(config, fine, fine_field, fine_filter, visibility_dem)
     eligible_f = (fine_filter.status == Status.ELIGIBLE) & ~np.isnan(fine_scores.total)
     fine_region = label_regions(fine, eligible_f)
     selection = select_diverse(

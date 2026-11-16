@@ -1,4 +1,9 @@
-import { fetchViewshed, visibleGridCount, type Viewshed } from '../api/viewshed'
+import {
+  fetchViewshed,
+  GRID_TARGET_COUNT,
+  visibleGridCount,
+  type Viewshed,
+} from '../api/viewshed'
 import {
   useEffect,
   useImperativeHandle,
@@ -209,8 +214,9 @@ export function MissionMoonViewer({
                   반경 내 최장 가시거리 {current.distanceKm?.toFixed(2)} km
                 </strong>
                 <div>
-                  보이는 격자점 {visibleGridCount(current.map)} /{' '}
-                  {current.map.targets.length}
+                  {current.map.targets.length === GRID_TARGET_COUNT
+                    ? `보이는 격자점 ${visibleGridCount(current.map)} / ${GRID_TARGET_COUNT}`
+                    : `지형 자료 부족 · ${GRID_TARGET_COUNT}개 중 ${current.map.targets.length}개 경로 확인`}
                 </div>
                 <span className="text-amber-400">⊙ 관측점</span>　
                 <span className="text-green-400">● 보임</span>　

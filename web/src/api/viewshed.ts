@@ -18,7 +18,10 @@ const schema = z.object({
 })
 export type Viewshed = z.infer<typeof schema>
 
-export function visibleGridCount(map: Viewshed) {
+export const GRID_TARGET_COUNT = 120
+
+export function visibleGridCount(map: Viewshed): number | null {
+  if (map.targets.length !== GRID_TARGET_COUNT) return null
   return map.targets.filter(([, hit]) => hit === null).length
 }
 

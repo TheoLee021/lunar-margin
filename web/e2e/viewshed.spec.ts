@@ -6,6 +6,7 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
   page,
   request,
 }) => {
+  test.setTimeout(90_000)
   await mockScheduledDepartures(page)
   await mockDashboardRuns(page, request)
   await page.goto('/')
@@ -22,7 +23,10 @@ test('3D viewshed follows the selected candidate and closes in overview', async 
   const a = await first
   await expect(page.getByText('● 보임')).toBeVisible()
   await rail.getByLabel('가시권 비교 높이').selectOption('40')
-  await expect(rail.getByText(/40 m에서 보이는 점/).first()).toBeVisible()
+  const count = rail.getByText(/40 m에서 보이는 점/).first()
+  await expect(count).toBeVisible({ timeout: 45_000 })
+  const visible = (await count.innerText()).split('보이는 점 ')[1]
+  await expect(page.getByText(`보이는 격자점 ${visible}`)).toBeVisible()
   await expect(page.getByLabel('관측 높이', { exact: true })).toHaveValue('40')
   const second = mask(-89.02)
   await rail.getByRole('button', { name: /후보 2/ }).click()

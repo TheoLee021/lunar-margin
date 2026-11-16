@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchViewshed, visibleGridCount } from '../api/viewshed'
+import {
+  fetchViewshed,
+  GRID_TARGET_COUNT,
+  visibleGridCount,
+} from '../api/viewshed'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
 import type { MissionAnalysisResult } from './useMissionAnalysis'
@@ -49,10 +53,10 @@ export function MissionWorkspace({
   const [comparison, setComparison] = useState<{
     sites: readonly CandidateSite[]
     height: number
-    counts: (readonly [number, number] | null)[]
+    counts: (number | null | 'error')[]
   } | null>(null)
   useEffect(() => {
-    if (!sites.length) return
+    if (!sites.length || height === searchHeight) return
     const controller = new AbortController()
     const signal = AbortSignal.any([
       controller.signal,
@@ -69,16 +73,16 @@ export function MissionWorkspace({
             site.grid,
             demName,
           )
-          return [visibleGridCount(map), map.targets.length] as const
+          return visibleGridCount(map)
         } catch {
-          return null
+          return 'error' as const
         }
       }),
     ).then((counts) => {
       if (!controller.signal.aborted) setComparison({ sites, height, counts })
     })
     return () => controller.abort()
-  }, [sites, height, demName])
+  }, [sites, height, demName, searchHeight])
   const counts =
     comparison?.sites === sites && comparison.height === height
       ? comparison.counts
@@ -86,10 +90,18 @@ export function MissionWorkspace({
   const rows = sites.map((site, index) => ({
     site,
     index,
-    count: counts?.[index],
+    count:
+      height === searchHeight
+        ? (run?.candidates.find((candidate) => candidate.id === site.id)?.score
+            .visible_grid_points ?? null)
+        : counts?.[index],
   }))
   if (sortByVisibility)
-    rows.sort((a, b) => (b.count?.[0] ?? -1) - (a.count?.[0] ?? -1))
+    rows.sort(
+      (a, b) =>
+        (typeof b.count === 'number' ? b.count : -1) -
+        (typeof a.count === 'number' ? a.count : -1),
+    )
   const moon = useRef<MissionMoonViewerHandle>(null)
   const selected = sites.find((site) => site.id === selection.siteId)
   const selectedCandidate = run?.candidates.find(
@@ -280,11 +292,13 @@ export function MissionWorkspace({
                       <span>
                         {site.name} · {Math.abs(site.latitude).toFixed(2)}°S
                         <span className="block text-teal-300">
-                          {count
-                            ? `${height} m에서 보이는 점 ${count[0]} / ${count[1]}`
+                          {typeof count === 'number'
+                            ? `${height} m에서 보이는 점 ${count} / ${GRID_TARGET_COUNT}`
                             : count === null
-                              ? '가시권 계산 불가'
-                              : '가시권 계산 중…'}
+                              ? '지형 자료 부족'
+                              : count === 'error'
+                                ? '가시권 계산 불가'
+                                : '가시권 계산 중…'}
                         </span>
                       </span>
                       <span className="ml-auto font-mono">

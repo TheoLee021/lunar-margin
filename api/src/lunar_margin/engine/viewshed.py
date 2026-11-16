@@ -133,16 +133,23 @@ def horizontal_rays(
             np.degrees(np.arctan2(z, np.hypot(x, y))), np.degrees(np.arctan2(y, x))
         )
         clearance = radius - dem.radius_m - heights
-        stops = np.flatnonzero(~np.isfinite(clearance) | (clearance <= 0))
+        # A ground-level observer starts on the terrain. Test contact after departure.
+        clearance[0] = observer_height_m
+        ahead = clearance[1:]
+        stops = np.flatnonzero(~np.isfinite(ahead) | (ahead <= 0))
         if not stops.size:
             rays.append((float(RADIUS_M), False))
             continue
-        i = int(stops[0])
-        previous = max(0, i - 1)
-        if not np.isfinite(clearance[i]) or i == 0:
+        i = int(stops[0]) + 1
+        previous = i - 1
+        if not np.isfinite(clearance[i]):
             rays.append((float(distances[previous]), False))
             continue
-        fraction = clearance[previous] / (clearance[previous] - clearance[i])
+        fraction = (
+            0.0
+            if clearance[previous] == 0
+            else clearance[previous] / (clearance[previous] - clearance[i])
+        )
         rays.append((float(distances[previous] + fraction * 5), True))
     return eye, rays
 
