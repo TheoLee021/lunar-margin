@@ -17,6 +17,7 @@ MU_M = 4.902800066e12
 R_M = 1_737_400.0
 OMEGA = 2 * math.pi / (27.321661 * 86400.0)
 G0 = 9.80665
+PROFILE_DURATIONS_S = (480.0, 600.0, 720.0, 840.0, 960.0)
 PathStatus = Literal[
     "REFERENCE_FEASIBLE",
     "TERRAIN_COLLISION",
@@ -324,7 +325,6 @@ def evaluate_alternatives(
     """
     if not 1 <= len(targets) <= 4:
         raise ValueError("one to four landing targets required")
-    durations = (480.0, 600.0, 720.0, 840.0, 960.0)
     lofts = (0.0, 2000.0, 6000.0)
     results: list[PathResult] = []
     for lat, lon in targets:
@@ -339,7 +339,7 @@ def evaluate_alternatives(
                 loft_m=loft,
                 clearance_m=clearance_m,
             )
-            for duration in durations
+            for duration in PROFILE_DURATIONS_S
             for loft in lofts
         ]
         feasible = [item for item in options if item.feasible]

@@ -1,13 +1,14 @@
 """HTTP contract tests for preliminary descent-reference endpoint."""
 
 from collections.abc import Generator
+from pathlib import Path
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from numpy.typing import NDArray
 
-from lunar_margin.app.analysis import get_dem
+from lunar_margin.app.analysis import get_dem, get_settings
 from lunar_margin.app.main import create_app
 from lunar_margin.app.settings import Settings
 
@@ -71,3 +72,20 @@ def test_reference_endpoint_does_not_invent_data_when_target_outside_roi(
     bad = payload()
     bad["primary_site"] = {"lat_deg": -70.0, "lon_deg": 0.0}
     assert client.post("/trajectory/descent-reference", json=bad).status_code == 422
+
+
+def test_los_outside_kernel_coverage_returns_422(client: TestClient, data_dir: Path) -> None:
+    request = {**payload(), "epoch_utc": "2500-01-10T00:00:00Z", "include_earth_los": True}
+    response = client.post("/trajectory/descent-reference", json=request)
+    assert response.status_code == 422
+    assert "SPICE coverage" in response.json()["detail"]
+
+
+def test_terrain_only_without_spice(data_dir: Path, tmp_path: Path) -> None:
+    (tmp_path / "dem").symlink_to((data_dir / "dem").resolve(), target_is_directory=True)
+    app = create_app(Settings(data_dir=tmp_path, horizon_table_download_on_start=False))
+    app.dependency_overrides[get_settings] = lambda: Settings(data_dir=tmp_path)
+    with TestClient(app) as client:
+        response = client.post("/trajectory/descent-reference", json=payload())
+        assert response.status_code == 200
+        assert response.json()["results"][0]["earth_los_samples"] is None

@@ -122,3 +122,12 @@ def test_rejects_invalid_inputs() -> None:
             Lander(),
             duration_s=10,
         )
+
+
+def test_outward_los_above_negative_elevation_terrain() -> None:
+    class CraterFloor:
+        def sample_height_lonlat_m(self, lat_deg: Vec, lon_deg: Vec) -> Vec:
+            return np.full_like(lat_deg, -2000.0)
+
+    observer = np.array([0.0, 0.0, -(R_M - 1000)])
+    assert terrain_los(CraterFloor(), observer, np.array([0.0, 0.0, -384400000.0])) == "VISIBLE"

@@ -11,11 +11,14 @@ from typing import Annotated, Literal
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from spiceypy.utils.exceptions import SpiceFRAMEDATANOTFOUND, SpiceSPKINSUFFDATA
 
-from lunar_margin.app.analysis import get_dem
+from lunar_margin.app.analysis import get_dem, get_settings, require_spice
+from lunar_margin.app.settings import Settings
 from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.descent_los import LosStatus, terrain_los
 from lunar_margin.engine.descent_reference import (
+    PROFILE_DURATIONS_S,
     Lander,
     PathResult,
     evaluate_alternatives,
@@ -96,10 +99,20 @@ def _check_path(path: PathResult) -> None:
 def descent_reference(
     query: DescentRequest,
     dem: Annotated[PolarDem, Depends(get_dem)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> DescentResponse:
     if not _slots.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Descent reference solver busy")
     try:
+        et0 = None
+        if query.include_earth_los:
+            require_spice(settings.data_dir)
+            epoch = query.epoch_utc
+            et0 = float(utc_range(epoch, epoch + timedelta(minutes=1), 1)[0])
+            # Check both ends of the longest profile before running the terrain search.
+            body_vectors(
+                "EARTH", np.array([et0, et0 + max(PROFILE_DURATIONS_S)]), correction="NONE"
+            )
         initial = pdi_from_target(
             query.primary_site.lat_deg,
             query.primary_site.lon_deg,
@@ -117,16 +130,14 @@ def descent_reference(
         )
 
         results: list[LandingSiteResult] = []
-        epoch = query.epoch_utc
         for target, path in zip(targets, paths, strict=True):
             _check_path(path)
             los: list[LosStatus] | None = None
             visible_fraction: float | None = None
             unknown_fraction: float | None = None
-            if query.include_earth_los and path.samples:
-                et0 = float(utc_range(epoch, epoch + timedelta(minutes=1), 1)[0])
+            if et0 is not None and path.samples:
                 offsets = np.array([sample.t_s for sample in path.samples], dtype=np.float64)
-                earth_m = body_vectors("EARTH", et0 + offsets) * 1000.0
+                earth_m = body_vectors("EARTH", et0 + offsets, correction="NONE") * 1000.0
                 los = [
                     terrain_los(
                         dem,
@@ -166,6 +177,10 @@ def descent_reference(
             ),
             results=results,
         )
+    except (SpiceFRAMEDATANOTFOUND, SpiceSPKINSUFFDATA) as error:
+        raise HTTPException(
+            status_code=422, detail="Descent interval outside SPICE coverage"
+        ) from error
     except (ValueError, OverflowError, FloatingPointError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     finally:

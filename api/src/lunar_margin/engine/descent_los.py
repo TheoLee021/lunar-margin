@@ -42,10 +42,6 @@ def terrain_los(
         raise ValueError("LOS target is too close")
     direction = difference / distance
 
-    closest = min(distance, max(0.0, -float(np.dot(observer_m, direction))))
-    if float(np.linalg.norm(observer_m + closest * direction)) < R_M - 0.001:
-        return "BLOCKED"
-
     end = min(distance, max_range_m)
     count = math.ceil(end / sample_m)
     distances = np.linspace(min(sample_m, end), end, count)

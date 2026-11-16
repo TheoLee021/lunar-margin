@@ -29,7 +29,8 @@ feasibility result*, **not** a safe landing certificate.
   the **same** initial PDI state. Thus B/C comparisons include the change
   in required thrust and propellant, rather than spatial distance only.
 - Optional **geometric** Earth LOS at saved flight samples, using SPICE
-  Earth positions in MOON_ME plus spherical-lunar and local DEM blocking.
+  simultaneous Earth positions in MOON_ME and sampled LOLA terrain heights,
+  including terrain below the lunar reference radius.
   VISIBLE/BLOCKED/UNKNOWN status does **not** imply an operational RF link.
 
 ## API
