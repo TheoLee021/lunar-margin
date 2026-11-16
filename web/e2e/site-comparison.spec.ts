@@ -6,6 +6,7 @@ import { mockScheduledDepartures } from './launch-fixture.js'
 // so this scenario exercises complete hexagons and real-unit requirement margins.
 function addComparisonMetrics(
   runs: Awaited<ReturnType<typeof mockDashboardRuns>>,
+  terrainCoverage = 1,
 ) {
   for (const run of runs) {
     Object.assign(run.config, {
@@ -33,7 +34,7 @@ function addComparisonMetrics(
           mean_elevation_deg: 4,
         },
         terrain: {
-          coverage_fraction: 1,
+          coverage_fraction: terrainCoverage,
           slope_p95_deg: 2 + index,
           roughness_p95_m: 1 + index * 0.2,
           assessment_radius_m: 250,
@@ -106,6 +107,16 @@ test('checked candidates compare saved values without selecting a map site and r
     dialog.locator('svg polygon[data-candidate]').first(),
   ).toHaveAttribute('points', before!)
   await dialog.getByRole('button', { name: '비교 닫기' }).click()
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().endsWith('/candidates/runs/' + first.id),
+    ),
+    rail.getByRole('button', { name: '결과 새로고침' }).click(),
+  ])
+  await expect(rail.getByRole('checkbox', { checked: true })).toHaveCount(3)
+  await expect(
+    rail.getByRole('checkbox', { name: '후보 3 비교' }),
+  ).toBeChecked()
   first.id = 'saved-dashboard-replacement'
   await page.route(
     '**/api/candidates/runs/saved-dashboard-replacement',
@@ -190,4 +201,37 @@ test('all five candidates and their actual metrics fit a mobile comparison dialo
       .getByRole('cell')
       .last(),
   ).toHaveText('—')
+})
+
+test('partial terrain coverage hides both terrain values and their margins', async ({
+  page,
+  request,
+}) => {
+  const runs = await mockDashboardRuns(page, request)
+  addComparisonMetrics(runs, 0.9)
+  await page.goto('/')
+  await page.getByRole('checkbox', { name: '후보 1 비교' }).check()
+  await page.getByRole('button', { name: '선택 후보 비교 (1/5)' }).click()
+  const dialog = page.getByRole('dialog', { name: 'TOP 5 후보 비교' })
+  await expect(dialog.locator('svg polygon[data-candidate]')).toHaveCount(0)
+  await expect(dialog.locator('g[data-candidate] circle')).toHaveCount(4)
+  for (const metric of ['지역 경사 P95', '지역 거칠기 P95']) {
+    const values = dialog.getByRole('table', { name: '후보 실제 지표' })
+    const margins = dialog.getByRole('table', { name: '후보 조건별 여유' })
+    await expect(
+      values
+        .getByRole('row')
+        .filter({ hasText: metric })
+        .getByRole('cell')
+        .first(),
+    ).toHaveText('—')
+    await expect(
+      margins
+        .getByRole('row')
+        .filter({ hasText: metric })
+        .getByRole('cell')
+        .last(),
+    ).toHaveText('—')
+  }
+  await dialog.screenshot({ path: 'test-results/site-comparison-partial.png' })
 })

@@ -56,7 +56,7 @@ export function MissionWorkspace({
     ids: [] as string[],
     open: false,
   })
-  if (checked.key !== comparisonKey)
+  if (result.kind !== 'loading' && checked.key !== comparisonKey)
     setChecked({ key: comparisonKey, ids: [], open: false })
   const checkedIds = checked.key === comparisonKey ? checked.ids : []
   const comparisonCandidates =

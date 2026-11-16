@@ -6,6 +6,7 @@ does not select or move the map, request point analysis, or alter the ranking.
 Two or three candidates are easier to read; all five remain available.
 
 The comparison uses one saved run, surface interval and search observer height.
+Refreshing the same saved result keeps the checks.
 Changing the landing date, duration or loaded run clears the checks. Changing the
 live viewshed height does not change these saved metrics. Closing the modal keeps
 the checks; **비교 선택 모두 해제** clears them.
