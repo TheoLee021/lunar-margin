@@ -382,7 +382,6 @@ function Board({ run }: { run: RunDetail }) {
                       'Earth visibility',
                       'Price¹',
                       'Score',
-                      'Availability',
                       'Longest RF blackout',
                       'Local slope (P95)',
                       'Local roughness (P95)',
@@ -394,12 +393,6 @@ function Board({ run }: { run: RunDetail }) {
                 </thead>
                 <tbody>
                   {sites.map((c) => {
-                    const status =
-                      availability.state.status === 'ready'
-                        ? availability.state.data.candidates.find(
-                            (a) => a.candidate_id === c.id,
-                          )?.status
-                        : null
                     const price =
                       prices.state.status === 'ok'
                         ? prices.state.data.get(c.id)?.price
@@ -423,15 +416,6 @@ function Board({ run }: { run: RunDetail }) {
                         <td>{fractionText(c.earth.fraction)}</td>
                         <td>{price ? formatPrice(price.adjusted_usd) : '—'}</td>
                         <td>{scoreText(c.score.total)}</td>
-                        <td>
-                          {status === 'available'
-                            ? reserveButton(c.id)
-                            : status === 'reserved'
-                              ? 'Reserved'
-                              : availability.state.status === 'loading'
-                                ? 'Checking…'
-                                : 'Unknown'}
-                        </td>
                         <td>
                           {c.rf?.longest_blackout_hours == null
                             ? '—'
@@ -457,9 +441,7 @@ function Board({ run }: { run: RunDetail }) {
             </div>
             <footer>
               ¹ Estimated price in USD for a 24 kg payload delivered to the
-              surface.{' '}
-              {availability.state.status === 'error' &&
-                ' Availability could not be verified.'}
+              surface.
             </footer>
           </section>
           <div className="co-stats">
