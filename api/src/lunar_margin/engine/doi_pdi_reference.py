@@ -6,9 +6,10 @@ across orbital planes. Output samples are time-tagged for later visualization.
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Callable, Literal
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -189,7 +190,11 @@ def reference_doi_pdi(
         else "NO_ALIGNED_REFERENCE"
     )
 
-    def phase_state(epoch: datetime, phase: Literal["LOI", "DOI_PRE", "DOI_POST", "PDI"], s: Vec) -> PhaseState:
+    def phase_state(
+        epoch: datetime,
+        phase: Literal["LOI", "DOI_PRE", "DOI_POST", "PDI"],
+        s: Vec,
+    ) -> PhaseState:
         fixed_state = np.asarray(frame_transform(s, epoch), dtype=np.float64)
         return PhaseState(epoch, phase, s.tolist(), fixed_state.tolist())
 
@@ -200,7 +205,12 @@ def reference_doi_pdi(
 
     samples: list[TrajectorySample] = []
 
-    def add_sample(epoch: datetime, segment: Literal["PARKING_COAST", "DOI_COAST"], r: Vec, v: Vec) -> None:
+    def add_sample(
+        epoch: datetime,
+        segment: Literal["PARKING_COAST", "DOI_COAST"],
+        r: Vec,
+        v: Vec,
+    ) -> None:
         fixed_state = np.asarray(frame_transform(np.r_[r, v], epoch), dtype=np.float64)
         samples.append(
             TrajectorySample(
