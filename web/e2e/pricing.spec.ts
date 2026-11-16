@@ -61,20 +61,24 @@ test('missing landing dates launch one batch and display all five results', asyn
   expect(
     (await starting).postDataJSON().mission.max_terrain_slope_degrees,
   ).toBe(12.5)
-  await expect.poll(() => launched).toEqual([
-    '2027-01-08',
-    '2027-01-09',
-    '2027-01-10',
-    '2027-01-11',
-    '2027-01-12',
-  ])
+  await expect
+    .poll(() => launched)
+    .toEqual([
+      '2027-01-08',
+      '2027-01-09',
+      '2027-01-10',
+      '2027-01-11',
+      '2027-01-12',
+    ])
   expect(batchCalls).toBe(1)
   await expect(
     dialog.getByRole('table').getByText('$29M', { exact: true }),
   ).toHaveCount(19, { timeout: 20000 })
   await dialog.getByRole('button', { name: 'Apply schedule' }).click()
   await expect(page).toHaveURL(/max_slope=12\.5/)
-  await expect(dialog).toHaveCount(0)
+  expect(new URL(page.url()).searchParams.get('overview')).toBe('1')
+  expect(new URL(page.url()).searchParams.get('run')).toBe('m-2027-01-10')
+  await expect(page.locator('#datePlanner')).toHaveCount(0)
 })
 
 test('date prices open the saved candidate run without recalculating', async ({

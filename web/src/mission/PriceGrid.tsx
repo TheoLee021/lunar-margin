@@ -1,12 +1,10 @@
 import { assumptionLabel, englishMessage } from './plannerCopy'
-import { useEffect } from 'react'
 import type { PricingSettings } from './usePricingSettings'
 import { formatPrice, isTransitPossible } from '../api/pricing'
 import type { departureAvailability } from '../api/launchSchedule'
-import type { ProviderCalendarInput } from '../api/providerPricing'
 import { dayOf, iso, short } from './missionDates'
 import type { Schedule } from './types'
-import { useProviderCalendar } from './useProviderCalendar'
+import type { useProviderCalendar } from './useProviderCalendar'
 
 const STATE_LABELS = {
   quoted: 'Quote available',
@@ -22,12 +20,6 @@ const STATE_LABELS = {
   failed: 'Search failed',
   unavailable: 'Unavailable',
 }
-export type DepartureStatus = {
-  departure: string
-  launchId: string | null
-  unavailable: boolean
-}
-
 export function PriceGrid({
   departures,
   landings,
@@ -35,7 +27,7 @@ export function PriceGrid({
   availability,
   settings,
   onSelect,
-  onDepartureStatus,
+  calendar,
 }: {
   departures: number[]
   landings: number[]
@@ -43,56 +35,10 @@ export function PriceGrid({
   settings: PricingSettings
   availability: (departure: string) => ReturnType<typeof departureAvailability>
   onSelect: (departure: string, landing: string) => void
-  onDepartureStatus: (status: DepartureStatus) => void
+  calendar: ReturnType<typeof useProviderCalendar>
 }) {
-  const {
-    valid,
-    sourceReady,
-    massNumber,
-    slopeLimit,
-    dark,
-    black,
-    source,
-    delivery,
-    mission,
-  } = settings
-  const scheduledDepartures = departures.filter(
-    (day) => availability(iso(day)) === 'scheduled',
-  )
-  const input: ProviderCalendarInput | null =
-    valid && sourceReady && scheduledDepartures.length > 0
-      ? {
-          estimate: true,
-          selected_launch_id: draft.launchId ?? null,
-          mass_kg: massNumber,
-          delivery,
-          landing_dates: landings.map(iso),
-          departure_dates: scheduledDepartures.map(iso),
-          source_run_id: source || null,
-          mission: {
-            ...mission,
-            landing_date: iso(landings[0]!),
-            mission_duration_days: draft.duration,
-            max_continuous_darkness_hours: dark,
-            max_communication_blackout_hours: black,
-            max_terrain_slope_degrees: slopeLimit,
-          },
-        }
-      : null
-  const calendar = useProviderCalendar(input)
+  const { massNumber, delivery, slopeLimit } = settings
   const data = calendar.data
-  useEffect(() => {
-    if (!data) return
-    const departureCells = data.cells.filter(
-      (cell) => cell.departure_date === draft.departure,
-    )
-    if (!departureCells.length) return
-    onDepartureStatus({
-      departure: draft.departure,
-      launchId: draft.launchId ?? null,
-      unavailable: departureCells.some((cell) => cell.status === 'no_launch'),
-    })
-  }, [data, draft.departure, draft.launchId, onDepartureStatus])
   const prices =
     data?.cells.flatMap((cell) =>
       cell.mean_min_usd === null ? [] : [cell.mean_min_usd],

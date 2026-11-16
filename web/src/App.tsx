@@ -119,9 +119,9 @@ export default function App() {
       locationFor(view, selection, planner),
     )
   }, [view, selection, planner])
-  function toggleOverview(runId: string | null) {
+  function toggleOverview(runId: string | null, nextSelection = selection) {
     const url = new URL(
-      locationFor('mission', selection, false),
+      locationFor('mission', nextSelection, false),
       window.location.origin,
     )
     if (runId) {
@@ -131,6 +131,7 @@ export default function App() {
       url.searchParams.delete('overview')
     }
     window.history.pushState(null, '', url)
+    setSelection(nextSelection)
     setPanelRun(runId)
     setPlanner(false)
   }
@@ -207,14 +208,9 @@ export default function App() {
             }
             planner={planner}
             onPlannerChange={setPlanner}
-            onApply={(schedule) => {
-              setSelection((current) => ({
-                ...current,
-                ...schedule,
-                siteId: null,
-              }))
-              setPlanner(false)
-            }}
+            onApply={(schedule, runId) =>
+              toggleOverview(runId, { ...selection, ...schedule, siteId: null })
+            }
             onViewOrbit={(schedule) =>
               navigate('orbit', false, {
                 ...selection,
@@ -260,7 +256,7 @@ function MissionApp({
   onSelect: (siteId: string | null) => void
   planner: boolean
   onPlannerChange: (open: boolean) => void
-  onApply: (schedule: Schedule) => void
+  onApply: (schedule: Schedule, runId: string) => void
   onViewOrbit: (schedule: Schedule) => void
 }) {
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })

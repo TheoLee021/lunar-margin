@@ -1,14 +1,16 @@
+import { useProviderCalendar } from './useProviderCalendar'
+import type { ProviderCalendarInput } from '../api/providerPricing'
 import { usePricingSettings } from './usePricingSettings'
 import { TransferOrbit } from './TransferOrbit'
 import { PlannerTouchdown } from './PlannerTouchdown'
 import { useFlightPlan } from '../flight/flightPlan'
 import { useEffect, useRef, useState } from 'react'
-import { dayOf, short } from './missionDates'
+import { dayOf, iso, short } from './missionDates'
 import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
 import { ScheduleSchema } from './scheduleSchema'
-import { PriceGrid, type DepartureStatus } from './PriceGrid'
+import { PriceGrid } from './PriceGrid'
 import {
   fetchLaunchSchedule,
   departureAvailability,
@@ -22,7 +24,7 @@ type Props = {
   selectedSiteId: string | null
   schedule: Schedule
   onViewOrbit: (schedule: Schedule) => void
-  onApply: (schedule: Schedule) => void
+  onApply: (schedule: Schedule, runId: string) => void
   onClose: () => void
 }
 export function DatePlanner({
@@ -56,8 +58,6 @@ export function DatePlanner({
   const [launchData, setLaunchData] = useState<LaunchSchedule | null>(null)
   const [launchError, setLaunchError] = useState('')
   const [launchRevision, setLaunchRevision] = useState(0)
-  const [departureStatus, setDepartureStatus] =
-    useState<DepartureStatus | null>(null)
   useEffect(() => {
     const controller = new AbortController()
     fetchLaunchSchedule({ signal: controller.signal })
@@ -76,10 +76,48 @@ export function DatePlanner({
   const availability = (departure: string) =>
     departureAvailability(launchData, launchError, draft.launchId, departure)
   const transitPossible = isTransitPossible(draft.departure, draft.landing)
-  const departureUnavailable =
-    departureStatus?.departure === draft.departure &&
-    departureStatus.launchId === (draft.launchId ?? null) &&
-    departureStatus.unavailable
+  const {
+    valid,
+    sourceReady,
+    massNumber,
+    slopeLimit,
+    dark,
+    black,
+    source,
+    delivery,
+    mission,
+  } = settings
+  const scheduledDepartures = departures.filter(
+    (day) => availability(iso(day)) === 'scheduled',
+  )
+  const input: ProviderCalendarInput | null =
+    valid && sourceReady && scheduledDepartures.length > 0
+      ? {
+          estimate: true,
+          selected_launch_id: draft.launchId ?? null,
+          mass_kg: massNumber,
+          delivery,
+          landing_dates: landings.map(iso),
+          departure_dates: scheduledDepartures.map(iso),
+          source_run_id: source || null,
+          mission: {
+            ...mission,
+            landing_date: iso(landings[0]!),
+            mission_duration_days: draft.duration,
+            max_continuous_darkness_hours: dark,
+            max_communication_blackout_hours: black,
+            max_terrain_slope_degrees: slopeLimit,
+          },
+        }
+      : null
+  const calendar = useProviderCalendar(input)
+  const selectedRun = calendar.data?.dates.find(
+    (row) => row.landing_date === draft.landing && row.state === 'completed',
+  )
+  const departureUnavailable = calendar.data?.cells.some(
+    (cell) =>
+      cell.departure_date === draft.departure && cell.status === 'no_launch',
+  )
   const canApply =
     (maxSlope === null || (maxSlope > 0 && maxSlope <= 90)) &&
     settings.valid &&
@@ -152,7 +190,7 @@ export function DatePlanner({
               draft={draft}
               availability={availability}
               settings={settings}
-              onDepartureStatus={setDepartureStatus}
+              calendar={calendar}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
@@ -249,12 +287,12 @@ export function DatePlanner({
           <button
             type="button"
             id="applyWindow"
-            disabled={!validDraft || !canApply}
+            disabled={!validDraft || !canApply || !selectedRun}
             onClick={() => {
               const result = ScheduleSchema.safeParse(draft)
-              if (result.success && canApply) {
+              if (result.success && canApply && selectedRun) {
                 setFormError('')
-                onApply({ ...result.data, maxSlope })
+                onApply({ ...result.data, maxSlope }, selectedRun.run_id)
               } else
                 setFormError(
                   'Choose an arrival date after departure and a surface mission of 7, 14, or 28 days.',
