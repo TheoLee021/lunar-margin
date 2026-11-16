@@ -46,6 +46,7 @@ import {
 } from './overlayTiles'
 import { parseSunDirection, type Vector3 } from './sun'
 import { loadSunlightMap, type SunlightMap } from './sunlightMap'
+import { sunlitNearby, type SunlitNearby } from './sunlitNearby'
 import { createSunlightWindows, type SunlightWindows } from './sunlightWindows'
 import type { TileLevel } from './overlayTiles'
 
@@ -98,10 +99,26 @@ const EXPOSURE_SUN_DEG = 3.5
 // The view term is taken as if looking straight down, so brightness does not change as the camera
 // tilts; on near-vertical slopes it is held at this cosine, where Lommel-Seeliger would blow up.
 const MIN_VIEW_COS = 0.2
-// Light reaching shadowed ground (scattered off sunlit terrain), as a reflectance. It needs sunlit
-// ground nearby: it fades out to where the Sun is FILL_GONE_DEG below the horizon of a smooth
-// sphere, so the night side of the overlay is as black as the photo's.
+// Light reaching shadowed ground (sunlight scattered off sunlit terrain), as a reflectance.
+// Seen from afar it is SHADOW_FILL without shape, so shadows read as black, as in orbital photos.
+// Where the screen spans no more than FILL_NEAR_SPAN_M of ground it is SHADOW_FILL_NEAR and shows
+// the terrain: it falls on the slopes as a light from the side away from the Sun, FILL_LIGHT_DEG
+// above the horizon (the slopes that scatter sunlight face the Sun, so their light travels back
+// towards it), except for the share FILL_AMBIENT, which reaches every slope alike. The two blend
+// out to FILL_FAR_SPAN_M. Both levels are brighter than the scattered light is at the exposure of
+// sunlit ground: the fill is an eye adapting to the shadow it looks into, not a measurement.
 const SHADOW_FILL = 0.005
+const SHADOW_FILL_NEAR = 0.01
+const FILL_LIGHT_DEG = 10
+const FILL_AMBIENT = 0.15
+const FILL_NEAR_SPAN_M = 70_000
+const FILL_FAR_SPAN_M = 200_000
+// The fill needs sunlit ground nearby, wherever the Sun stands: it follows the sunlit share of the
+// surroundings (sunlitNearby.ts, worked out from the wide sunlight map when it arrives) and is
+// whole from FILL_REACH_SHARE up. Ground with no sunlit terrain around it stays black, by day or
+// night. Until that map has arrived, and on backends without one, the fill instead fades out to
+// where the Sun is FILL_GONE_DEG below the horizon of a smooth sphere.
+const FILL_REACH_SHARE = 0.08
 const FILL_GONE_DEG = 3
 const SUN_RADIUS_DEG = 0.2665
 const OVERLAY_FADE_M = 10_000
@@ -168,6 +185,19 @@ function sunlightTexture(map: SunlightMap): TextureUniform {
   })
 }
 
+function sunlitNearbyTexture(nearby: SunlitNearby): TextureUniform {
+  // Coarse cells of a smooth quantity: the GPU's own filtering between them is enough.
+  return new TextureUniform({
+    typedArray: nearby.data,
+    width: nearby.width,
+    height: nearby.height,
+    pixelFormat: PixelFormat.LUMINANCE,
+    repeat: false,
+    minificationFilter: TextureMinificationFilter.LINEAR,
+    magnificationFilter: TextureMagnificationFilter.LINEAR,
+  })
+}
+
 /** Reflectance of level ground under a Sun this high; the shader's flatGround is the same model. */
 function flatGround(sunHeightDeg: number): number {
   const mu0 = Math.sin(CesiumMath.toRadians(sunHeightDeg))
@@ -230,6 +260,17 @@ function createMoonShader(): CustomShader {
       u_wideSunlightGrid: {
         type: UniformType.VEC3,
         value: new Cartesian3(1, 0, 0),
+      },
+      // The sunlit share of the surroundings, over the same ground as u_wideSunlight (sunlitNearby.ts).
+      u_sunlitNearby: {
+        type: UniformType.SAMPLER_2D,
+        value: placeholderTexture(),
+      },
+      // From texture coordinates of u_wideSunlight to those of u_sunlitNearby, whose last cells
+      // reach past the edge of the map.
+      u_sunlitNearbyScale: {
+        type: UniformType.VEC2,
+        value: new Cartesian2(1, 1),
       },
       ...Object.fromEntries(
         fineSlots.flatMap((slot) => [
@@ -488,10 +529,12 @@ ${fineSlots
       // Cast shadows of the wide zone: its sunlight map, and until that has arrived only the Sun
       // setting behind a smooth sphere.
       float visible = discFraction(sunEl);
+      vec2 wideUv = vec2(0.0);
       if (u_wideSunlightGrid.z > 0.5) {
         vec2 mapPixel = vec2(u_wideSunlightGrid.y + xy.x / u_wideSunlightGrid.x, u_wideSunlightGrid.y - xy.y / u_wideSunlightGrid.x);
         vec2 toUv = vec2(1.0, -1.0) / (u_wideSunlightGrid.x * u_wideSunlightGrid.z);
-        visible = textureGrad(u_wideSunlight, (mapPixel + 0.5) / u_wideSunlightGrid.z, dxyDx * toUv, dxyDy * toUv).r;
+        wideUv = (mapPixel + 0.5) / u_wideSunlightGrid.z;
+        visible = textureGrad(u_wideSunlight, wideUv, dxyDx * toUv, dxyDy * toUv).r;
       }
       if (top > 0.0) {
         // Interpolate the horizon first, then take the disc fraction once: shadow edges follow
@@ -520,7 +563,27 @@ ${sunWindowSlots
       float mu0 = max(dot(normalWC, sun), 0.0);
       float mu = max(dot(normalWC, up), ${MIN_VIEW_COS.toFixed(2)});
       float lommelSeeliger = 2.0 * mu0 / (mu0 + mu);
-      float fill = ${SHADOW_FILL.toFixed(3)} * smoothstep(${(-Math.sin(CesiumMath.toRadians(FILL_GONE_DEG))).toFixed(6)}, 0.0, sunSin);
+      // How much of the fill light reaches here (see FILL_REACH_SHARE). Ground that sees the whole
+      // Sun has sunlit ground around it, and is spared the lookup.
+      float fillReach = 1.0;
+      if (visible < 0.999) {
+        if (u_wideSunlightGrid.z > 0.5) {
+          // Level 0 by name: inside a branch the GPU cannot work out a level of its own.
+          float sunlitNearby = textureLod(u_sunlitNearby, wideUv * u_sunlitNearbyScale, 0.0).r;
+          fillReach = smoothstep(0.0, ${FILL_REACH_SHARE.toFixed(3)}, sunlitNearby);
+        } else {
+          fillReach = smoothstep(${(-Math.sin(CesiumMath.toRadians(FILL_GONE_DEG))).toFixed(6)}, 0.0, sunSin);
+        }
+      }
+      // The fill light (see SHADOW_FILL): shapeless from afar, lighting the slopes close in.
+      float fillNear = 1.0 - smoothstep(${FILL_NEAR_SPAN_M.toFixed(1)}, ${FILL_FAR_SPAN_M.toFixed(1)}, footprint * czm_viewport.z);
+      vec3 sunLevel = sun - sunSin * up;
+      float sunLevelLength = length(sunLevel);
+      vec3 fillFrom = ${Math.sin(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)} * up
+        - ${Math.cos(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)} * (sunLevelLength > 1e-4 ? sunLevel / sunLevelLength : east);
+      // Level ground gets the same from the light as from the ambient share.
+      float fillShape = mix(max(dot(normalWC, fillFrom), 0.0) / ${Math.sin(CesiumMath.toRadians(FILL_LIGHT_DEG)).toFixed(6)}, 1.0, ${FILL_AMBIENT.toFixed(2)});
+      float fill = fillReach * mix(${SHADOW_FILL.toFixed(3)}, ${SHADOW_FILL_NEAR.toFixed(3)} * fillShape, fillNear);
       float reflectance = visible * mix(lommelSeeliger, mu0, ${LAMBERT_SHARE.toFixed(2)}) + fill;
       float exposure = ${SUN_EXPOSURE.toFixed(2)} * min(1.0, ${flatGround(EXPOSURE_SUN_DEG).toFixed(6)} / max(flatGround(sunSin), 1e-6));
       vec3 sunlit = filmic(vec3(exposure * reflectance));
@@ -618,6 +681,8 @@ export async function createMoonScene(
     wide: boolean,
     textureUniform: string,
     gridUniform: string,
+    // Whatever else the shader needs from the map, set before the map itself is switched on.
+    prepare?: (map: SunlightMap) => void,
   ) => {
     let pending: AbortController | undefined
     const clear = () => {
@@ -640,6 +705,7 @@ export async function createMoonScene(
         .then((map) => {
           if (request.signal.aborted) return
           if (map.width !== grid.size_px || map.height !== grid.size_px) return
+          prepare?.(map)
           moonShader.setUniform(textureUniform, sunlightTexture(map))
           moonShader.setUniform(
             gridUniform,
@@ -655,6 +721,17 @@ export async function createMoonScene(
     true,
     'u_wideSunlight',
     'u_wideSunlightGrid',
+    (map) => {
+      const nearby = sunlitNearby(map)
+      moonShader.setUniform('u_sunlitNearby', sunlitNearbyTexture(nearby))
+      moonShader.setUniform(
+        'u_sunlitNearbyScale',
+        new Cartesian2(
+          map.width / (nearby.width * nearby.cellPx),
+          map.height / (nearby.height * nearby.cellPx),
+        ),
+      )
+    },
   )
   // For a new Sun the wide map is asked for first: the backend computes one map at a time, and this
   // one is quick and covers the whole first screen. The 80 m map then sharpens the middle.

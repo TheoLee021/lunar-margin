@@ -107,7 +107,8 @@ export function LaunchDeparture({
         </p>
       ) : null}
       <p className="hint">
-        공개된 발사 예정일로 비교합니다. 가격은 달 배송을 가정한 모델값입니다.
+        데모에서는 모든 우주 발사를 달 탐사로 가정합니다. 날짜·발사사는 공개
+        일정, 가격은 모델 예상값입니다.
       </p>
     </section>
   )
