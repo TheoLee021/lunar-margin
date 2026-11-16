@@ -1,8 +1,8 @@
 """Verify integrated route never synthesizes a PDI or hides a failed profile."""
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable
 
 import numpy as np
 import pytest
@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from lunar_margin.app import flight_preview as module
 from lunar_margin.app.flight_preview import FlightPreviewQuery
 from lunar_margin.app.settings import Settings
-from lunar_margin.engine.descent_reference import PathResult, PdiState, R_M, surface_vector
+from lunar_margin.engine.descent_reference import R_M, PathResult, PdiState, surface_vector
 from lunar_margin.engine.doi_pdi_reference import (
     DoiPdiReference,
     PhaseState,
