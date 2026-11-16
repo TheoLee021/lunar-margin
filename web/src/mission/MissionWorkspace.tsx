@@ -4,6 +4,7 @@ import {
   GRID_TARGET_COUNT,
   visibleGridCount,
 } from '../api/viewshed'
+import { landingStart } from './liveAnalysis'
 import { MissionMetrics } from './MissionMetrics'
 import { ReviewTimeline } from './ReviewTimeline'
 import { RequirementMarginPanel } from './RequirementMarginPanel'
@@ -151,6 +152,14 @@ export function MissionWorkspace({
     () => (sunPath ? sunAt(sunPath, reviewDays) : null),
     [sunPath, reviewDays],
   )
+  const landingSun = analysis.kind === 'ready' ? analysis.data.sun : null
+  const shadowedAtLanding =
+    selected &&
+    landingSun?.lat === selected.latitude &&
+    landingSun.lon === selected.longitude &&
+    Date.parse(landingSun.series.times[0] ?? '') ===
+      Date.parse(landingStart(selection.landing)) &&
+    landingSun.series.visible[0] === false
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -386,6 +395,15 @@ export function MissionWorkspace({
                 {Math.abs(selected.longitude).toFixed(4)}°
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
+              {shadowedAtLanding && (
+                <p
+                  role="alert"
+                  className="mb-3 rounded border border-amber-400/60 bg-amber-950/40 p-3 text-xs text-amber-200"
+                >
+                  <strong>착륙 일조 경고</strong> · {selection.landing} 00:00
+                  UTC에 이 지점에서는 태양 중심이 지형에 가려집니다.
+                </p>
+              )}
               <MissionMetrics result={analysis} />
               {run && selectedCandidate ? (
                 <RequirementMarginPanel

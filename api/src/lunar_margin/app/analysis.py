@@ -130,27 +130,31 @@ def get_settings() -> Settings:
 
 @lru_cache(maxsize=2)
 def load_analysis_dem(data_dir: Path, dem_name: str = "80s_80m") -> PolarDem:
-    """DEM과 SPICE 커널을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
+    """DEM을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
     if dem_name not in DEM_SOURCES:
         raise HTTPException(status_code=422, detail="unknown DEM")
     img_source, lbl_source = DEM_SOURCES[dem_name]
     img = data_dir / "dem" / img_source.filename
     lbl = data_dir / "dem" / lbl_source.filename
-    if not img.exists() or not lbl.exists() or not (data_dir / "spice").is_dir():
+    if not img.exists() or not lbl.exists():
         raise HTTPException(
             status_code=503,
             detail="NASA data not found; run `uv run python -m lunar_margin.pipeline.fetch`",
         )
+    return PolarDem.from_files(img, lbl)
+
+
+def require_spice(data_dir: Path) -> None:
     try:
         load_kernels(data_dir / "spice")
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail=f"{error}") from error
-    return PolarDem.from_files(img, lbl)
 
 
 @lru_cache(maxsize=2)
 def _build_analyzer(data_dir: Path) -> Analyzer:
     dem = load_analysis_dem(data_dir)
+    require_spice(data_dir)
 
     def analyze(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
         return analyze_site(

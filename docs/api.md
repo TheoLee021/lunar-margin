@@ -371,6 +371,10 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 기존 `run.elapsed_seconds`는 계산 시간이며 `total_elapsed_seconds`는 결과 저장까지 포함한다.
 새 실행만 총 시간을 기록하며 과거 결과의 시간을 추측해 채우지 않는다.
 
+### POST /trajectory/descent-reference
+
+가상 PDI에서 목표와 예비 착륙지의 기준 하강 경로를 평가한다. 요청·응답과 모델 한계는 [하강 기준 모델](descent-reference.md)에 있다. `include_earth_los=false`이면 LOLA DEM만 필요하다. 지구 시선은 동일 시각의 기하학적 지구 위치와 DEM을 사용한다. LOS 계산 구간이 SPICE 커널 범위를 벗어나면 422, 필요한 데이터가 없으면 503이다.
+
 ## 날짜별 지구–달 전이
 
 `GET /trajectory/transfer?departure=2027-01-06T00:00:00Z&arrival=2027-01-10T00:00:00Z`
@@ -398,10 +402,27 @@ NASA 데이터, 30분 시간 간격으로 계산하되, 거친 격자 20,000 m �
 | `transfer`, `capture` | 출발→도착과 진입 후 좌표 표본 |
 | `moon_orbit_km` | 출발 후 29일간 달의 지구 중심 J2000 위치 표본 |
 
+전이는 SPICE 도착·출발 ET의 차이로 전파한다. 좌표 표본의 경과 초는 윤초를 포함하는 TAI 경과시간이고, `travel_time_days`는 요청한 UTC 달력 일정의 일수다.
+
+LOI 상태 경계(후속 DOI/PDI 연결을 위한 6차원 handoff):
+
+- `loi_handoff.epoch_utc`: 정확한 LOI UTC 시각(요청한 `arrival`과 동일).
+- `center="MOON"`, `inertial_frame="J2000"`, `fixed_frame="MOON_ME"`.
+- `pre_loi_j2000_km_kmps`, `post_loi_j2000_km_kmps`: 달 중심 J2000 관성좌표계에서 [x,y,z,vx,vy,vz]. 위치 단위 km, 속도 km/s.
+- `pre_loi_moon_me_m_mps`, `post_loi_moon_me_m_mps`: 같은 상태를 SPICE `sxform(J2000, MOON_ME, epoch)`의 **6×6 회전 프레임 상태변환**으로 변환한 [x,y,z,vx,vy,vz] (m, m/s). 달 회전으로 인한 속도 보정을 포함한다.
+- LOI는 같은 위치에서 순간 속도만 변하는 접선원궤도화 모델이다. Pre/post 위치가 일치하고, 속도 차이의 크기가 기존 `metrics.loi_delta_v_km_s`와 일치하도록 검증한다.
+- 이 상태는 **실제 생성된 Earth–Moon Transfer의 결과**이지, 이후 DOI/PDI나 착륙점 접근이 성립한다는 주장이 아니다. 전이 솔버는 자유롭게 궤도면을 선택하므로 착륙지·남극 궤도에 정렬되지 않을 수 있다. 지형고도, 실제 착륙선 질량, 유한추력·궤도면 변경, DOI 연료는 포함하지 않는다.
+- 내부의 달 중심 상태는 전이 솔버와 동일한 Hermite 보간 달 위치·속도를 기준으로 산출한다. 공개 좌표 표본을 차분해서 임의 속도를 만드는 방식은 사용하지 않는다. 다음 단계에서 SPICE 정확 상태와 보간 오차를 별도로 평가해야 한다.
+- #69의 현재 PDI는 가상의 목표지 기반 상태이므로 **자동으로 handoff를 연결하지 않는다**. 궤도면 정렬·DOI 전파·PDI 경계 검증을 별도 기능으로 개발한 후에만 연결 가능하다.
+
 각 좌표 표본은 `{seconds, spacecraft_km: [x,y,z], moon_km: [x,y,z]}`. 시간은 출발부터 경과한 초, 위치는 지구 중심 J2000의 km. 전이 마지막 표본과 진입 첫 표본은 동일 시각·동일 위치이며 진입에서 접선 방향을 유지하며 속력만 순간 변경한다. LOI 전후 각각 10분 구간에 5초 간격 표본을 추가한다. 확대도는 각 표본의 달 위치를 뺀 뒤 진입 궤도면에 투영한다.
 
 오류: `422` 입력 오류·비수렴·충돌 경로, `503` SPICE 파일 없음, `429` 동시 계산 한도(2건) 초과. 계산 한 건은 최대 약 20초로 제한한다. 정적 궤도로 대체하지 않는다.
 
+
+### POST /trajectory/doi-pdi-reference
+
+전이의 LOI 상태에서 목표 지점과 정렬되는 DOI/PDI 기준 궤도를 탐색한다. 요청·응답과 정렬 오차의 의미는 [DOI/PDI 기준 모델](doi-pdi-handoff.md)에 있다. 출발·도착 시각은 UTC로 정규화한다. 전이 솔버의 동시 계산 한도(2건)를 `GET /trajectory/transfer`와 공유하며, 이 경로 자체의 한도는 1건이다. 한도 초과 시 429를 반환한다.
 
 ### 후보지 탐색의 실제 지형 경사 필터
 
@@ -876,3 +897,11 @@ RF 필터가 활성화된 상태에서 RF 지표가 결측이면 적격으로 �
 
 선택 매개변수 `observer_height_m`는 지면 위 관측 높이(m, 기본 2, 0~100)이다.
 응답에 적용 높이를 포함하며 가시권, 목표점 차폐, 수평선 교차에 동일하게 적용한다.
+
+### POST /trajectory/flight-preview
+
+출발·달 궤도 진입 UTC와 목표 위경도(`latitude`, `longitude`)를 받아 궤도와 하강을 연결한다. `arrival`은 LOI 시각이다. 정렬된 PDI가 있으면 같은 위치·속도를 하강 엔진에 전달한다. `estimated_touchdown_utc`는 하강 기준 경로가 추력·연료·지형 조건을 통과한 경우의 PDI UTC + 평가된 하강 기간이다. 정렬 실패 또는 하강 조건 실패 시 null이다. 하강 기간과 착륙선 제원은 시나리오 입력이다.
+
+착륙 목표가 있는 예측은 동일한 전이·근월점에서 순간 원궤도화 기동의 방향을 변경한다. 착륙 시각에 회전한 목표와 진입 위치를 포함하는 궤도면을 구하고, 접선 방향 두 개 중 진입 속도와 더 가까운 쪽을 선택한다. `GET /trajectory/transfer`에도 선택적으로 `latitude`, `longitude`, `duration_s`를 전달하면 같은 LOI를 계산한다. 좌표 생략 시 기존 접선 원궤도화가 유지된다.
+
+하강 접근 거리는 `planned_downrange_m`(기본 240 km)이다. 연결된 비행의 `orbit.approach_error_m`는 PDI에서 궤도 진행 방향으로 이 거리만큼 앞선 지점과 착륙 시각의 목표 사이의 지표 거리다. 단독 DOI/PDI API는 기존 PDI 직하점 오차를 유지한다. `capture_delta_v_mps`는 궤도면 변경을 포함한 진입 전후 속도 벡터 차이의 크기다. 입력 질량은 PDI 시점 제원이므로 LOI·DOI 연료 공급 능력은 별도 검증 대상이다.
