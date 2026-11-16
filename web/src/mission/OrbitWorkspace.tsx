@@ -1,3 +1,4 @@
+import { approachFromUrl } from '../flight/approach'
 import { useDashboardRun } from './useDashboardRun'
 import { useState } from 'react'
 import { TransferOrbit } from './TransferOrbit'
@@ -28,8 +29,6 @@ export default function OrbitWorkspace({
   const flight = new URLSearchParams(window.location.search)
   flight.set('departure', schedule.departure)
   flight.set('arrival', schedule.landing)
-  flight.delete('lat')
-  flight.delete('lon')
   if (candidate) {
     flight.set('lat', String(candidate.lat_deg))
     flight.set('lon', String(candidate.lon_deg))
@@ -90,7 +89,12 @@ export default function OrbitWorkspace({
                 착륙까지 보기 ↗
               </a>
             )}
-            <TransferOrbit schedule={parsed.data} />
+            {(!siteId || candidate) && (
+              <TransferOrbit
+                schedule={parsed.data}
+                {...approachFromUrl(flight)}
+              />
+            )}
           </>
         ) : (
           <p role="alert" className="orbit-date-error">

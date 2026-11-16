@@ -1,3 +1,4 @@
+import { approachFromUrl, defaultApproach } from './approach'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MoonViewer, { type MoonViewerHandle } from '../moon/MoonViewer'
 import {
@@ -15,10 +16,8 @@ import {
 const demo: FlightRequest = {
   departure: '2027-01-06',
   arrival: '2027-01-10',
-  latitude: -89,
-  longitude: 30,
+  ...defaultApproach,
   alignmentToleranceM: 5000,
-  durationS: 720,
   wetMassKg: 1200,
   dryMassKg: 450,
   maxThrustN: 15000,
@@ -27,18 +26,11 @@ const demo: FlightRequest = {
 
 function initialRequest(): FlightRequest {
   const params = new URLSearchParams(window.location.search)
-  const numberParam = (key: string, fallback: number) => {
-    const raw = params.get(key)
-    if (raw === null || raw.trim() === '') return fallback
-    const value = Number(raw)
-    return Number.isFinite(value) ? value : fallback
-  }
   return {
     ...demo,
     departure: params.get('departure') ?? demo.departure,
     arrival: params.get('arrival') ?? demo.arrival,
-    latitude: numberParam('lat', demo.latitude),
-    longitude: numberParam('lon', demo.longitude),
+    ...approachFromUrl(params),
   }
 }
 
@@ -136,6 +128,17 @@ export default function FlightWorkspace() {
     return () => window.clearTimeout(timeout)
   }, [frame, playing, points.length])
   const current = points[frame]
+  const orbitQuery = new URLSearchParams(window.location.search)
+  const original = approachFromUrl(orbitQuery)
+  if (
+    original.latitude !== request.latitude ||
+    original.longitude !== request.longitude
+  ) {
+    orbitQuery.delete('site')
+    orbitQuery.set('lat', String(request.latitude))
+    orbitQuery.set('lon', String(request.longitude))
+  }
+  orbitQuery.set('descent_s', String(request.durationS))
   const fields = [
     ['latitude', '목표 위도 (°)', -90, -80],
     ['longitude', '목표 경도 (°E)', -360, 360],
@@ -149,7 +152,7 @@ export default function FlightWorkspace() {
   return (
     <main className="grid min-h-svh bg-neutral-950 text-neutral-100 md:grid-cols-[22rem_1fr]">
       <section className="space-y-4 p-5 md:max-h-svh md:overflow-auto">
-        <a className="hud-button" href={'/orbit' + window.location.search}>
+        <a className="hud-button" href={'/orbit?' + orbitQuery}>
           ← 비행 궤도
         </a>
         <h1 className="text-xl font-semibold">달 궤도에서 착륙까지</h1>
@@ -182,8 +185,18 @@ export default function FlightWorkspace() {
                   : '기준 하강 경로가 지형·연료·추력 조건을 통과했습니다.'}
             </p>
             <p>
-              목표와 시작점 거리{' '}
+              접근 경로의 목표 정렬 오차{' '}
               {(data.orbit.approach_error_m / 1000).toFixed(2)} km
+            </p>
+            <p>
+              달 진입 Δv (궤도면 변경 포함){' '}
+              {(data.capture_delta_v_mps / 1000).toFixed(2)} km/s
+            </p>
+            <p>
+              계획 감속 거리 {(data.planned_downrange_m / 1000).toFixed(0)} km
+            </p>
+            <p className="text-xs text-neutral-400">
+              착륙선 연료 평가는 동력하강 시작부터 적용됩니다.
             </p>
             <p>동력하강 시작점 도달 {utc(data.orbit.pdi.epoch_utc)}</p>
           </div>

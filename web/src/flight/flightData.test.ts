@@ -21,6 +21,8 @@ const response = {
   status: 'NO_PDI_REFERENCE',
   note: 'No aligned orbit',
   target_latitude: -89,
+  capture_delta_v_mps: 2800,
+  planned_downrange_m: 240000,
   target_longitude: 30,
   orbit: {
     model: 'TWO_BODY_REFERENCE_NO_MISSION_FEASIBILITY',

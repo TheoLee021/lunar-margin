@@ -15,25 +15,40 @@ type LoadState =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; data: TransferData }
 
-export function TransferOrbit({ schedule }: { schedule: Schedule }) {
+export function TransferOrbit({
+  schedule,
+  latitude,
+  longitude,
+  durationS,
+}: {
+  schedule: Schedule
+  latitude: number
+  longitude: number
+  durationS: number
+}) {
   const [stored, setStored] = useState<{
     key: string
     state: LoadState
   } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const { departure, landing: arrival } = schedule
-  const key = `${departure}|${arrival}|${attempt}`
+  const key = `${departure}|${arrival}|${latitude}|${longitude}|${durationS}|${attempt}`
   const state: LoadState =
     stored?.key === key ? stored.state : { kind: 'loading' }
   useEffect(() => {
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      void fetchTransfer(departure, arrival, {
-        signal: AbortSignal.any([
-          controller.signal,
-          AbortSignal.timeout(45_000),
-        ]),
-      })
+      void fetchTransfer(
+        departure,
+        arrival,
+        {
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(45_000),
+          ]),
+        },
+        { latitude, longitude, durationS },
+      )
         .then((data) => {
           if (!controller.signal.aborted)
             setStored({ key, state: { kind: 'ready', data } })
@@ -55,7 +70,7 @@ export function TransferOrbit({ schedule }: { schedule: Schedule }) {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [departure, arrival, key])
+  }, [departure, arrival, key, latitude, longitude, durationS])
   return (
     <section className="transfer-section" aria-label="지구–달 계산 궤도">
       <div className="window-toolbar">
@@ -87,7 +102,8 @@ export function TransferOrbit({ schedule }: { schedule: Schedule }) {
       <p className="orbit-note">
         선택한 날짜의 00:00 UTC 기준 · DE440 달 위치와 지구·달 중력으로
         계산합니다. 지구 주차궤도 200 km → 달 도착 고도 100 km. 출발 궤도면은
-        자동 선택하며 지상 발사·착륙은 계산하지 않습니다.
+        자동 선택합니다. 달 진입 기동은 착륙 목표({latitude}°, {longitude}°)에
+        맞춰 궤도면을 변경합니다.
       </p>
     </section>
   )

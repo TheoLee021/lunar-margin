@@ -66,6 +66,8 @@ export const FlightPreviewSchema = z.object({
     aligned_pdi_moon_me_m_mps: z.array(z.number()).length(6).nullable(),
     samples: z.array(orbitSample).min(2),
   }),
+  capture_delta_v_mps: z.number().nonnegative(),
+  planned_downrange_m: z.number().positive(),
   estimated_touchdown_utc: z.iso.datetime({ offset: true }).nullable(),
   descent_epoch_utc: z.iso.datetime({ offset: true }).nullable(),
   descent: z
