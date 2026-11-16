@@ -122,3 +122,24 @@ def moon_states(start: datetime, seconds: NDArray[np.float64]) -> NDArray[np.flo
         et = float(spiceypy.str2et(utc.strftime("%Y-%m-%dT%H:%M:%S.%f")))
         states, _ = spiceypy.spkezr("MOON", (et + seconds).tolist(), "J2000", "NONE", "EARTH")
     return np.asarray(states, dtype=np.float64)
+
+
+def inertial_moon_state_to_moon_me(
+    state_j2000_m: NDArray[np.float64], epoch: datetime
+) -> NDArray[np.float64]:
+    """Transform a Moon-CENTERED 6D J2000 state to MOON_ME at one epoch.
+
+    Position is metres, velocity metres/second. SPICE sxform includes the
+    derivative of the rotating lunar frame, unlike a 3x3 pxform rotation.
+    Kernels must already have been loaded by load_kernels.
+    """
+    state = np.asarray(state_j2000_m, dtype=np.float64)
+    if state.shape != (6,) or not np.isfinite(state).all():
+        raise ValueError("Moon-centered state must be six finite SI numbers")
+    if epoch.tzinfo is None:
+        raise ValueError("state epoch must be timezone aware")
+    moment = epoch.astimezone(UTC).replace(tzinfo=None)
+    with _SPICE_LOCK:
+        et = float(spiceypy.str2et(moment.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+        xform = np.asarray(spiceypy.sxform("J2000", "MOON_ME", et), dtype=np.float64)
+    return xform @ state
