@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchSunDirection } from '../api/sunlight'
 import type { Vector3 } from '../moon/sun'
+import { landingStart } from './liveAnalysis'
 
 export type SunDirectionState =
-  | { kind: 'loading'; direction: Vector3 | null }
+  | { kind: 'loading' }
   | { kind: 'ready'; direction: Vector3 }
   | { kind: 'error' }
 export type SunDirectionResult = SunDirectionState & { retry: () => void }
 
 /**
- * Moon-to-Sun direction (MOON_ME) at a chosen UTC instant. A different inspection
- * time changes the terrain lighting but does not change candidate ranking or eligibility.
+ * The Sun at landing, as the Moon-to-Sun direction (MOON_ME). It follows from the landing time
+ * alone, so the Moon can be lit before any candidate is selected, and stays the same Sun, hence the
+ * same sunlight map, when the selected candidate changes.
  */
-export function useSunDirection(instant: string): SunDirectionResult {
+export function useSunDirection(landing: string): SunDirectionResult {
   const [attempt, setAttempt] = useState(0)
-  const key = JSON.stringify([instant, attempt])
+  const key = JSON.stringify([landing, attempt])
   const [stored, setStored] = useState<{
     key: string
     state: SunDirectionState
@@ -25,7 +27,7 @@ export function useSunDirection(instant: string): SunDirectionResult {
     // Debounce date scrubbing like useMissionAnalysis.
     const timer = window.setTimeout(() => {
       void fetchSunDirection(
-        instant,
+        landingStart(landing),
         AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
       )
         .then(
@@ -40,14 +42,8 @@ export function useSunDirection(instant: string): SunDirectionResult {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [instant, key])
+  }, [landing, key])
   const state: SunDirectionState =
-    stored?.key === key
-      ? stored.state
-      : {
-          kind: 'loading',
-          direction:
-            stored?.state.kind === 'ready' ? stored.state.direction : null,
-        }
+    stored?.key === key ? stored.state : { kind: 'loading' }
   return { ...state, retry }
 }

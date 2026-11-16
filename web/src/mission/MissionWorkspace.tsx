@@ -4,6 +4,7 @@ import {
   GRID_TARGET_COUNT,
   visibleGridCount,
 } from '../api/viewshed'
+import { landingStart } from './liveAnalysis'
 import { MissionMetrics } from './MissionMetrics'
 import { MissionTimeline } from './MissionTimeline'
 import { RequirementMarginPanel } from './RequirementMarginPanel'
@@ -37,26 +38,6 @@ export function MissionWorkspace({
   children?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
-  // Inspect a UTC instant within the surface mission without changing its search criteria.
-  // The existing schedule is date-only; 00:00 UTC is the model's reference start.
-  const [inspection, setInspection] = useState({
-    landing: selection.landing,
-    sample: 0,
-  })
-  const sample =
-    inspection.landing === selection.landing ? inspection.sample : 0
-  const maxSample = selection.duration * 48 - 1
-  const inspectedSample = Math.max(0, Math.min(sample, maxSample))
-  const inspectedHour = inspectedSample / 2
-  const instant = new Date(
-    Date.parse(`${selection.landing}T00:00:00Z`) +
-      inspectedSample * 30 * 60_000,
-  ).toISOString()
-  const changeHour = (hour: number) =>
-    setInspection({
-      landing: selection.landing,
-      sample: Math.max(0, Math.min(Math.round(hour * 2), maxSample)),
-    })
   const result = candidates.result
   const run = result.kind === 'ready' ? result.run : null
   const [override, setOverride] = useState<{
@@ -133,17 +114,16 @@ export function MissionWorkspace({
   searchUrl.searchParams.delete('planner')
   if (run) searchUrl.searchParams.set('run', run.id)
   else searchUrl.searchParams.delete('run')
-  // One UTC instant controls both the 3D shadow map and the candidate's warning.
-  const sun = useSunDirection(instant)
-  const inspectedTimeline =
-    analysis.kind === 'ready' &&
+  // The Sun at landing (00:00 UTC) lights the Moon whether or not a candidate is selected.
+  const sun = useSunDirection(selection.landing)
+  const landingSun = analysis.kind === 'ready' ? analysis.data.sun : null
+  const shadowedAtLanding =
     selected &&
-    analysis.data.sun.lat === selected.latitude &&
-    analysis.data.sun.lon === selected.longitude &&
-    analysis.data.timeline.start === `${selection.landing}T00:00:00Z`
-      ? analysis.data.timeline
-      : null
-  const sampleVisible = inspectedTimeline?.sunVis[inspectedSample]
+    landingSun?.lat === selected.latitude &&
+    landingSun.lon === selected.longitude &&
+    Date.parse(landingSun.series.times[0] ?? '') ===
+      Date.parse(landingStart(selection.landing)) &&
+    landingSun.series.visible[0] === false
   return (
     <main className="relative h-svh overflow-hidden bg-[#050607] text-[#ebe8e2]">
       <MissionMoonViewer
@@ -182,37 +162,6 @@ export function MissionWorkspace({
             <section className="hud-section">
               <h2>미션 · UTC</h2>
               {summary}
-              <div className="mt-3 border-t border-white/10 pt-3 text-xs">
-                <label
-                  htmlFor="mission-sun-time"
-                  className="block font-semibold text-neutral-200"
-                >
-                  햇빛 시뮬레이션 시각 (UTC)
-                </label>
-                <output
-                  htmlFor="mission-sun-time"
-                  className="mt-1 block font-mono text-amber-200"
-                >
-                  {instant.slice(0, 16).replace('T', ' ')} UTC
-                </output>
-                <input
-                  id="mission-sun-time"
-                  type="range"
-                  min={0}
-                  max={maxSample}
-                  step={1}
-                  value={inspectedSample}
-                  aria-label="태양 조명 검토 시각, 30분 단위"
-                  onChange={(event) =>
-                    changeHour(Number(event.target.value) / 2)
-                  }
-                  className="mt-2 w-full"
-                />
-                <p className="mt-1 text-[10px] text-neutral-400">
-                  30분 간격 · 착륙일 00:00 UTC 기준. 선택 시각은 탐색 조건이나
-                  후보 순위를 바꾸지 않습니다.
-                </p>
-              </div>
             </section>
             {run ? (
               <section className="hud-section">
@@ -406,30 +355,13 @@ export function MissionWorkspace({
                 {Math.abs(selected.longitude).toFixed(4)}°
                 {selected.longitude < 0 ? 'W' : 'E'}
               </p>
-              {sampleVisible === false ? (
-                <div
+              {shadowedAtLanding && (
+                <p
                   role="alert"
                   className="mb-3 rounded border border-amber-400/60 bg-amber-950/40 p-3 text-xs text-amber-200"
                 >
-                  <strong>
-                    일조 경고 · 선택 시각에 태양 중심이 지형에 가려집니다.
-                  </strong>
-                  <p className="mt-1">
-                    {instant.slice(0, 16).replace('T', ' ')} UTC · 이 후보는
-                    제외하지 않으며 적격 여부와 순위도 변경하지 않습니다. 태양
-                    원반 일부의 가시성과 실제 발전 가능 여부는 별도 평가가
-                    필요합니다.
-                  </p>
-                </div>
-              ) : sampleVisible === true ? (
-                <p role="status" className="mb-3 text-xs text-emerald-300">
-                  {instant.slice(0, 16).replace('T', ' ')} UTC · 태양 중심이
-                  지형 수평선 위에 있습니다. 발전 가능 판정은 아닙니다.
-                </p>
-              ) : (
-                <p role="status" className="mb-3 text-xs text-neutral-400">
-                  이 시각의 일조 여부를 확인 중이거나 분석 데이터가 없습니다.
-                  후보를 제외하지 않습니다.
+                  <strong>착륙 일조 경고</strong> · {selection.landing} 00:00
+                  UTC에 이 지점에서는 태양 중심이 지형에 가려집니다.
                 </p>
               )}
               <MissionMetrics result={analysis} />
@@ -481,8 +413,7 @@ export function MissionWorkspace({
                     key={`${analysis.data.sun.start}/${analysis.data.sun.end}/${analysis.data.sun.lat}/${analysis.data.sun.lon}`}
                     timeline={analysis.data.timeline}
                     duration={selection.duration}
-                    hour={inspectedHour}
-                    onHourChange={changeHour}
+                    hour={0}
                     observerHeightM={analysis.data.sun.observer_height_m}
                   />
                 </section>
