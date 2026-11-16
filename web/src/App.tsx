@@ -197,6 +197,8 @@ export default function App() {
           />
         ) : (
           <MissionApp
+            onAnalysis={() => navigate('analysis')}
+            onSearch={() => navigate('search')}
             onOverview={toggleOverview}
             selection={selection}
             onSelect={(siteId) =>
@@ -235,40 +237,13 @@ export default function App() {
           />
         </Suspense>
       )}
-      {view === 'mission' ? (
-        <div className="fixed bottom-10 left-32 z-20 flex gap-2">
-          <a
-            className="hud-button"
-            href={locationFor('analysis', selection, false)}
-            onClick={(event) => {
-              if (
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return
-              event.preventDefault()
-              navigate('analysis')
-            }}
-          >
-            상세 분석
-          </a>
-          <button
-            type="button"
-            className="hud-button"
-            onClick={() => navigate('search')}
-          >
-            후보지 탐색
-          </button>
-        </div>
-      ) : null}
     </FlightConditions.Provider>
   )
 }
 
 function MissionApp({
+  onAnalysis,
+  onSearch,
   onOverview,
   selection,
   onSelect,
@@ -277,6 +252,8 @@ function MissionApp({
   onApply,
   onViewOrbit,
 }: {
+  onAnalysis: () => void
+  onSearch: () => void
   onOverview: (runId: string) => void
   selection: MissionSelection
   onSelect: (siteId: string | null) => void
@@ -345,57 +322,87 @@ function MissionApp({
       : null,
   )
   return (
-    <MissionWorkspace
-      onOverview={onOverview}
-      selection={selection}
-      analysis={live}
-      candidates={candidates}
-      sites={sites}
-      onSelect={onSelect}
-      summary={
+    <>
+      <MissionWorkspace
+        onOverview={onOverview}
+        selection={selection}
+        analysis={live}
+        candidates={candidates}
+        sites={sites}
+        onSelect={onSelect}
+        summary={
+          <button
+            type="button"
+            className="w-full rounded text-left"
+            aria-haspopup="dialog"
+            aria-controls="datePlanner"
+            aria-label="미션 날짜 비교 열기"
+            onClick={() => onPlannerChange(true)}
+          >
+            <MissionSummary selection={selection} />
+            <span className="mt-3 block text-right text-xs text-amber-400">
+              날짜 계획 보기 ↗
+            </span>
+          </button>
+        }
+        apiStatus={
+          <p data-testid="api-status">
+            {health.kind === 'loading' && 'Connecting to API…'}
+            {health.kind === 'ok' && 'API connected'}
+            {health.kind === 'error' && `API unavailable: ${health.message}`}
+          </p>
+        }
+      >
+        {planner ? (
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
+              >
+                날짜 패널을 불러오는 중입니다.
+              </div>
+            }
+          >
+            <DatePlanner
+              site={site}
+              selectedSiteId={selection.siteId}
+              schedule={selection}
+              onApply={onApply}
+              onViewOrbit={onViewOrbit}
+              onClose={() => onPlannerChange(false)}
+            />
+          </Suspense>
+        ) : null}
+      </MissionWorkspace>
+      <div className="fixed bottom-10 left-32 z-20 flex gap-2">
+        <a
+          className="hud-button"
+          href={locationFor('analysis', selection, false)}
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return
+            event.preventDefault()
+            onAnalysis()
+          }}
+        >
+          상세 분석
+        </a>
         <button
           type="button"
-          className="w-full rounded text-left"
-          aria-haspopup="dialog"
-          aria-controls="datePlanner"
-          aria-label="미션 날짜 비교 열기"
-          onClick={() => onPlannerChange(true)}
+          className="hud-button"
+          disabled={candidates.result.kind === 'loading'}
+          onClick={() => (run ? onOverview(run.id) : onSearch())}
         >
-          <MissionSummary selection={selection} />
-          <span className="mt-3 block text-right text-xs text-amber-400">
-            날짜 계획 보기 ↗
-          </span>
+          후보지 탐색
         </button>
-      }
-      apiStatus={
-        <p data-testid="api-status">
-          {health.kind === 'loading' && 'Connecting to API…'}
-          {health.kind === 'ok' && 'API connected'}
-          {health.kind === 'error' && `API unavailable: ${health.message}`}
-        </p>
-      }
-    >
-      {planner ? (
-        <Suspense
-          fallback={
-            <div
-              role="status"
-              className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
-            >
-              날짜 패널을 불러오는 중입니다.
-            </div>
-          }
-        >
-          <DatePlanner
-            site={site}
-            selectedSiteId={selection.siteId}
-            schedule={selection}
-            onApply={onApply}
-            onViewOrbit={onViewOrbit}
-            onClose={() => onPlannerChange(false)}
-          />
-        </Suspense>
-      ) : null}
-    </MissionWorkspace>
+      </div>
+    </>
   )
 }
