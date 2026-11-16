@@ -66,3 +66,26 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
     { timeout: 30000 },
   )
 })
+
+test('date search recovers when the flight solver is busy on the first request', async ({
+  page,
+}) => {
+  let attempts = 0
+  await page.route('**/trajectory/flight-preview', (route) => {
+    attempts += 1
+    if (attempts === 1)
+      return route.fulfill({
+        status: 429,
+        json: { detail: 'Reference flight computation busy' },
+      })
+    return route.continue()
+  })
+  await page.goto(
+    '/?planner=1&departure=2027-01-06&arrival=2027-01-11&duration=14&lat=-85.194602&lon=36.634114',
+  )
+  await expect(page.getByTestId('planner-touchdown')).toHaveText(
+    '2027-01-11 02:31:08 UTC',
+    { timeout: 30000 },
+  )
+  expect(attempts).toBe(2)
+})
