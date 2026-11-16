@@ -39,6 +39,15 @@ const labels = {
   POWERED_DESCENT: 'PDI → Surface · Powered Descent',
 } as const
 
+type NumericKey =
+  | 'latitude'
+  | 'longitude'
+  | 'wetMassKg'
+  | 'dryMassKg'
+  | 'maxThrustN'
+  | 'ispS'
+  | 'alignmentToleranceM'
+
 export default function FlightWorkspace() {
   const [input, setInput] = useState<FlightRequest>(initialRequest)
   const [data, setData] = useState<FlightPreview | null>(null)
@@ -94,7 +103,7 @@ export default function FlightWorkspace() {
 
   const numberField = (
     label: string,
-    key: 'latitude' | 'longitude' | 'wetMassKg' | 'dryMassKg' | 'maxThrustN' | 'ispS' | 'alignmentToleranceM',
+    key: NumericKey,
     step: string,
   ) => (
     <label className="flex flex-col gap-1 text-[11px] text-neutral-300">
@@ -117,9 +126,13 @@ export default function FlightWorkspace() {
   return (
     <main className="relative h-svh overflow-hidden bg-black text-neutral-100">
       <MoonViewer ref={moon} flightPoints={points} flightFrame={frame} />
-      <section className="hud-panel absolute left-4 top-4 z-20 max-h-[calc(100dvh-2rem)] w-[340px] max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
+      <section
+        className="hud-panel absolute left-4 top-4 z-20 max-h-[calc(100dvh-2rem)] w-[340px] max-w-[calc(100vw-2rem)] overflow-y-auto p-4"
+      >
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-base font-semibold">Lunar Flight · 3D Reference</h1>
+          <h1 className="text-base font-semibold">
+            Lunar Flight · 3D Reference
+          </h1>
           <a className="hud-button" href="/">
             Mission
           </a>
@@ -138,7 +151,10 @@ export default function FlightWorkspace() {
               className="rounded border border-white/20 bg-black/50 p-1.5"
               value={input.departure}
               onChange={(event) =>
-                setInput((value) => ({ ...value, departure: event.target.value }))
+                setInput((value) => ({
+                  ...value,
+                  departure: event.target.value,
+                }))
               }
             />
           </label>
@@ -149,7 +165,10 @@ export default function FlightWorkspace() {
               className="rounded border border-white/20 bg-black/50 p-1.5"
               value={input.arrival}
               onChange={(event) =>
-                setInput((value) => ({ ...value, arrival: event.target.value }))
+                setInput((value) => ({
+                  ...value,
+                  arrival: event.target.value,
+                }))
               }
             />
           </label>
@@ -158,7 +177,9 @@ export default function FlightWorkspace() {
           {numberField('PDI site tolerance · m', 'alignmentToleranceM', '100')}
         </div>
 
-        <h2 className="mt-4 text-xs font-semibold">Illustrative lander · at PDI</h2>
+        <h2 className="mt-4 text-xs font-semibold">
+          Illustrative lander · at PDI
+        </h2>
         <p className="mt-1 text-[10px] text-neutral-400">
           Not specifications for any CLPS provider. Customer equipment masses
           are not lander wet masses.
@@ -189,8 +210,12 @@ export default function FlightWorkspace() {
               {data.status}
             </p>
             <p>DOI Δv: {data.orbit.doi_delta_v_mps.toFixed(2)} m/s</p>
-            <p>PDI site offset: {(data.orbit.approach_error_m / 1000).toFixed(2)} km</p>
-            <p>Plane offset: {(data.orbit.plane_offset_m / 1000).toFixed(2)} km</p>
+            <p>
+              PDI site offset: {(data.orbit.approach_error_m / 1000).toFixed(2)} km
+            </p>
+            <p>
+              Plane offset: {(data.orbit.plane_offset_m / 1000).toFixed(2)} km
+            </p>
             <p>
               Descent: {data.descent?.status ?? 'Not evaluated — no aligned PDI'}
             </p>
@@ -207,10 +232,14 @@ export default function FlightWorkspace() {
         )}
       </section>
       {points.length > 0 && (
-        <section className="hud-panel absolute bottom-5 left-1/2 z-20 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 p-3 text-xs">
+        <section
+          className="hud-panel absolute bottom-5 left-1/2 z-20 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 p-3 text-xs"
+        >
           <div className="flex items-center justify-between gap-2">
             <strong>Mission Playback</strong>
-            <span className="text-neutral-400">Sample-by-sample, not real-time</span>
+            <span className="text-neutral-400">
+              Sample-by-sample, not real-time
+            </span>
           </div>
           <input
             className="mt-2 w-full"
@@ -237,7 +266,9 @@ export default function FlightWorkspace() {
               {playing ? 'Pause' : 'Play'}
             </button>
             <div className="min-w-0">
-              <p className="truncate font-medium">{current && labels[current.phase]}</p>
+              <p className="truncate font-medium">
+                {current && labels[current.phase]}
+              </p>
               <p className="font-mono text-[10px] text-neutral-400">
                 {current?.epochUtc ?? '—'}
               </p>
