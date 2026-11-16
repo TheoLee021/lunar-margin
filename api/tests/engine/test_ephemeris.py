@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta, timezone
 import numpy as np
 import pytest
 
-from lunar_margin.engine.ephemeris import body_azel, sun_direction, utc_range
+from lunar_margin.engine.ephemeris import body_azel, sun_direction, sun_directions, utc_range
 
 START = datetime(2027, 1, 1, tzinfo=UTC)
 
@@ -184,3 +184,17 @@ def test_the_sun_direction_follows_the_clock_not_the_time_zone() -> None:
 def test_the_sun_direction_needs_a_time_zone() -> None:
     with pytest.raises(ValueError, match="timezone"):
         sun_direction(datetime(2027, 1, 10))
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_the_sun_directions_of_a_range_are_the_direction_at_each_step() -> None:
+    start = datetime(2027, 1, 10, tzinfo=UTC)
+
+    directions = sun_directions(start, start + timedelta(minutes=90), 30)
+
+    # 끝 시각은 빠진다: 00:00, 00:30, 01:00
+    assert directions.shape == (3, 3)
+    for i, direction in enumerate(directions):
+        assert tuple(direction) == pytest.approx(
+            sun_direction(start + timedelta(minutes=30 * i)), abs=1e-9
+        )

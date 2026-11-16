@@ -26,6 +26,7 @@ from lunar_margin.app.sunlight import (
     detail_levels,
     get_renderer,
     get_sun_finder,
+    get_sun_path_finder,
     make_renderer,
     sunlight_grid,
     wide_sunlight_grid,
@@ -374,6 +375,108 @@ def test_the_sun_direction_without_spice_kernels_is_503_not_500(tmp_path: Path) 
     )
 
     assert response.status_code == 503
+
+
+Asked = list[tuple[datetime, datetime, int]]
+
+
+def sun_path_client(asked: Asked) -> TestClient:
+    def finder(start: datetime, end: datetime, step_minutes: int) -> NDArray[np.float64]:
+        asked.append((start, end, step_minutes))
+        return np.array([[0.6, -0.8, 0.0000004], [0.0, -0.6, -0.8]])
+
+    app = create_app(Settings())
+    app.dependency_overrides[get_sun_path_finder] = lambda: finder
+    return TestClient(app)
+
+
+def test_the_sun_directions_of_a_range_are_one_moon_me_vector_per_step() -> None:
+    asked: Asked = []
+
+    # 서울 시각 09:00~10:00 = 00:00~01:00 UTC
+    response = sun_path_client(asked).get(
+        "/sunlight/sun-directions",
+        params={
+            "start": "2027-01-10T09:00:00+09:00",
+            "end": "2027-01-10T10:00:00+09:00",
+            "step_minutes": "30",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "start": "2027-01-10T00:00:00Z",
+        "end": "2027-01-10T01:00:00Z",
+        "step_minutes": 30,
+        "directions": [[0.6, -0.8, 0.0], [0.0, -0.6, -0.8]],
+    }
+    assert "max-age" in response.headers["cache-control"]
+    assert asked == [(datetime(2027, 1, 10, tzinfo=UTC), datetime(2027, 1, 10, 1, tzinfo=UTC), 30)]
+
+
+def test_the_sun_directions_step_defaults_to_30_minutes() -> None:
+    asked: Asked = []
+
+    response = sun_path_client(asked).get(
+        "/sunlight/sun-directions",
+        params={"start": "2027-01-10T00:00:00Z", "end": "2027-01-11T00:00:00Z"},
+    )
+
+    assert response.json()["step_minutes"] == 30
+    assert asked[0][2] == 30
+
+
+DAY = {"start": "2027-01-10T00:00:00Z", "end": "2027-01-11T00:00:00Z"}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"end": DAY["end"]},  # 시작 누락
+        {"start": DAY["start"]},  # 끝 누락
+        {**DAY, "start": "2027-01-10T00:00:00"},  # 타임존 없음
+        {"start": DAY["end"], "end": DAY["start"]},  # 끝이 시작보다 앞
+        {"start": DAY["start"], "end": DAY["start"]},  # 빈 구간
+        {**DAY, "step_minutes": "4"},
+        {**DAY, "step_minutes": "361"},
+        {**DAY, "end": "2031-01-10T00:00:00Z", "step_minutes": "360"},  # 3년 초과
+        {**DAY, "end": "2029-01-10T00:00:00Z", "step_minutes": "5"},  # 표본 100,000개 초과
+        {**DAY, "lat": "-89.7"},  # 모르는 파라미터
+    ],
+)
+def test_an_unusable_range_is_422(params: dict[str, str]) -> None:
+    asked: Asked = []
+
+    response = sun_path_client(asked).get("/sunlight/sun-directions", params=params)
+
+    assert response.status_code == 422
+    assert asked == []
+
+
+def test_the_sun_directions_without_spice_kernels_are_503_not_500(tmp_path: Path) -> None:
+    app = create_app(Settings())
+    app.dependency_overrides[get_settings] = lambda: Settings(data_dir=tmp_path)
+
+    response = TestClient(app).get("/sunlight/sun-directions", params=DAY)
+
+    assert response.status_code == 503
+
+
+@pytest.mark.usefixtures("spice_kernels")
+def test_a_mission_of_sun_directions_matches_the_single_moment_endpoint(data_dir: Path) -> None:
+    app = create_app(Settings())
+    app.dependency_overrides[get_settings] = lambda: Settings(data_dir=data_dir)
+    client = TestClient(app)
+
+    path = client.get(
+        "/sunlight/sun-directions",
+        params={"start": "2027-01-10T00:00:00Z", "end": "2027-02-07T00:00:00Z"},
+    ).json()
+    later = client.get("/sunlight/sun-direction", params={"time": "2027-01-13T06:30:00Z"}).json()
+
+    # 28일을 30분 간격으로: 1,344개. D+3 06:30은 3 * 48 + 13 = 157번째 표본
+    assert len(path["directions"]) == 1344
+    assert path["directions"][157] == pytest.approx([later["x"], later["y"], later["z"]], abs=2e-6)
 
 
 # 넓은 지도: 200 m 격자(극에서 +-15 km). 좁은 지도(+-5 km)의 DEM에는 없는 둑이 y 10.0~10.2 km에 있다

@@ -27,15 +27,14 @@ MAX_SPAN = timedelta(days=366 * 3)
 MAX_SAMPLES = 100_000
 
 
-class AnalysisQuery(BaseModel):
+class SampledRange(BaseModel):
+    """[start, end)를 step_minutes 간격으로 나눈 표본 시각들. 쿼리 모델이 물려받아 쓴다."""
+
     model_config = ConfigDict(extra="forbid")
 
-    lat: float = Field(ge=-90.0, le=-80.0)
-    lon: float = Field(ge=-360.0, le=360.0)
     start: AwareDatetime
     end: AwareDatetime
     step_minutes: int = Field(default=30, ge=5, le=360)
-    observer_height_m: float = Field(default=0.0, ge=0.0, le=100.0)
 
     @model_validator(mode="after")
     def _check_range(self) -> Self:
@@ -47,6 +46,12 @@ class AnalysisQuery(BaseModel):
         if samples > MAX_SAMPLES:
             raise ValueError(f"too many samples ({samples} > {MAX_SAMPLES}); raise step_minutes")
         return self
+
+
+class AnalysisQuery(SampledRange):
+    lat: float = Field(ge=-90.0, le=-80.0)
+    lon: float = Field(ge=-360.0, le=360.0)
+    observer_height_m: float = Field(default=0.0, ge=0.0, le=100.0)
 
 
 class Metrics(BaseModel):
