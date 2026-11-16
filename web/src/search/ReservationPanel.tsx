@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ApiError } from '../api/client'
 import type { MissionRequest } from '../api/candidates'
 import {
   cancelReservation,
@@ -20,9 +21,11 @@ export function ReservationPanel({
   mission,
   selected,
   onChanged,
+  embedded = false,
 }: {
   mission: MissionRequest | null
   selected: CandidateAvailability | null
+  embedded?: boolean
   onChanged: () => void
 }) {
   const [company, setCompany] = useState('')
@@ -50,7 +53,13 @@ export function ReservationPanel({
       await action()
     } catch (cause: unknown) {
       setError(
-        cause instanceof Error ? cause.message : '예약 요청에 실패했습니다',
+        embedded
+          ? cause instanceof ApiError && cause.status === 409
+            ? 'This site has already been reserved for those dates.'
+            : 'Couldn’t confirm the reservation. Check availability and try again.'
+          : cause instanceof Error
+            ? cause.message
+            : '예약 요청에 실패했습니다',
       )
     } finally {
       setBusy(false)
@@ -69,7 +78,11 @@ export function ReservationPanel({
           landing_date: mission.landing_date,
           mission_duration_days: mission.mission_duration_days,
         })
-        setMessage(`${selected.cell_id} 예약을 확정했습니다.`)
+        setMessage(
+          embedded
+            ? `Reservation confirmed for ${selected.cell_id}.`
+            : `${selected.cell_id} 예약을 확정했습니다.`,
+        )
       } finally {
         onChanged()
       }
@@ -90,19 +103,23 @@ export function ReservationPanel({
     })
   }
 
+  const Container = embedded ? 'section' : 'details'
   return (
-    <details className="rounded-xl border border-white/10 bg-[#101419]/95 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-neutral-100">
-        예약 관리
-      </summary>
+    <Container className="rounded-xl border border-white/10 bg-[#101419]/95 p-4">
+      {!embedded && (
+        <summary className="cursor-pointer text-sm font-semibold text-neutral-100">
+          예약 관리
+        </summary>
+      )}
       <p className="mt-3 text-xs leading-5 text-neutral-400">
-        공개 데모로 누구나 예약을 확정하거나 취소할 수 있습니다. 같은 500 × 500m
-        격자의 겹치는 기간은 중복 예약할 수 없습니다.
+        {embedded
+          ? 'Anyone can book or cancel a reservation in this public demo. A 500 m grid cell can only be booked once for any given date.'
+          : '공개 데모로 누구나 예약을 확정하거나 취소할 수 있습니다. 같은 500 × 500m 격자의 겹치는 기간은 중복 예약할 수 없습니다.'}
       </p>
       <form className="mt-4 flex flex-col gap-3" onSubmit={confirm}>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="text-xs text-neutral-400">
-            회사명
+            {embedded ? 'Company name' : '회사명'}
             <input
               className={inputClass}
               value={company}
@@ -113,7 +130,7 @@ export function ReservationPanel({
             />
           </label>
           <label className="text-xs text-neutral-400">
-            임무명
+            {embedded ? 'Mission name' : '임무명'}
             <input
               className={inputClass}
               value={missionName}
@@ -126,25 +143,30 @@ export function ReservationPanel({
         </div>
         <div className="rounded-lg border border-white/10 p-3 text-xs leading-6 text-neutral-300">
           <p>
-            선택 격자:{' '}
+            {embedded ? 'Grid cell:' : '선택 격자:'}{' '}
             <span className="font-mono text-neutral-100">
-              {selected?.cell_id ?? '후보 표에서 ID를 선택하세요'}
+              {selected?.cell_id ??
+                (embedded ? 'Checking site…' : '후보 표에서 ID를 선택하세요')}
             </span>
           </p>
           {mission ? (
             <p>
-              착륙일 {mission.landing_date} 00:00 UTC부터{' '}
-              {mission.mission_duration_days}일 동안 예약
+              {embedded
+                ? `Landing on ${mission.landing_date} at 00:00 UTC for ${mission.mission_duration_days} days`
+                : `착륙일 ${mission.landing_date} 00:00 UTC부터 ${mission.mission_duration_days}일 동안 예약`}
             </p>
           ) : (
             <p className="text-amber-300">
-              이 실행에는 임무 입력이 없습니다. 위에서 착륙일과 표면 임무 기간을
-              지정해 탐색한 뒤 예약하세요.
+              {embedded
+                ? 'Choose a landing date and mission duration before booking.'
+                : '이 실행에는 임무 입력이 없습니다. 위에서 착륙일과 표면 임무 기간을 지정해 탐색한 뒤 예약하세요.'}
             </p>
           )}
           {selected?.status === 'reserved' ? (
             <p className="text-amber-300">
-              예약됨 · 이 기간에는 확정할 수 없습니다.
+              {embedded
+                ? 'This site is already booked for these dates.'
+                : '예약됨 · 이 기간에는 확정할 수 없습니다.'}
             </p>
           ) : null}
         </div>
@@ -159,23 +181,25 @@ export function ReservationPanel({
             selected?.status !== 'available'
           }
         >
-          선택 격자 예약 확정
+          {embedded ? 'Confirm reservation' : '선택 격자 예약 확정'}
         </button>
       </form>
       <div className="mt-4 flex flex-col gap-3">
-        <button
-          className={`${buttonClass} self-start`}
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void operate(() => load(0))
-          }}
-        >
-          예약 이력 조회
-        </button>
+        {!embedded && (
+          <button
+            className={`${buttonClass} self-start`}
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void operate(() => load(0))
+            }}
+          >
+            예약 이력 조회
+          </button>
+        )}
         {busy ? (
           <p role="status" className="text-xs text-neutral-400">
-            예약 요청 처리 중…
+            {embedded ? 'Processing your request…' : '예약 요청 처리 중…'}
           </p>
         ) : null}
         {error ? (
@@ -239,6 +263,6 @@ export function ReservationPanel({
           </button>
         ) : null}
       </div>
-    </details>
+    </Container>
   )
 }

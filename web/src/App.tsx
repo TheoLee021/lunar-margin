@@ -16,6 +16,7 @@ const DatePlanner = lazy(() =>
 )
 const AnalysisWorkspace = lazy(() => import('./AnalysisWorkspace'))
 const OrbitWorkspace = lazy(() => import('./mission/OrbitWorkspace'))
+const CandidateOverview = lazy(() => import('./search/CandidateOverview'))
 const SearchWorkspace = lazy(() => import('./search/SearchWorkspace'))
 const INITIAL_SELECTION: MissionSelection = {
   departure: '2027-01-06',
@@ -27,7 +28,13 @@ type View = 'mission' | 'analysis' | 'orbit' | 'search' | 'flight'
 type HealthState =
   { kind: 'loading' } | { kind: 'ok' } | { kind: 'error'; message: string }
 
+function overviewRun() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('overview') === '1' ? params.get('run') : null
+}
+
 function currentView(): View {
+  if (overviewRun()) return 'mission'
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
   if (window.location.pathname.replace(/\/+$/, '') === '/flight')
     return 'flight'
@@ -85,6 +92,7 @@ function locationFor(
 }
 
 export default function App() {
+  const [panelRun, setPanelRun] = useState(overviewRun)
   const [view, setView] = useState<View>(currentView)
   const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
@@ -93,6 +101,7 @@ export default function App() {
   )
   useEffect(() => {
     const pop = () => {
+      setPanelRun(overviewRun())
       setView(currentView())
       setPlanner(
         new URLSearchParams(window.location.search).get('planner') === '1',
@@ -109,6 +118,21 @@ export default function App() {
       locationFor(view, selection, planner),
     )
   }, [view, selection, planner])
+  function toggleOverview(runId: string | null) {
+    const url = new URL(
+      locationFor('mission', selection, false),
+      window.location.origin,
+    )
+    if (runId) {
+      url.searchParams.set('run', runId)
+      url.searchParams.set('overview', '1')
+    } else {
+      url.searchParams.delete('overview')
+    }
+    window.history.pushState(null, '', url)
+    setPanelRun(runId)
+    setPlanner(false)
+  }
   function navigate(
     nextView: View,
     openPlanner = false,
@@ -173,6 +197,9 @@ export default function App() {
           />
         ) : (
           <MissionApp
+            onAnalysis={() => navigate('analysis')}
+            onSearch={() => navigate('search')}
+            onOverview={toggleOverview}
             selection={selection}
             onSelect={(siteId) =>
               setSelection((current) => ({ ...current, siteId }))
@@ -201,40 +228,23 @@ export default function App() {
           />
         )}
       </Suspense>
-      {view === 'mission' ? (
-        <div className="fixed bottom-10 left-32 z-20 flex gap-2">
-          <a
-            className="hud-button"
-            href={locationFor('analysis', selection, false)}
-            onClick={(event) => {
-              if (
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return
-              event.preventDefault()
-              navigate('analysis')
-            }}
-          >
-            상세 분석
-          </a>
-          <button
-            type="button"
-            className="hud-button"
-            onClick={() => navigate('search')}
-          >
-            후보지 탐색
-          </button>
-        </div>
-      ) : null}
+      {view === 'mission' && panelRun && (
+        <Suspense fallback={null}>
+          <CandidateOverview
+            key={panelRun}
+            runId={panelRun}
+            onClose={() => toggleOverview(null)}
+          />
+        </Suspense>
+      )}
     </FlightConditions.Provider>
   )
 }
 
 function MissionApp({
+  onAnalysis,
+  onSearch,
+  onOverview,
   selection,
   onSelect,
   planner,
@@ -242,6 +252,9 @@ function MissionApp({
   onApply,
   onViewOrbit,
 }: {
+  onAnalysis: () => void
+  onSearch: () => void
+  onOverview: (runId: string) => void
   selection: MissionSelection
   onSelect: (siteId: string | null) => void
   planner: boolean
@@ -309,56 +322,87 @@ function MissionApp({
       : null,
   )
   return (
-    <MissionWorkspace
-      selection={selection}
-      analysis={live}
-      candidates={candidates}
-      sites={sites}
-      onSelect={onSelect}
-      summary={
+    <>
+      <MissionWorkspace
+        onOverview={onOverview}
+        selection={selection}
+        analysis={live}
+        candidates={candidates}
+        sites={sites}
+        onSelect={onSelect}
+        summary={
+          <button
+            type="button"
+            className="w-full rounded text-left"
+            aria-haspopup="dialog"
+            aria-controls="datePlanner"
+            aria-label="미션 날짜 비교 열기"
+            onClick={() => onPlannerChange(true)}
+          >
+            <MissionSummary selection={selection} />
+            <span className="mt-3 block text-right text-xs text-amber-400">
+              날짜 계획 보기 ↗
+            </span>
+          </button>
+        }
+        apiStatus={
+          <p data-testid="api-status">
+            {health.kind === 'loading' && 'Connecting to API…'}
+            {health.kind === 'ok' && 'API connected'}
+            {health.kind === 'error' && `API unavailable: ${health.message}`}
+          </p>
+        }
+      >
+        {planner ? (
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
+              >
+                날짜 패널을 불러오는 중입니다.
+              </div>
+            }
+          >
+            <DatePlanner
+              site={site}
+              selectedSiteId={selection.siteId}
+              schedule={selection}
+              onApply={onApply}
+              onViewOrbit={onViewOrbit}
+              onClose={() => onPlannerChange(false)}
+            />
+          </Suspense>
+        ) : null}
+      </MissionWorkspace>
+      <div className="fixed bottom-10 left-32 z-20 flex gap-2">
+        <a
+          className="hud-button"
+          href={locationFor('analysis', selection, false)}
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return
+            event.preventDefault()
+            onAnalysis()
+          }}
+        >
+          상세 분석
+        </a>
         <button
           type="button"
-          className="w-full rounded text-left"
-          aria-haspopup="dialog"
-          aria-controls="datePlanner"
-          aria-label="미션 날짜 비교 열기"
-          onClick={() => onPlannerChange(true)}
+          className="hud-button"
+          disabled={candidates.result.kind === 'loading'}
+          onClick={() => (run ? onOverview(run.id) : onSearch())}
         >
-          <MissionSummary selection={selection} />
-          <span className="mt-3 block text-right text-xs text-amber-400">
-            날짜 계획 보기 ↗
-          </span>
+          후보지 탐색
         </button>
-      }
-      apiStatus={
-        <p data-testid="api-status">
-          {health.kind === 'loading' && 'Connecting to API…'}
-          {health.kind === 'ok' && 'API connected'}
-          {health.kind === 'error' && `API unavailable: ${health.message}`}
-        </p>
-      }
-    >
-      {planner ? (
-        <Suspense
-          fallback={
-            <div
-              role="status"
-              className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
-            >
-              날짜 패널을 불러오는 중입니다.
-            </div>
-          }
-        >
-          <DatePlanner
-            site={site}
-            selectedSiteId={selection.siteId}
-            schedule={selection}
-            onApply={onApply}
-            onViewOrbit={onViewOrbit}
-            onClose={() => onPlannerChange(false)}
-          />
-        </Suspense>
-      ) : null}
-    </MissionWorkspace>
+      </div>
+    </>
   )
 }

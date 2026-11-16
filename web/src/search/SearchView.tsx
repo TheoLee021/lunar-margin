@@ -202,6 +202,10 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
   const runId =
     picked ?? (runs.status === 'ok' ? (runs.data[0]?.id ?? null) : null)
   if (runId === null) return <EmptyRuns />
+  const overviewUrl = new URL(window.location.href)
+  overviewUrl.searchParams.set('view', 'search')
+  overviewUrl.searchParams.set('overview', '1')
+  overviewUrl.searchParams.set('run', runId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -230,6 +234,9 @@ function SavedRuns({ initialRunId }: { initialRunId: string | null }) {
           />
         )}
       </header>
+      <a className="hud-button self-start" href={overviewUrl.href}>
+        후보지 한눈에 보기
+      </a>
       <RunScreen key={runId} runId={runId} />
     </div>
   )
