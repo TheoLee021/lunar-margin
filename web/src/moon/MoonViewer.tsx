@@ -25,6 +25,7 @@ interface MoonViewerProps {
   viewshed?: Viewshed | null
   flightPoints?: readonly FlightPoint[]
   flightFrame?: number
+  landerPreviewSite?: LunarLocation | null
   ref?: Ref<MoonViewerHandle>
   /** Labelled points such as candidate landing sites. */
   markers?: readonly MoonMarker[]
@@ -51,6 +52,7 @@ export default function MoonViewer({
   viewshed = null,
   flightPoints = NO_FLIGHT,
   flightFrame = 0,
+  landerPreviewSite = null,
   markers = NO_MARKERS,
   selectedMarkerId = null,
   onMarkerSelect,
@@ -91,6 +93,10 @@ export default function MoonViewer({
   useEffect(() => {
     if (ready) sceneRef.current?.setFlightFrame(flightFrame)
   }, [ready, flightFrame, flightPoints])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setLanderPreviewSite(landerPreviewSite)
+  }, [ready, landerPreviewSite?.lat, landerPreviewSite?.lon, landerPreviewSite?.surfaceHeightM])
 
   useImperativeHandle(
     ref,
