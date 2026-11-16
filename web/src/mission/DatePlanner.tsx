@@ -1,13 +1,14 @@
+import { usePricingSettings } from './usePricingSettings'
+import { TransferOrbit } from './TransferOrbit'
 import { PlannerTouchdown } from './PlannerTouchdown'
 import { useFlightPlan } from '../flight/flightPlan'
 import { useEffect, useRef, useState } from 'react'
-import { dayOf, iso, short } from './missionDates'
+import { dayOf, short } from './missionDates'
 import { MissionCharts } from './MissionCharts'
 import { demoDateScore } from './demoDateScore'
 import type { Schedule } from './types'
-import { DateSchema, ScheduleSchema } from './scheduleSchema'
+import { ScheduleSchema } from './scheduleSchema'
 import { PriceGrid, type DepartureStatus } from './PriceGrid'
-import { LaunchDeparture } from './LaunchDeparture'
 import {
   fetchLaunchSchedule,
   departureAvailability,
@@ -35,6 +36,7 @@ export function DatePlanner({
   const ref = useRef<HTMLDialogElement>(null)
   const [draft, setDraft] = useState(schedule)
   const [slope, setSlope] = useState(schedule.maxSlope?.toString() ?? '')
+  const settings = usePricingSettings(slope, setSlope)
   const maxSlope = slope === '' ? null : Number(slope)
   const samePeriod =
     draft.landing === schedule.landing && draft.duration === schedule.duration
@@ -80,6 +82,8 @@ export function DatePlanner({
     departureStatus.unavailable
   const canApply =
     (maxSlope === null || (maxSlope > 0 && maxSlope <= 90)) &&
+    settings.valid &&
+    settings.sourceReady &&
     !departureUnavailable &&
     availability(draft.departure) === 'scheduled' &&
     transitPossible
@@ -96,13 +100,6 @@ export function DatePlanner({
       trigger?.focus()
     }
   }, [])
-  function shiftAnchors(step: number) {
-    setAnchors((a) => ({
-      departure: iso(dayOf(a.departure) + step),
-      landing: iso(dayOf(a.landing) + step),
-    }))
-  }
-
   function selectLanding(landing: string) {
     const departure = draft.departure
     setDraft((d) => ({ ...d, departure, landing }))
@@ -111,7 +108,9 @@ export function DatePlanner({
   return (
     <dialog
       id="datePlanner"
+      lang="en"
       ref={ref}
+      className="date-compare"
       aria-labelledby="plannerTitle"
       onCancel={onClose}
       onClick={(e) => {
@@ -129,130 +128,56 @@ export function DatePlanner({
       <header className="planner-header">
         <div>
           <h2 id="plannerTitle">
-            미션 날짜 <span className="tag">UTC</span>
+            Date grid and flight trajectory <span className="tag">UTC</span>
           </h2>
-          <p className="hint">
-            선택한 날짜의 00:00 UTC에 달 궤도에 진입하며, 예상 표면 착륙 시각은
-            하강 궤도로 계산합니다.
-          </p>
         </div>
         <button
           type="button"
           className="close-planner"
           onClick={onClose}
-          aria-label="날짜 패널 닫기"
+          aria-label="Close date planner"
         >
           ✕
         </button>
       </header>
-      <div className="planner-layout">
+      <div className="planner-layout date-comparison-body">
         <div className="planner-primary">
           <section className="window-section">
             <div className="window-toolbar">
-              <div>
-                <h3>출발일 × 착륙일</h3>
-                <p>500m 격자 평균 예상 비용 · USD million</p>
-              </div>
-              <div className="week-nav">
-                <button
-                  type="button"
-                  aria-label="기준일 하루 이전"
-                  onClick={() => shiftAnchors(-1)}
-                >
-                  ←
-                </button>
-                <span>{anchors.departure.slice(0, 7)} · ±2일</span>
-                <button
-                  type="button"
-                  aria-label="기준일 하루 이후"
-                  onClick={() => shiftAnchors(1)}
-                >
-                  →
-                </button>
-              </div>
-            </div>
-            <LaunchDeparture
-              data={launchData}
-              error={launchError}
-              onRetry={() => setLaunchRevision((v) => v + 1)}
-              selectedId={draft.launchId ?? null}
-              onClear={() => setDraft((d) => ({ ...d, launchId: null }))}
-              onSelect={(launch) => {
-                const departure = launch.departure_date
-                if (!departure) return
-                setAnchors((a) => ({ ...a, departure }))
-                setDraft((d) => ({ ...d, departure, launchId: launch.id }))
-              }}
-            />
-            <div className="date-anchors">
-              <label>
-                기준 출발일 · UTC
-                <input
-                  type="date"
-                  value={anchors.departure}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    if (DateSchema.safeParse(value).success) {
-                      setFormError('')
-                      setAnchors((a) => ({ ...a, departure: value }))
-                      setDraft((d) => ({ ...d, departure: value }))
-                    } else setFormError('유효한 출발일을 입력하세요.')
-                  }}
-                />
-              </label>
-              <span>→</span>
-              <label>
-                기준 착륙일 · UTC
-                <input
-                  type="date"
-                  value={anchors.landing}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    if (DateSchema.safeParse(value).success) {
-                      setFormError('')
-                      setAnchors((a) => ({ ...a, landing: value }))
-                      setDraft((d) => ({ ...d, landing: value }))
-                    } else setFormError('유효한 착륙일을 입력하세요.')
-                  }}
-                />
-              </label>
-              <label>
-                착륙 후 표면 임무
-                <select
-                  value={draft.duration}
-                  onChange={(e) => {
-                    const duration = Number(e.target.value)
-                    setDraft((d) => ({ ...d, duration }))
-                  }}
-                >
-                  {[7, 14, 28].map((d) => (
-                    <option key={d} value={d}>
-                      {d}일
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <h3>Estimated cost (USD millions)</h3>
             </div>
             <PriceGrid
               departures={departures}
               landings={landings}
               draft={draft}
               availability={availability}
-              slope={slope}
-              onSlopeChange={setSlope}
+              settings={settings}
               onDepartureStatus={setDepartureStatus}
               onSelect={(departure, landing) =>
                 setDraft((s) => ({ ...s, departure, landing }))
               }
             />
-            {departureUnavailable ? (
+            {settings.sourceError || !settings.valid ? (
+              <p role="alert">Unable to use the supplied pricing conditions.</p>
+            ) : null}
+            {launchError ? (
+              <p role="alert">
+                Unable to load launch dates.{' '}
+                <button
+                  type="button"
+                  onClick={() => setLaunchRevision((v) => v + 1)}
+                >
+                  Try again
+                </button>
+              </p>
+            ) : departureUnavailable ? (
               <p className="hint" role="status">
-                선택한 출발일의 발사 일정이 없습니다.
+                No launch is scheduled for the selected departure date.
               </p>
             ) : availability(draft.departure) !== 'scheduled' ? (
               <p className="hint" role="status">
-                출발일의 발사 일정을 확인해야 일정을 적용할 수 있습니다.
-                날짜표는 공개된 발사 예정일만 활성화합니다.
+                A published launch date is required to apply this schedule.
+                Select an available departure in the grid.
               </p>
             ) : null}
             {formError ? (
@@ -261,15 +186,30 @@ export function DatePlanner({
               </p>
             ) : null}
           </section>
+          {validDraft &&
+            (samePeriod && selectedSiteId && !site ? (
+              <p role="status">Loading landing site coordinates</p>
+            ) : (
+              <TransferOrbit
+                active
+                schedule={draft}
+                latitude={plan.request.latitude}
+                longitude={plan.request.longitude}
+                durationS={plan.request.durationS}
+              />
+            ))}
           {validDraft ? (
             <>
-              <MissionCharts score={score} onLanding={selectLanding} />
+              <details className="date-analysis">
+                <summary>Surface mission analysis by arrival date</summary>
+                <MissionCharts score={score} onLanding={selectLanding} />
+              </details>
             </>
           ) : (
             <section className="group" role="status">
-              <h2>일정을 확인하세요</h2>
+              <h2>Check your dates</h2>
               <p className="hint">
-                착륙일을 출발일 이후로 선택하면 일정 분석이 표시됩니다.
+                Choose an arrival date after departure to see the analysis.
               </p>
             </section>
           )}
@@ -278,7 +218,7 @@ export function DatePlanner({
       <footer className="planner-footer">
         {validDraft &&
           (samePeriod && selectedSiteId && !site ? (
-            <p role="status">착륙 후보 좌표 확인 중</p>
+            <p role="status">Loading landing site coordinates</p>
           ) : (
             <PlannerTouchdown
               key={JSON.stringify(plan.request)}
@@ -287,8 +227,8 @@ export function DatePlanner({
           ))}
         {validDraft && !transitPossible ? (
           <p role="status">
-            전이는 3~150일이어야 합니다. 현재{' '}
-            {dayOf(draft.landing) - dayOf(draft.departure)}일입니다.
+            Transit must take 3 to 150 days. Selected duration:{' '}
+            {dayOf(draft.landing) - dayOf(draft.departure)} days.
           </p>
         ) : null}
         <div>
@@ -304,7 +244,7 @@ export function DatePlanner({
               if (result.success) onViewOrbit(result.data)
             }}
           >
-            이 일정의 궤도 보기 ↗
+            View trajectory details ↗
           </button>
           <button
             type="button"
@@ -317,11 +257,11 @@ export function DatePlanner({
                 onApply({ ...result.data, maxSlope })
               } else
                 setFormError(
-                  '착륙일은 출발일 이후여야 하며 임무 기간은 7·14·28일이어야 합니다.',
+                  'Choose an arrival date after departure and a surface mission of 7, 14, or 28 days.',
                 )
             }}
           >
-            일정 적용 <span>↗</span>
+            Apply schedule <span>↗</span>
           </button>
         </div>
       </footer>

@@ -33,6 +33,11 @@ function overviewRun() {
   return params.get('overview') === '1' ? params.get('run') : null
 }
 
+function plannerIsOpen() {
+  const value = new URLSearchParams(window.location.search).get('planner')
+  return value === '1' || value === 'compare'
+}
+
 function currentView(): View {
   if (overviewRun()) return 'mission'
   if (window.location.pathname.replace(/\/+$/, '') === '/orbit') return 'orbit'
@@ -96,16 +101,12 @@ export default function App() {
   const [view, setView] = useState<View>(currentView)
   const [override, apply] = useState<FlightOverride | null>(null)
   const [selection, setSelection] = useState(initialSelection)
-  const [planner, setPlanner] = useState(
-    () => new URLSearchParams(window.location.search).get('planner') === '1',
-  )
+  const [planner, setPlanner] = useState(plannerIsOpen)
   useEffect(() => {
     const pop = () => {
       setPanelRun(overviewRun())
       setView(currentView())
-      setPlanner(
-        new URLSearchParams(window.location.search).get('planner') === '1',
-      )
+      setPlanner(plannerIsOpen())
     }
     window.addEventListener('popstate', pop)
     return () => window.removeEventListener('popstate', pop)
@@ -336,12 +337,12 @@ function MissionApp({
             className="w-full rounded text-left"
             aria-haspopup="dialog"
             aria-controls="datePlanner"
-            aria-label="미션 날짜 비교 열기"
+            aria-label="Compare dates and trajectory"
             onClick={() => onPlannerChange(true)}
           >
             <MissionSummary selection={selection} />
             <span className="mt-3 block text-right text-xs text-amber-400">
-              날짜 계획 보기 ↗
+              Compare dates and trajectory ↗
             </span>
           </button>
         }
@@ -360,7 +361,7 @@ function MissionApp({
                 role="status"
                 className="hud-panel absolute bottom-20 left-4 p-3 text-xs"
               >
-                날짜 패널을 불러오는 중입니다.
+                Loading date comparison…
               </div>
             }
           >

@@ -122,6 +122,8 @@ export async function requestExample(
     },
   )
   if (!response.ok)
-    throw new Error(`하강 예시 계산 실패 (HTTP ${response.status})`)
+    throw new Error(
+      `Unable to calculate the example descent (HTTP ${response.status})`,
+    )
   return ExampleDescentSchema.parse(await response.json()).results[0].path
 }
