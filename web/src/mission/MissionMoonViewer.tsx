@@ -66,6 +66,10 @@ export function MissionMoonViewer({
   )
   const selected = sites.find((site) => site.id === selection.siteId)
   const [detail, setDetail] = useState(false)
+  const [showLander, setShowLander] = useState(false)
+  const landerSite = selected
+    ? { lat: selected.latitude, lon: selected.longitude }
+    : null
   const [attempt, retry] = useState(0)
   const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
   const lon = detail ? (observer?.lon ?? selected?.longitude) : undefined
@@ -118,6 +122,7 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
+          landerPreviewSite={showLander ? landerSite : null}
           viewshed={detail ? current?.map : null}
           markers={markers}
           selectedMarkerId={selection.siteId}
@@ -136,6 +141,16 @@ export function MissionMoonViewer({
         />
       </div>
       <div className="absolute right-4 top-4 flex gap-2">
+        <button
+          type="button"
+          className="hud-button"
+          disabled={!selected}
+          aria-pressed={showLander && !!selected}
+          title="선택 후보지에 개념 3D 착륙선 표시 · 실제 착륙 성공을 의미하지 않음"
+          onClick={() => setShowLander((value) => !value)}
+        >
+          {showLander && selected ? '착륙선 숨기기' : '3D 착륙선 보기'}
+        </button>
         <button
           type="button"
           className="hud-button"
@@ -182,6 +197,11 @@ export function MissionMoonViewer({
           선택 지점 3D로 보기
         </button>
       </div>
+      {showLander && selected && (
+        <p role="status" className="pointer-events-none absolute right-4 top-16 rounded bg-black/85 px-3 py-2 text-xs text-amber-200">
+          개념 착륙선 · 선정 후보지 시각화 · 착륙 성공 판정 아님
+        </p>
+      )}
       {detail && lat !== undefined && lon !== undefined && (
         <div
           role="status"
