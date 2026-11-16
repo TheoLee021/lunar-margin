@@ -3,6 +3,7 @@ import type { Viewshed } from '../api/viewshed'
 import {
   ArcType,
   Color,
+  ConstantProperty,
   Entity,
   BoundingSphere,
   Cartesian2,
@@ -629,6 +630,7 @@ export interface MoonSceneOptions {
 export interface MoonScene {
   setFlightPath(points: readonly FlightPoint[]): void
   setFlightFrame(index: number): void
+  setSightlinesVisible(visible: boolean): void
   setViewshed(map: Viewshed | null): void
   flyTo(location: LunarLocation, rangeM?: number): void
   /** Back to the start view: straight above the south pole. */
@@ -1035,6 +1037,7 @@ export async function createMoonScene(
   }
   camera.setView(overview)
 
+  const sightlinesVisible = new ConstantProperty(true)
   let rayGeneration = 0
   const rayEntities: Entity[] = []
   return {
@@ -1043,6 +1046,10 @@ export async function createMoonScene(
     },
     setFlightFrame(index) {
       flightLayer.setFrame(index)
+    },
+    setSightlinesVisible(visible) {
+      sightlinesVisible.setValue(visible)
+      scene.requestRender()
     },
     setViewshed(map) {
       const generation = ++rayGeneration
@@ -1083,6 +1090,7 @@ export async function createMoonScene(
                   disableDepthTestDistance: Infinity,
                 },
                 polyline: {
+                  show: sightlinesVisible,
                   positions: [first, end],
                   arcType: ArcType.NONE,
                   width: 1.4,
