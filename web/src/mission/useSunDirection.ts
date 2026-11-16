@@ -3,7 +3,7 @@ import { fetchSunDirection } from '../api/sunlight'
 import type { Vector3 } from '../moon/sun'
 
 export type SunDirectionState =
-  | { kind: 'loading' }
+  | { kind: 'loading'; direction: Vector3 | null }
   | { kind: 'ready'; direction: Vector3 }
   | { kind: 'error' }
 export type SunDirectionResult = SunDirectionState & { retry: () => void }
@@ -42,6 +42,12 @@ export function useSunDirection(instant: string): SunDirectionResult {
     }
   }, [instant, key])
   const state: SunDirectionState =
-    stored?.key === key ? stored.state : { kind: 'loading' }
+    stored?.key === key
+      ? stored.state
+      : {
+          kind: 'loading',
+          direction:
+            stored?.state.kind === 'ready' ? stored.state.direction : null,
+        }
   return { ...state, retry }
 }

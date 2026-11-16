@@ -45,7 +45,10 @@ export function MissionTimeline({
     0,
     tl.t.findLastIndex((t) => t <= hour / 24),
   )
-  const selected = Math.min(tl.t.length - 1, onHourChange ? current : (inspection ?? current))
+  const selected = Math.min(
+    tl.t.length - 1,
+    onHourChange ? current : (inspection ?? current),
+  )
   const width = 580,
     left = 43,
     plotWidth = 523,

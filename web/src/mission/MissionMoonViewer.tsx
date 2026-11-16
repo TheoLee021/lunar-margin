@@ -47,7 +47,7 @@ export function MissionMoonViewer({
 }) {
   const viewer = useRef<MoonViewerHandle>(null)
   const [photo, setPhoto] = useState(false)
-  const sunDirection = sun.kind === 'ready' ? sun.direction : null
+  const sunDirection = sun.kind === 'error' ? null : sun.direction
   const lit = sunDirection !== null && !photo
   useEffect(() => {
     viewer.current?.setSunDirection(lit ? sunDirection : null)
@@ -143,21 +143,23 @@ export function MissionMoonViewer({
           aria-pressed={lit}
           title={
             sun.kind === 'loading'
-              ? '착륙 시각의 태양 방향을 불러오는 중입니다'
+              ? '선택 시각의 태양 방향을 불러오는 중입니다'
               : sun.kind === 'error'
-                ? '착륙 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
-                : '착륙 시각의 태양으로 조명과 지형 그림자를 그립니다'
+                ? '선택 시각의 태양 방향을 불러오지 못했습니다. 누르면 다시 시도합니다'
+                : '선택 시각의 태양으로 조명과 지형 그림자를 그립니다'
           }
           onClick={() => {
             if (sun.kind === 'error') sun.retry()
             else setPhoto((value) => !value)
           }}
         >
-          {sun.kind === 'error'
-            ? '햇빛 다시 시도'
-            : lit
-              ? '사진으로 보기'
-              : '착륙 시각 햇빛'}
+          {sun.kind === 'loading' && !photo
+            ? '선택 시각 조명 계산 중…'
+            : sun.kind === 'error'
+              ? '햇빛 다시 시도'
+              : lit
+                ? '사진으로 보기'
+                : '선택 시각 햇빛'}
         </button>
         <button
           type="button"
