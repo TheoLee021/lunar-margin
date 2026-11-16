@@ -67,13 +67,14 @@ test('site-targeted capture connects the default orbit to surface touchdown', as
   )
 })
 
-test('date search recovers when the flight solver is busy on the first request', async ({
+test('date search recovers from a dropped request and busy solver, then shares touchdown with orbit', async ({
   page,
 }) => {
   let attempts = 0
   await page.route('**/trajectory/flight-preview', (route) => {
     attempts += 1
-    if (attempts === 1)
+    if (attempts === 1) return route.abort('failed')
+    if (attempts === 2)
       return route.fulfill({
         status: 429,
         json: { detail: 'Reference flight computation busy' },
@@ -87,5 +88,10 @@ test('date search recovers when the flight solver is busy on the first request',
     '2027-01-11 02:31:08 UTC',
     { timeout: 30000 },
   )
-  expect(attempts).toBe(2)
+  await page.getByRole('button', { name: '이 일정의 궤도 보기 ↗' }).click()
+  await page.getByRole('button', { name: '착륙', exact: true }).click()
+  await expect(page.getByTestId('touchdown')).toHaveText(
+    '2027-01-11 02:31:08 UTC',
+  )
+  expect(attempts).toBe(3)
 })

@@ -81,6 +81,7 @@ export function MissionMoonViewer({
     [sites],
   )
   const selected = sites.find((site) => site.id === selection.siteId)
+  const [showSightlines, setShowSightlines] = useState(true)
   const [detail, setDetail] = useState(false)
   const [attempt, retry] = useState(0)
   const lat = detail ? (observer?.lat ?? selected?.latitude) : undefined
@@ -92,10 +93,6 @@ export function MissionMoonViewer({
     distanceKm?: number
     map: Viewshed | null
   } | null>(null)
-  useEffect(() => {
-    if (lat === undefined || lon === undefined) return
-    viewer.current?.flyTo(observer ?? { lat, lon }, 18000)
-  }, [lat, lon, observer])
   useEffect(() => {
     if (lat === undefined || lon === undefined) return
     const controller = new AbortController()
@@ -117,14 +114,16 @@ export function MissionMoonViewer({
     return () => controller.abort()
   }, [key, lat, lon, height, center, demName])
   const current = result?.key === key ? result : null
-  const focusSite = (site: CandidateSite) =>
+  const focusSite = (site: CandidateSite) => {
+    setPicked(null)
+    setDetail(true)
     viewer.current?.flyTo(
       { lat: site.latitude, lon: site.longitude },
       detail ? 18000 : site.grid ? site.grid.spacing_m * 20 : undefined,
     )
+  }
   useImperativeHandle(ref, () => ({
     focusSite(siteId) {
-      setPicked(null)
       const site = sites.find((candidate) => candidate.id === siteId)
       if (site) focusSite(site)
     },
@@ -137,18 +136,19 @@ export function MissionMoonViewer({
       <div className="absolute inset-0" aria-label="달 남극 3D 지도">
         <MoonViewer
           ref={viewer}
+          showSightlines={showSightlines}
           viewshed={detail ? current?.map : null}
           markers={markers}
           selectedMarkerId={selection.siteId}
           onPick={(location) => {
             onSelect(null)
             setPicked(location)
+            viewer.current?.flyTo(location, 18000)
             setDetail(true)
           }}
           onMarkerSelect={(siteId) => {
             const site = sites.find((candidate) => candidate.id === siteId)
             if (!site) return
-            setPicked(null)
             onSelect(siteId)
             focusSite(site)
           }}
@@ -195,7 +195,10 @@ export function MissionMoonViewer({
           disabled={!selected && !observer}
           onClick={() => {
             setDetail(true)
-            if (detail && selected) focusSite(selected)
+            const location =
+              observer ??
+              (selected && { lat: selected.latitude, lon: selected.longitude })
+            if (location) viewer.current?.flyTo(location, 18000)
           }}
         >
           선택 지점 3D로 보기
@@ -221,6 +224,14 @@ export function MissionMoonViewer({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="ml-3 inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={showSightlines}
+              onChange={(event) => setShowSightlines(event.target.checked)}
+            />
+            가시선 표시
           </label>
           <div>
             {!current ? (
