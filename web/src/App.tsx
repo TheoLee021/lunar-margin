@@ -95,6 +95,8 @@ function locationFor(
   view: View,
   selection: MissionSelection,
   overlay: Overlay,
+  /** The saved run whose site selection panel is open over the 3D view. */
+  panelRun: string | null = null,
 ): string {
   const url = new URL(window.location.href)
   url.pathname =
@@ -115,6 +117,8 @@ function locationFor(
     url.searchParams.set('max_slope', String(selection.maxSlope ?? 'none'))
   else url.searchParams.delete('max_slope')
   writeRequirements(url.searchParams, selection.requirements)
+  // A saved run's conditions would replace the ones the search screen is about to set.
+  if (view === 'landing') url.searchParams.delete('pricing_run')
   if (selection.launchId) url.searchParams.set('launch_id', selection.launchId)
   else url.searchParams.delete('launch_id')
   if (selection.siteId) url.searchParams.set('site', selection.siteId)
@@ -122,6 +126,10 @@ function locationFor(
   for (const name of ['planner', 'compare'] as const)
     if (view === 'mission' && overlay === name) url.searchParams.set(name, '1')
     else url.searchParams.delete(name)
+  if (view === 'mission' && panelRun) {
+    url.searchParams.set('run', panelRun)
+    url.searchParams.set('overview', '1')
+  } else url.searchParams.delete('overview')
   return `${url.pathname}${url.search}${url.hash}`
 }
 
@@ -145,50 +153,39 @@ export default function App() {
     window.history.replaceState(
       window.history.state,
       '',
-      locationFor(view, selection, overlay),
+      locationFor(view, selection, overlay, panelRun),
     )
-  }, [view, selection, overlay])
-  function toggleOverview(runId: string | null, nextSelection = selection) {
-    const url = new URL(
-      locationFor('mission', nextSelection, null),
-      window.location.origin,
-    )
-    if (runId) {
-      url.searchParams.set('run', runId)
-      url.searchParams.set('overview', '1')
-    } else {
-      url.searchParams.delete('overview')
-    }
-    window.history.pushState(null, '', url)
-    setSelection(nextSelection)
-    setPanelRun(runId)
-    setOverlay(null)
-  }
+  }, [view, selection, overlay, panelRun])
   function navigate(
     nextView: View,
     nextOverlay: Overlay = null,
     nextSelection = selection,
+    nextPanelRun: string | null = null,
   ) {
     window.history.pushState(
       null,
       '',
-      locationFor(nextView, nextSelection, nextOverlay),
+      locationFor(nextView, nextSelection, nextOverlay, nextPanelRun),
     )
     setSelection(nextSelection)
     setView(nextView)
     setOverlay(nextOverlay)
+    setPanelRun(nextPanelRun)
   }
+  function toggleOverview(runId: string | null, nextSelection = selection) {
+    navigate('mission', null, nextSelection, runId)
+  }
+  const stage: Stage =
+    view === 'landing'
+      ? 'search'
+      : overlay === 'planner'
+        ? 'schedule'
+        : overlay === 'compare' || panelRun
+          ? 'compare'
+          : 'explore'
   const stageNav = (
     <StageNav
-      current={
-        view === 'landing'
-          ? 'search'
-          : overlay === 'planner'
-            ? 'schedule'
-            : overlay === 'compare'
-              ? 'compare'
-              : 'explore'
-      }
+      current={stage}
       hrefFor={(stage) =>
         locationFor(
           STAGE_VIEWS[stage].view,
@@ -196,9 +193,10 @@ export default function App() {
           STAGE_VIEWS[stage].overlay,
         )
       }
-      onNavigate={(stage) =>
-        navigate(STAGE_VIEWS[stage].view, STAGE_VIEWS[stage].overlay)
-      }
+      onNavigate={(next) => {
+        if (next !== stage)
+          navigate(STAGE_VIEWS[next].view, STAGE_VIEWS[next].overlay)
+      }}
     />
   )
   return (
@@ -269,7 +267,8 @@ export default function App() {
             planner={overlay === 'planner'}
             onPlannerChange={(open) => setOverlay(open ? 'planner' : null)}
             comparing={overlay === 'compare'}
-            onComparingChange={(open) => setOverlay(open ? 'compare' : null)}
+            onComparingClose={() => setOverlay(null)}
+            overviewOpen={panelRun !== null}
             nav={stageNav}
             onApply={(schedule, runId) =>
               toggleOverview(runId, { ...selection, ...schedule, siteId: null })
@@ -293,6 +292,7 @@ export default function App() {
           <CandidateOverview
             key={panelRun}
             runId={panelRun}
+            nav={stageNav}
             onClose={() => toggleOverview(null)}
           />
         </Suspense>
@@ -310,7 +310,8 @@ function MissionApp({
   planner,
   onPlannerChange,
   comparing,
-  onComparingChange,
+  onComparingClose,
+  overviewOpen,
   nav,
   onApply,
   onViewOrbit,
@@ -322,8 +323,11 @@ function MissionApp({
   onSelect: (siteId: string | null) => void
   planner: boolean
   onPlannerChange: (open: boolean) => void
+  /** The Compare Sites stage was opened without naming a run: it shows this schedule's saved run. */
   comparing: boolean
-  onComparingChange: (open: boolean) => void
+  onComparingClose: () => void
+  /** The site selection panel of a named run is open. */
+  overviewOpen: boolean
   /** The stage links. An open dialog covers the page, so it shows them instead. */
   nav: ReactNode
   onApply: (schedule: Schedule, runId: string) => void
@@ -397,9 +401,7 @@ function MissionApp({
         candidates={candidates}
         sites={sites}
         onSelect={onSelect}
-        comparing={comparing}
-        onComparingChange={onComparingChange}
-        nav={planner ? null : nav}
+        nav={planner || overviewOpen || (comparing && run) ? null : nav}
         summary={
           <button
             type="button"
@@ -447,6 +449,16 @@ function MissionApp({
           </Suspense>
         ) : null}
       </MissionWorkspace>
+      {comparing && run ? (
+        <Suspense fallback={null}>
+          <CandidateOverview
+            key={run.id}
+            runId={run.id}
+            nav={nav}
+            onClose={onComparingClose}
+          />
+        </Suspense>
+      ) : null}
       <div className="fixed bottom-10 left-32 z-20 flex gap-2">
         <a
           className="hud-button"

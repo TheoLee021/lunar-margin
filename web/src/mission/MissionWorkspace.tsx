@@ -29,8 +29,6 @@ export function MissionWorkspace({
   candidates,
   sites,
   onSelect,
-  comparing,
-  onComparingChange,
   nav,
   summary,
   apiStatus,
@@ -42,10 +40,7 @@ export function MissionWorkspace({
   sites: readonly CandidateSite[]
   selection: MissionSelection
   onSelect: (id: string | null) => void
-  /** The comparison dialog is open. It is a stage of its own, so the page's URL decides. */
-  comparing: boolean
-  onComparingChange: (open: boolean) => void
-  /** The stage links: at the top of the page, or in the comparison dialog while that covers it. */
+  /** The stage links, unless a dialog that covers the page is showing them. */
   nav: ReactNode
   summary: ReactNode
   apiStatus: ReactNode
@@ -64,9 +59,10 @@ export function MissionWorkspace({
   const [checked, setChecked] = useState({
     key: comparisonKey,
     ids: [] as string[],
+    open: false,
   })
   if (result.kind !== 'loading' && checked.key !== comparisonKey)
-    setChecked({ key: comparisonKey, ids: [] })
+    setChecked({ key: comparisonKey, ids: [], open: false })
   const checkedIds = checked.key === comparisonKey ? checked.ids : []
   const comparisonCandidates =
     run?.candidates
@@ -378,6 +374,7 @@ export function MissionWorkspace({
                               site.id,
                               sites.map((value) => value.id),
                             ),
+                            open: false,
                           }))
                         }
                       />
@@ -424,7 +421,9 @@ export function MissionWorkspace({
                     type="button"
                     className="hud-button disabled:opacity-40"
                     disabled={checkedIds.length === 0}
-                    onClick={() => onComparingChange(true)}
+                    onClick={() =>
+                      setChecked((current) => ({ ...current, open: true }))
+                    }
                   >
                     선택 후보 비교 ({checkedIds.length}/5)
                   </button>
@@ -552,16 +551,14 @@ export function MissionWorkspace({
       <div className="hud-panel absolute bottom-20 right-4 max-w-64 px-3 py-2 text-xs text-neutral-400">
         {apiStatus}
       </div>
+      {/* Under the title: the top right belongs to the 3D toolbar. */}
+      {nav ? <div className="absolute top-14 left-4 z-20">{nav}</div> : null}
       {children}
-      {run && comparing ? null : (
-        <div className="absolute top-4 right-4 z-20">{nav}</div>
-      )}
-      {run && comparing ? (
+      {run && checked.key === comparisonKey && checked.open ? (
         <SiteComparisonPanel
-          nav={nav}
           candidates={comparisonCandidates}
           config={run.config}
-          onClose={() => onComparingChange(false)}
+          onClose={() => setChecked((current) => ({ ...current, open: false }))}
           onClear={() => setChecked((current) => ({ ...current, ids: [] }))}
         />
       ) : null}
