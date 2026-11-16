@@ -5,7 +5,6 @@ the chosen landing target. An illustrative customer payload is not a lander.
 """
 import math
 from dataclasses import dataclass
-from datetime import timedelta
 from threading import BoundedSemaphore
 from typing import Annotated, Literal
 
@@ -48,7 +47,7 @@ class FlightPreviewQuery(BaseModel):
     isp_s: float = Field(default=310, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def validate_mission(self) -> "FlightPreviewQuery":
+    def validate_mission(self) -> FlightPreviewQuery:
         if not 86400 <= (self.arrival - self.departure).total_seconds() <= 864000:
             raise ValueError("transfer duration must be 1-10 days")
         if not (1900 <= self.departure.year <= 2100 and 1900 <= self.arrival.year <= 2100):
@@ -146,7 +145,7 @@ def flight_preview(
             query.latitude,
             query.longitude,
             orbit,
-            (orbit.pdi.epoch_utc + timedelta(seconds=0)).isoformat(),
+            orbit.pdi.epoch_utc.isoformat(),
             path,
         )
     except FileNotFoundError as exc:
