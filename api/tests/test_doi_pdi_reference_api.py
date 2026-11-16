@@ -7,6 +7,8 @@ Physical validation is in the engine tests, not this API routing test.
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from numpy.typing import NDArray
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -30,7 +32,7 @@ def _loi_state() -> list[float]:
 
 
 def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    called = []
+    called: list[tuple[datetime, datetime]] = []
 
     def transfer(start: datetime, end: datetime, data_dir: object) -> object:
         del data_dir
@@ -40,11 +42,11 @@ def test_reference_endpoint_uses_loi_handoff(monkeypatch: pytest.MonkeyPatch) ->
         )
 
     monkeypatch.setattr(endpoint, "calculate_transfer", transfer)
-    monkeypatch.setattr(
-        endpoint,
-        "inertial_moon_state_to_moon_me",
-        lambda state, epoch: state.copy(),
-    )
+    def identity_transform(state: NDArray[np.float64], epoch: datetime) -> NDArray[np.float64]:
+        del epoch
+        return state.copy()
+
+    monkeypatch.setattr(endpoint, "inertial_moon_state_to_moon_me", identity_transform)
     app = create_app(Settings(horizon_table_download_on_start=False))
     with TestClient(app) as client:
         response = client.post(
