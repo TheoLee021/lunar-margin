@@ -124,9 +124,11 @@ def get_settings() -> Settings:
 
 
 @lru_cache(maxsize=2)
-def _load_dem(data_dir: Path) -> PolarDem:
+def load_analysis_dem(data_dir: Path, dem_name: str = "80s_80m") -> PolarDem:
     """DEM과 SPICE 커널을 처음 요청 때 한 번 로드한다. 데이터가 없으면 503."""
-    img_source, lbl_source = DEM_SOURCES["80s_80m"]
+    if dem_name not in DEM_SOURCES:
+        raise HTTPException(status_code=422, detail="unknown DEM")
+    img_source, lbl_source = DEM_SOURCES[dem_name]
     img = data_dir / "dem" / img_source.filename
     lbl = data_dir / "dem" / lbl_source.filename
     if not img.exists() or not lbl.exists() or not (data_dir / "spice").is_dir():
@@ -143,7 +145,7 @@ def _load_dem(data_dir: Path) -> PolarDem:
 
 @lru_cache(maxsize=2)
 def _build_analyzer(data_dir: Path) -> Analyzer:
-    dem = _load_dem(data_dir)
+    dem = load_analysis_dem(data_dir)
 
     def analyze(kind: Kind, query: AnalysisQuery) -> SiteAnalysis:
         return analyze_site(
@@ -165,7 +167,7 @@ def get_analyzer(settings: Annotated[Settings, Depends(get_settings)]) -> Analyz
 
 
 def get_dem(settings: Annotated[Settings, Depends(get_settings)]) -> PolarDem:
-    return _load_dem(settings.data_dir)
+    return load_analysis_dem(settings.data_dir)
 
 
 def _utc(moment: datetime) -> str:

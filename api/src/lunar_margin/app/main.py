@@ -17,6 +17,7 @@ from lunar_margin.app.settings import Settings
 from lunar_margin.app.sunlight import router as sunlight_router
 from lunar_margin.app.tiles import router as tiles_router
 from lunar_margin.app.trajectory import router as trajectory_router
+from lunar_margin.app.viewshed import router as viewshed_router
 from lunar_margin.pipeline.table_prefetch import start_prefetch
 
 
@@ -42,6 +43,7 @@ def create_app(settings: Settings) -> FastAPI:
     )
 
     app.include_router(analysis_router)
+    app.include_router(viewshed_router)
     app.include_router(candidates_router)
     app.include_router(pricing_router)
     app.include_router(provider_pricing_router)

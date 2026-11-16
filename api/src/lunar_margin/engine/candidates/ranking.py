@@ -14,6 +14,7 @@ class RankScores:
     total: NDArray[np.float64]  # 사용 가능한 성분만으로 가중치를 다시 정규화한 점수. 없으면 NaN
     sun_component: NDArray[np.float64]  # 일조율 (결측이면 NaN)
     earth_component: NDArray[np.float64]  # 지구 가시율 (결측이면 NaN)
+    visibility_component: NDArray[np.float64]
     components_used: NDArray[np.int8]  # 점수 계산에 실제로 쓰인 성분 수 (0~2)
 
 
@@ -29,18 +30,32 @@ def communication_component(
 
 
 def score_sites(
-    field: MetricField, weights: Weights, *, rf: bool = False, duration_hours: float = 1.0
+    field: MetricField,
+    weights: Weights,
+    *,
+    rf: bool = False,
+    duration_hours: float = 1.0,
+    visibility: NDArray[np.float64] | None = None,
 ) -> RankScores:
     """결측 성분은 0으로 취급하지 않고 빼서 나머지 가중치로 다시 정규화한다."""
     sun, earth = field.sun_fraction, field.earth_fraction
     communication = communication_component(field, rf=rf, duration_hours=duration_hours)
     w_sun = np.where(~np.isnan(sun), weights.sun, 0.0)
     w_earth = np.where(~np.isnan(communication), weights.earth, 0.0)
-    total_weight = w_sun + w_earth
+    if visibility is None:
+        visibility = np.full_like(sun, np.nan)
+    w_visibility = np.where(np.isfinite(visibility), weights.visibility, 0.0)
+    total_weight = w_sun + w_earth + w_visibility
     numerator = w_sun * np.nan_to_num(sun) + w_earth * np.nan_to_num(communication)
+    numerator += w_visibility * np.nan_to_num(visibility)
     with np.errstate(invalid="ignore", divide="ignore"):
         total = np.where(total_weight > 0.0, numerator / total_weight, np.nan)
     used = ((w_sun > 0.0).astype(np.int8)) + ((w_earth > 0.0).astype(np.int8))
+    used += (w_visibility > 0).astype(np.int8)
     return RankScores(
-        total=total, sun_component=sun.copy(), earth_component=earth.copy(), components_used=used
+        visibility_component=visibility,
+        total=total,
+        sun_component=sun.copy(),
+        earth_component=earth.copy(),
+        components_used=used,
     )

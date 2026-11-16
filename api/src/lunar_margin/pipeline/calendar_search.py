@@ -14,7 +14,7 @@ from lunar_margin.engine.candidates.filtering import evaluate
 from lunar_margin.engine.candidates.grid import SitePoints, polar_grid, refine_points
 from lunar_margin.engine.candidates.horizon_table import find_table
 from lunar_margin.engine.candidates.projection import polar_xy_to_lonlat
-from lunar_margin.engine.candidates.ranking import score_sites
+from lunar_margin.engine.dem import PolarDem
 from lunar_margin.engine.ephemeris import load_kernels
 from lunar_margin.pipeline.candidates import (
     ProgressFn,
@@ -22,6 +22,7 @@ from lunar_margin.pipeline.candidates import (
     field_settings,
     promotion_mask,
     run_search,
+    score_search_field,
 )
 from lunar_margin.pipeline.horizons import TABLES_DIR, resolve_dems, table_spec_for
 
@@ -77,17 +78,17 @@ def run_search_batch(
             dem_files=pairs,
             on_progress=reporter("coarse"),
         )
+        visibility_dem = (
+            PolarDem.from_files(*pairs[0]) if any(c.weights.visibility for c in configs) else None
+        )
         for config, field in zip(configs, coarse_fields, strict=True):
             filtered = evaluate(
                 field,
                 config.thresholds,
                 exclude_incomplete_horizon=config.exclude_incomplete_horizon,
             )
-            scores = score_sites(
-                field,
-                config.weights,
-                rf=config.rf is not None,
-                duration_hours=(config.window.end - config.window.start).total_seconds() / 3600,
+            scores = score_search_field(
+                config, coarse, field, filtered, visibility_dem, coarse=True
             )
             promoted = promotion_mask(
                 field, filtered, scores, config.thresholds, config.refine_fraction

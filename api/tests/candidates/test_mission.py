@@ -59,15 +59,22 @@ def test_missing_constraints_mean_no_filter_not_zero() -> None:
 
 
 @pytest.mark.parametrize(
-    ("priority", "sun", "earth"),
-    [("balanced", 0.5, 0.5), ("solar", 0.75, 0.25), ("earth", 0.25, 0.75)],
+    ("priority", "sun", "earth", "visibility"),
+    [
+        ("balanced", 0.4, 0.4, 0.2),
+        ("solar", 0.6, 0.2, 0.2),
+        ("earth", 0.2, 0.6, 0.2),
+        ("visibility", 0.25, 0.25, 0.5),
+    ],
 )
-def test_priority_sets_the_score_weights(priority: str, sun: float, earth: float) -> None:
+def test_priority_sets_the_score_weights(
+    priority: str, sun: float, earth: float, visibility: float
+) -> None:
     mission = MissionRequest.model_validate({**EXAMPLE, "optimization_priority": priority})
 
     weights = plan_search(mission).config.weights
 
-    assert (weights.sun, weights.earth) == (sun, earth)
+    assert (weights.sun, weights.earth, weights.visibility) == (sun, earth, visibility)
 
 
 def test_null_observer_height_means_ground_level() -> None:

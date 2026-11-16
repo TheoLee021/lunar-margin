@@ -21,14 +21,13 @@ from lunar_margin.engine.candidates.config import (
 )
 from lunar_margin.engine.rf import RFScenario
 
-# 우선순위별 점수 가중치 (일조, 지구).
-# 값이 바뀌면 같은 입력의 결과가 달라지므로 PLAN_VERSION도 함께 올린다
-PRIORITY_WEIGHTS: dict[str, tuple[float, float]] = {
-    "balanced": (0.5, 0.5),
-    "solar": (0.75, 0.25),
-    "earth": (0.25, 0.75),
+PRIORITY_WEIGHTS = {
+    "visibility": Weights(sun=0.25, earth=0.25, visibility=0.5),
+    "balanced": Weights(sun=0.4, earth=0.4, visibility=0.2),
+    "solar": Weights(sun=0.6, earth=0.2, visibility=0.2),
+    "earth": Weights(sun=0.2, earth=0.6, visibility=0.2),
 }
-PLAN_VERSION = "5-rf-roughness"  # Preserve RF and roughness semantics in new cached runs.
+PLAN_VERSION = "6-local-visibility"
 # 임무 기간은 짧으므로 30분 간격이면 24시간·6시간 한도를 충분히 가릴 수 있다
 MISSION_STEP_MINUTES = 30
 
@@ -45,7 +44,7 @@ class MissionRequest(BaseModel):
     max_terrain_slope_degrees: float | None = Field(default=None, gt=0.0, le=90.0)
     max_terrain_roughness_m: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
     search_region: Literal["south", "global"] = "south"
-    optimization_priority: Literal["balanced", "solar", "earth"] = "balanced"
+    optimization_priority: Literal["balanced", "solar", "earth", "visibility"] = "balanced"
     observer_height_m: float | None = Field(default=None, ge=0.0, le=100.0)
 
     @model_validator(mode="after")
@@ -79,7 +78,6 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
     start = datetime(
         mission.landing_date.year, mission.landing_date.month, mission.landing_date.day, tzinfo=UTC
     )
-    sun_weight, earth_weight = PRIORITY_WEIGHTS[mission.optimization_priority]
     config = base.model_copy(
         update={
             "rf": mission.rf,
@@ -98,7 +96,7 @@ def plan_search(mission: MissionRequest, base: SearchConfig | None = None) -> Se
                 max_terrain_slope_degrees=mission.max_terrain_slope_degrees,
                 max_terrain_roughness_m=mission.max_terrain_roughness_m,
             ),
-            "weights": Weights(sun=sun_weight, earth=earth_weight),
+            "weights": PRIORITY_WEIGHTS[mission.optimization_priority],
             "observer_height_m": mission.observer_height_m or 0.0,
         }
     )

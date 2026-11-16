@@ -305,6 +305,7 @@ export type SortKey =
   | 'lon'
   | 'sun'
   | 'earth'
+  | 'visibility'
   | 'roughness'
   | 'rf'
   | 'rfBlackout'
@@ -327,6 +328,8 @@ function sortValue(candidate: Candidate, key: SortKey): number | string | null {
       return candidate.sun.fraction
     case 'earth':
       return candidate.earth.fraction
+    case 'visibility':
+      return candidate.score.visible_grid_points ?? null
     case 'roughness':
       return candidate.terrain?.roughness_p95_m ?? null
     case 'rf':

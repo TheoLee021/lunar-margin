@@ -48,12 +48,13 @@ class Thresholds(_Frozen):
 class Weights(_Frozen):
     """소프트 선호도 (순위 점수). 합이 1일 필요는 없고 비율만 쓴다."""
 
+    visibility: float = Field(default=0.0, ge=0.0, allow_inf_nan=False)
     sun: float = Field(default=0.5, ge=0.0)
     earth: float = Field(default=0.5, ge=0.0)
 
     @model_validator(mode="after")
     def _not_all_zero(self) -> Self:
-        if self.sun + self.earth <= 0.0:
+        if self.sun + self.earth + self.visibility <= 0.0:
             raise ValueError("at least one weight must be positive")
         return self
 

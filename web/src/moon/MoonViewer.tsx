@@ -1,3 +1,4 @@
+import type { Viewshed } from '../api/viewshed'
 import {
   useEffect,
   useImperativeHandle,
@@ -20,6 +21,7 @@ export interface MoonViewerHandle {
 }
 
 interface MoonViewerProps {
+  viewshed?: Viewshed | null
   ref?: Ref<MoonViewerHandle>
   /** Labelled points such as candidate landing sites. */
   markers?: readonly MoonMarker[]
@@ -42,6 +44,7 @@ const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
 
 export default function MoonViewer({
   ref,
+  viewshed = null,
   markers = NO_MARKERS,
   selectedMarkerId = null,
   onMarkerSelect,
@@ -70,6 +73,10 @@ export default function MoonViewer({
   useEffect(() => {
     if (ready) sceneRef.current?.setSelectedMarker(selectedMarkerId)
   }, [ready, selectedMarkerId])
+
+  useEffect(() => {
+    if (ready) sceneRef.current?.setViewshed(viewshed)
+  }, [ready, viewshed])
 
   useImperativeHandle(
     ref,

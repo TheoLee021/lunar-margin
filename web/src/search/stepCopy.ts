@@ -143,7 +143,7 @@ export function stepContent(
       const sampled = count(c, 'coarse_sampled')
       return {
         title: '2. 유망한 곳만 세밀화',
-        what: `조건을 통과한 거친 점은 점수(일조율과 ${config.rf ? 'RF 가능 비율·최장 두절로 계산한 통신 성분' : '지구 가시율'}의 가중 평균) 순으로, 조건 미달인 점은 한도에 가까운 순으로 검토합니다. 좁은 유망 지점을 놓치지 않도록 미달 지점도 포함해 상위 ${Math.round(config.refine_fraction * 100)}%를 고르고, 그 주변만 ${grid} 간격으로 다시 계산하기로 합니다. 지도의 주황색이 다시 계산할 영역입니다.`,
+        what: `조건을 통과한 거친 점은 점수(일조율과 ${config.rf ? 'RF 가능 비율·최장 두절로 계산한 통신 성분' : '지구 가시율'}${config.weights.visibility ? ', 주변 가시 격자점 비율' : ''}의 가중 평균) 순으로, 조건 미달인 점은 한도에 가까운 순으로 검토합니다. 좁은 유망 지점을 놓치지 않도록 미달 지점도 포함해 상위 ${Math.round(config.refine_fraction * 100)}%를 고르고, 그 주변만 ${grid} 간격으로 다시 계산하기로 합니다. 지도의 주황색이 다시 계산할 영역입니다.`,
         why: '가능성이 낮은 곳에 계산 시간을 쓰지 않고, 유망한 곳에 집중해서 후보 위치를 더 정확하게 찾기 위해서입니다.',
         numbers: [
           { label: '세밀화로 고른 거친 점', value: countText(promoted) },
@@ -221,7 +221,7 @@ export function stepContent(
             label: config.rf
               ? '점수 가중치(일조 : RF 통신)'
               : '점수 가중치(일조 : 지구)',
-            value: `${config.weights.sun} : ${config.weights.earth}`,
+            value: `${config.weights.sun} : ${config.weights.earth}${config.weights.visibility ? ` · 주변 가시권 ${config.weights.visibility}` : ''}`,
           },
         ],
       }

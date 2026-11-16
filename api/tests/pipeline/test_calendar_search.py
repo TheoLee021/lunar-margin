@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lunar_margin.engine.candidates.config import Roi, SearchConfig
+from lunar_margin.engine.candidates.config import Roi, SearchConfig, Weights
 from lunar_margin.engine.candidates.field import MetricField
 from lunar_margin.engine.candidates.mission import MissionRequest, plan_search
 from lunar_margin.pipeline.calendar_search import run_search_batch
@@ -87,3 +87,26 @@ def test_dates_without_a_full_table_share_incremental_3m_horizons(
         np.testing.assert_array_equal(result.field.sun_fraction, expected.field.sun_fraction)
         np.testing.assert_array_equal(result.field.earth_fraction, expected.field.earth_fraction)
         np.testing.assert_array_equal(result.rank, expected.rank)
+
+
+def test_calendar_refines_the_same_points_when_ranked_only_by_visibility(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    for folder in ("dem", "spice"):
+        (tmp_path / folder).symlink_to((data_dir / folder).resolve(), target_is_directory=True)
+    base = SearchConfig(
+        roi=Roi(max_lat_deg=-89.95), coarse_spacing_m=1000, max_range_m=2000, workers=1
+    )
+    mission = MissionRequest(landing_date=date(2027, 1, 8), mission_duration_days=1)
+    config = plan_search(mission, base).config.model_copy(
+        update={"weights": Weights(sun=0, earth=0, visibility=1)}
+    )
+    build_for_config(config, tmp_path, workers=1, log=lambda _: None)
+    expected = run_search(config, tmp_path, log=lambda _: None)
+    assert np.any(expected.rank > 0)
+    [actual] = run_search_batch([config], tmp_path, log=lambda _: None)
+    for name in ("ix", "iy", "stage", "rank"):
+        np.testing.assert_array_equal(getattr(actual, name), getattr(expected, name))
+    np.testing.assert_array_equal(
+        actual.scores.visibility_component, expected.scores.visibility_component
+    )
